@@ -1,0 +1,40 @@
+services:
+  # Server
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: orbit_server
+    ports:
+      - "8787:8787"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+      - PORT=8787
+    volumes:
+      - ./server/app:/app
+      - /app/node_modules
+    command: npm run dev
+    tty: true
+    stdin_open: true
+  # Client
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: orbit_client
+    ports:
+      - "5173:5173"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./client/app:/app
+      - /app/node_modules
+    command: npm run dev -- --host 0.0.0.0
+    depends_on:
+      - server
+    tty: true
+    stdin_open: true
