@@ -15,7 +15,6 @@ services:
     volumes:
       - ./server/app:/app
       - /app/node_modules
-    command: npm run dev
     tty: true
     stdin_open: true
   # Client
@@ -33,7 +32,6 @@ services:
     volumes:
       - ./client/app:/app
       - /app/node_modules
-    command: npm run dev -- --host 0.0.0.0
     depends_on:
       - server
     tty: true
