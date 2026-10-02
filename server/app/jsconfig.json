@@ -3,7 +3,6 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-    "allowJs": true,
     "checkJs": true
   },
   "exclude": ["node_modules", "dist"]

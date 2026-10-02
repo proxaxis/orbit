@@ -1,0 +1,110 @@
+@use 'sass:color';
+@use 'sass:map';
+
+// フォント
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@100..900&display=swap'); // 'Noto Sans JP'
+@import url('https://fonts.googleapis.com/css2?family=Kosugi+Maru&display=swap'); // 'Kosugi Maru'
+@import url('https://fonts.googleapis.com/css?family=Ubuntu+Mono'); // 'Ubuntu Mono'
+@import url('https://fonts.googleapis.com/css?family=Sawarabi+Mincho'); // 'Sawarabi Mincho'
+@import url('https://fonts.googleapis.com/css?family=M+PLUS+Rounded+1c'); // 'M PLUS Rounded 1c'
+@import url('https://fonts.googleapis.com/css?family=M+PLUS+1p'); // 'M PLUS 1p'
+@import url('https://fonts.googleapis.com/css?family=Sawarabi+Gothic'); // 'Sawarabi Gothic'
+@import url('https://fonts.googleapis.com/css?family=Kosugi'); // 'Kosugi'
+@import url('https://fonts.googleapis.com/css?family=Noto+Serif+JP'); // 'Noto Serif JP'
+@import url('https://fonts.googleapis.com/css?family=Noto+Sans+JP'); // 'Noto Sans JP'
+
+// カラーコード定数
+$base-color-lt-bg: #ffffff;
+$base-color-dk-bg: #000000;
+$base-color-lt-text: #333333;
+$base-color-dk-text: #ffffff;
+$themes: (
+  light: (
+    bg-0: $base-color-lt-bg,
+    bg-1: color.scale($base-color-lt-bg, $lightness: -10%),
+    bg-2: color.scale($base-color-lt-bg, $lightness: -20%),
+    bg-3: color.scale($base-color-lt-bg, $lightness: -30%),
+    text: $base-color-lt-text,
+    text-light: color.scale($base-color-lt-text, $lightness: 60%),
+    border: rgba(0, 0, 0, 0.3),
+    shadow: rgba(0, 0, 0, 0.3),
+    primary: #0000ff,
+    danger: #ca0000,
+    accent: #ff3434,
+  ),
+  dark: (
+    bg-0: $base-color-dk-bg,
+    bg-1: color.scale($base-color-dk-bg, $lightness: 10%),
+    bg-2: color.scale($base-color-dk-bg, $lightness: 20%),
+    bg-3: color.scale($base-color-dk-bg, $lightness: 30%),
+    text: $base-color-dk-text,
+    text-light: color.scale($base-color-dk-text, $lightness: -60%),
+    border: rgba(255, 255, 255, 0.3),
+    shadow: rgba(255, 255, 255, 0.3),
+    primary: #0000af,
+    danger: #a50000,
+    accent: #ff3434,
+  ),
+);
+
+// CSS変数を展開する
+@mixin spread-vars($theme-name) {
+  $theme-map: map.get($themes, $theme-name);
+  @each $key, $value in $theme-map {
+    --#{$key}: #{$value};
+  }
+}
+
+// CSS変数を取得する
+@function cp($key) {
+  @return var(--#{$key});
+}
+
+@mixin iconAnimation() {
+  opacity: 0.8;
+  transition: 0.6s;
+
+  &:hover {
+    opacity: 1;
+    transform: scale(1.1);
+    cursor: pointer;
+  }
+}
+
+$btn-main-color: #0000ff;
+$btn-main-text-color: #ffffff;
+@mixin btnMain() {
+  & {
+    border: 2px solid $btn-main-color;
+    border-radius: 0.2rem;
+    background-color: $btn-main-color;
+    color: $btn-main-text-color;
+    transition: 0.6s;
+  }
+
+  &:hover {
+    cursor: pointer;
+    box-shadow: 0 0 5px 1px cp('shadow');
+    border: 2px solid color.scale($btn-main-color, $lightness: 15%);
+    background-color: color.scale($btn-main-color, $lightness: 15%);
+  }
+}
+
+$btn-sub-color: #ffffff;
+$btn-sub-text-color: #333333;
+@mixin btnSub() {
+  & {
+    padding: 1px;
+    border: 1px solid $btn-sub-color;
+    border-radius: 0.2rem;
+    background-color: $btn-sub-color;
+    color: $btn-sub-text-color;
+    transition: 0.6s;
+  }
+
+  &:hover {
+    cursor: pointer;
+    box-shadow: 0 0 5px 1px cp('shadow');
+    background-color: color.scale($btn-sub-color, $lightness: -15%);
+  }
+}

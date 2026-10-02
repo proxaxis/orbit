@@ -25,6 +25,16 @@ See [Vite Configuration Reference](https://vite.dev/config/).
 npm install
 ```
 
+### BFF の接続先
+
+同一オリジン上の BFF を利用する場合は設定不要です。別ホストの BFF を利用する場合は `.env` を作成し、次の値を設定してください。
+
+```sh
+VITE_BFF_BASE_URL=https://example.com
+```
+
+`.env.example` も参照してください。
+
 ### Compile and Hot-Reload for Development
 
 ```sh
