@@ -11,22 +11,39 @@ dayjs.locale('ja');
  * @returns {dayjs.Dayjs}
  */
 export function toDayjs(arg1 = undefined, arg2 = undefined, arg3 = undefined) {
-  // 1. 数値 3 つ (year, month, day) の場合
-  if (typeof arg1 === 'number' && typeof arg2 === 'number' && typeof arg3 === 'number') {
-    const month = String(arg2 + 1).padStart(2, '0'); // 月インデックスを 1~12 に変換
-    const day = String(arg3).padStart(2, '0');
-    return dayjs(`${arg1}-${month}-${day}`);
+  // 引数がすべて undefined の場合、現在の日付を返す
+  if (arg1 === undefined && arg2 === undefined && arg3 === undefined) {
+    return dayjs();
   }
-  // 2. 文字列の場合
+  // 数値 3 つ (year, month, day) の場合
+  else if (typeof arg1 === 'number' && typeof arg2 === 'number' && typeof arg3 === 'number') {
+    return dayjs(new Date(arg1, arg2, arg3));
+  }
+  // 文字列の場合
   else if (typeof arg1 === 'string') {
     return dayjs(arg1);
   }
-  // 3. Date オブジェクトの場合
+  // Date オブジェクトの場合
   else if (arg1 instanceof Date) {
     return dayjs(arg1);
   }
 
   throw new TypeError('無効な引数: toDayjs(year, month, day) または toDayjs("YYYY-MM-DD") または toDayjs(date) を指定してください');
+}
+
+/**
+ * 指定した日付とイベントの時間帯が重なっているか判定
+ * @param {{start?: {date?: string, dateTime?: string}, end?: {date?: string, dateTime?: string}}} event
+ * @param {dayjs.Dayjs} date
+ * @returns {boolean}
+ */
+export function isEventOnDate(event, date) {
+  const eventStart = toDayjs(event.start?.dateTime ?? event.start?.date ?? undefined);
+  const eventEnd = toDayjs(event.end?.dateTime ?? event.end?.date ?? undefined);
+  const dateStart = date.startOf('day');
+  const dateEnd = dateStart.add(1, 'day');
+
+  return eventStart.isBefore(dateEnd) && eventEnd.isAfter(dateStart);
 }
 
 export default dayjs;

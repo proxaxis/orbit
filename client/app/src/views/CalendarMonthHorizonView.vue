@@ -6,6 +6,7 @@ import { useEventStore } from '@/stores/event.js';
 import { useUserStore } from '@/stores/user.js';
 import { useCalendarStore } from '@/stores/calendar.js';
 import DropdownMenu from '@/components/DropdownMenu.vue';
+
 const router = useRouter();
 const eventStore = useEventStore();
 const userStore = useUserStore();
@@ -13,74 +14,80 @@ const calendarStore = useCalendarStore();
 
 /** @type {Ref<{ open: (event: MouseEvent) => void, close: () => void }|null>} コンテキストメニュー表示用のドロップダウンへの直接の参照 */
 const rfDropdownForContextMenu = ref(null);
+const lastWheelNavigationAt = ref(0);
 
 /** @type {Ref<GoogleEvent[]>} 全てのカレンダーに登録されたイベントのうち、指定された月に登録されたもの */
 const eventsSource = ref([]);
 
-/** @type {ComputedRef<(GoogleEvent & { _instanceStart: Date, _instanceEnd: Date })[]>} 計算用に整形したイベント情報 */
+/** @type {ComputedRef<(GoogleEvent & { _instanceStart: Dayjs, _instanceEnd: Dayjs })[]>} 計算用に整形したイベント情報 */
 const events = computed(() => Array.from(eventsSource.value).map((e) => ({
   ...e,
-  _instanceStart: new Date(e.start?.dateTime || e.start?.date || ''),
-  _instanceEnd: new Date(e.end?.dateTime || e.end?.date || ''),
+  _instanceStart: toDayjs(e.start?.dateTime || e.start?.date || undefined),
+  _instanceEnd: toDayjs(e.end?.dateTime || e.end?.date || undefined),
 })));
 
-/** @type {ComputedRef<{date: Date, key: string, isToday: boolean, isOtherMonth: boolean, isSelected: boolean}[]>} @description カレンダーメインの日付配列 */
+/** @param {GoogleEvent & { sourceCalendarId: string }} event @returns {string|undefined} カレンダー設定に基づくイベントバーの色 */
+const getEventBarColor = (event) => {
+  return calendarStore.list.find((calendar) => calendar.id === event.sourceCalendarId)?.backgroundColor ?? event.color;
+};
+
+/** @type {ComputedRef<{date: Dayjs, key: string, isToday: boolean, isOtherMonth: boolean, isSelected: boolean}[]>} @description カレンダーメインの日付配列 */
 const calDaysArray = computed(() => {
-  const today = new Date();
+  const today = toDayjs();
   const days = [];
-  const year = userStore.nowUsingDate.getFullYear();
-  const month = userStore.nowUsingDate.getMonth();
+  const year = userStore.nowUsingDate.year();
+  const month = userStore.nowUsingDate.month();
 
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
+  const firstDay = toDayjs(new Date(year, month, 1));
+  const lastDay = toDayjs(new Date(year, month + 1, 0));
 
-  const dayOfFirst = firstDay.getDay();
+  const dayOfFirst = firstDay.day();
   const prevPadding = (dayOfFirst - userStore.firstDayOfWeek + 7) % 7;
 
   // 前月分
   for (let i = prevPadding; i > 0; i--) {
     days.push({
-      date: new Date(year, month, 1 - i),
+      date: toDayjs(new Date(year, month, 1 - i)),
       key: `prev-${i}`,
       isToday: false,
       isOtherMonth: true,
-      isSelected: userStore.nowSelectedDate === toDayjs(year, month, 1 - i).format('YYYY-MM-DD'),
+      isSelected: userStore.nowSelectedDate === toDayjs(new Date(year, month, 1 - i)).format('YYYY-MM-DD'),
     });
   }
   // 当月分
-  for (let i = 1; i <= lastDay.getDate(); i++) {
+  for (let i = 1; i <= lastDay.date(); i++) {
     days.push({
-      date: new Date(year, month, i),
+      date: toDayjs(new Date(year, month, i)),
       key: `curr-${i}`,
-      isToday: new Date(year, month, i).toDateString() === today.toDateString(),
+      isToday: toDayjs(new Date(year, month, i)).format('YYYY-MM-DD') === today.format('YYYY-MM-DD'),
       isOtherMonth: false,
-      isSelected: userStore.nowSelectedDate === toDayjs(year, month, i).format('YYYY-MM-DD'),
+      isSelected: userStore.nowSelectedDate === toDayjs(new Date(year, month, i)).format('YYYY-MM-DD'),
     });
   }
   // 次月分
-  const currentDaysCount = prevPadding + lastDay.getDate();
+  const currentDaysCount = prevPadding + lastDay.date();
   const nextPadding = (7 - (currentDaysCount % 7)) % 7;
   // 横表示の場合は行数を固定せず、必要分だけ埋めるのが一般的
   // ここでは最低 5-6 行確保するロジックを入れても良いが、シンプルに余り分を追加
   for (let i = 1; i <= nextPadding; i++) {
     days.push({
-      date: new Date(year, month + 1, i),
+      date: toDayjs(new Date(year, month + 1, i)),
       key: `next-${i}`,
       isToday: false,
       isOtherMonth: true,
-      isSelected: userStore.nowSelectedDate === toDayjs(year, month + 1, i).format('YYYY-MM-DD'),
+      isSelected: userStore.nowSelectedDate === toDayjs(new Date(year, month + 1, i)).format('YYYY-MM-DD'),
     });
   }
   return days;
 });
 
-/** @param {Date} date @description 指定された日付のイベントを取得 */
+/** @param {Dayjs} date @description 指定された日付のイベントを取得 */
 const getMonthDayEvents = (date) => {
-  const dateKey = date.toDateString();
+  const dateKey = date.format('YYYY-MM-DD');
   return layoutMap.value.get(dateKey) || [];
 };
 
-/** @type {ComputedRef<Map<string, {event: GoogleEvent, isStart: boolean, isEnd: boolean}[]>>} @description イベントの配置情報を保持するマップ */
+/** @type {ComputedRef<Map<string, {event: GoogleEvent, isStart: boolean, isEnd: boolean, isLabelStart: boolean, spanDays: number}[]>>} @description イベントの配置情報を保持するマップ */
 const layoutMap = computed(() => {
   const map = new Map();
   const days = calDaysArray.value;
@@ -93,19 +100,18 @@ const layoutMap = computed(() => {
 
   weeks.forEach((week) => {
     const weekStart = week[0].date;
-    const weekEnd = week[week.length - 1].date;
-    weekEnd.setHours(23, 59, 59, 999);
+    const weekEnd = week[week.length - 1].date.endOf('day');
 
     // この週に関係するイベントを抽出
     const weekEvents = Array.from(events.value)
-      .filter((e) => e._instanceStart < weekEnd && e._instanceEnd > weekStart)
+      .filter((e) => e._instanceStart.isBefore(weekEnd) && e._instanceEnd.isAfter(weekStart))
       .sort((a, b) => {
         // ソート: 開始日時順 > 期間が長い順
         const sa = a._instanceStart;
         const sb = b._instanceStart;
-        if (sa.getTime() !== sb.getTime()) return sa.getTime() - sb.getTime();
-        const durA = a._instanceEnd.getTime() - sa.getTime();
-        const durB = b._instanceEnd.getTime() - sb.getTime();
+        if (sa.unix() !== sb.unix()) return sa.unix() - sb.unix();
+        const durA = a._instanceEnd.unix() - sa.unix();
+        const durB = b._instanceEnd.unix() - sb.unix();
         return durB - durA;
       });
 
@@ -121,13 +127,13 @@ const layoutMap = computed(() => {
       let endIndex = 6;
 
       // 開始日時が週の開始日より後であれば、開始インデックスを計算
-      if (evStart > weekStart) {
-        startIndex = Math.floor((evStart.getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24));
+      if (evStart.isAfter(weekStart)) {
+        startIndex = evStart.diff(weekStart, 'day');
       }
-      if (evEnd < weekEnd) {
-        endIndex = Math.floor((evEnd.getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24));
+      if (evEnd.isBefore(weekEnd)) {
+        endIndex = evEnd.diff(weekStart, 'day');
         // 00:00終了の場合は前日までとする
-        if (evEnd.getHours() === 0 && evEnd.getMinutes() === 0 && evEnd > evStart) {
+        if (evEnd.hour() === 0 && evEnd.minute() === 0 && evEnd.isAfter(evStart)) {
           endIndex -= 1;
         }
       }
@@ -159,7 +165,7 @@ const layoutMap = computed(() => {
       for (let i = 0; i < 7; i++) {
         const d = week[i];
         if (!d) continue;
-        const key = d.date.toDateString();
+        const key = d.date.format('YYYY-MM-DD');
 
         let daySlots = map.get(key);
         if (!daySlots) {
@@ -174,7 +180,9 @@ const layoutMap = computed(() => {
           daySlots[row] = {
             event: ev,
             isStart: i === startIndex,
-            isEnd: i === endIndex
+            isEnd: i === endIndex,
+            isLabelStart: i === startIndex || i === 0,
+            spanDays: i === startIndex || i === 0 ? endIndex - i + 1 : 1,
           };
         }
       }
@@ -193,14 +201,25 @@ const handleEventClick = (e, event) => {
   // router.push({ name: 'EventDetail', query: { id: event.id } });
 };
 
+/** @param {Dayjs} date 日付セルで選択された日付 */
+const selectDateCell = (date) => {
+  const selectedDate = date.format('YYYY-MM-DD');
+  const isDifferentDate = userStore.nowSelectedDate !== selectedDate;
+
+  userStore.setNowSelectedDate(date);
+  if (router.currentRoute.value.name === 'EventDetail' && isDifferentDate) {
+    router.push({ name: 'Home' });
+  }
+};
+
 /**
  * 日付セルのコンテキストメニューを開く
- * @param {MouseEvent} event - 右クリックイベント
- * @param {{ date: Date }} day - 右クリックされた日付情報
+ * @param {MouseEvent} evt - 右クリックイベント
+ * @param {Dayjs} date - 右クリックされた日付情報
  */
-const openContextMenu = (event, day) => {
-  userStore.setNowSelectedDate(day.date);
-  rfDropdownForContextMenu.value?.open(event);
+const openContextMenu = (evt, date) => {
+  selectDateCell(date);
+  rfDropdownForContextMenu.value?.open(evt);
 };
 
 /** @param {string} action コンテキストメニューを選択したときのハンドラ */
@@ -208,12 +227,29 @@ const onSelectContextMenu = (action) => {
   switch (action) {
     // 選択中の日付で新しい予定を作成
     case 'CreateEvent':
+      userStore.setNowSelectedEvent(null);
       router.push({ name: 'EventCreator' });
       break;
     default:
       break;
   }
   rfDropdownForContextMenu.value?.close();
+};
+
+/** @param {WheelEvent} evt カレンダー上のホイール操作 */
+const handleCalendarWheel = (evt) => {
+  if (!userStore.useWheelMonthNavigation || evt.ctrlKey || evt.metaKey || evt.deltaY === 0) return;
+
+  const now = Date.now();
+  if (now - lastWheelNavigationAt.value < 400) {
+    evt.preventDefault();
+    return;
+  }
+
+  evt.preventDefault();
+  lastWheelNavigationAt.value = now;
+  if (evt.deltaY < 0) userStore.goPrevMonth();
+  else userStore.goNextMonth();
 };
 
 /**
@@ -234,30 +270,35 @@ const getMonthCellClass = (day) => {
 
 watch(() => [calendarStore.list, userStore.nowUsingDate], async () => {
   // カレンダーリストがロードされたり、月が変わったりしたらイベントを取得または再取得
-  eventsSource.value = await eventStore.listEvents(userStore.nowUsingDate.getFullYear(), userStore.nowUsingDate.getMonth());
-});
+  eventsSource.value = await eventStore.listEvents(userStore.nowUsingDate.year(), userStore.nowUsingDate.month());
+}, { immediate: true });
 </script>
 
 <template>
-  <div class="month-horizontal-view">
+  <div class="month-horizontal-view" @wheel="handleCalendarWheel">
     <div class="month-header">
-      <div v-for="(map, i) in userStore.daysMap" :key="i">{{ map.label }}</div>
+      <div v-for="(map, i) in userStore.daysMap" :key="i" :style="{ color: map.weekendColor ?? undefined }">
+        {{ map.label }}
+      </div>
     </div>
 
     <div class="month-grid">
       <div v-for="(day, idx) in calDaysArray" :key="day.key || idx" :class="getMonthCellClass(day)"
-        @click="userStore.setNowSelectedDate(day.date)" @contextmenu.prevent="openContextMenu($event, day)">
-        <div class="day-num">{{ day.date.getDate() }}</div>
+        :style="{ color: userStore.getWeekendColor(day.date.day(), day.isOtherMonth) ?? undefined }"
+        @click="selectDateCell(day.date)" @contextmenu.prevent="openContextMenu($event, day.date)">
+        <div class="day-num"
+          :style="{ color: userStore.getWeekendColor(day.date.day(), day.isOtherMonth) ?? undefined }">
+          {{ day.date.date() }}
+        </div>
 
         <div class="events-stack">
           <div v-for="(slot, i) in getMonthDayEvents(day.date)" :key="i" class="event-slot">
             <div v-if="slot" class="event-bar"
-              :class="{ 'is-start': slot.isStart, 'is-end': slot.isEnd, 'is-continued': !slot.isStart }"
-              :style="{ backgroundColor: slot.event.color }" @click.stop="(e) => handleEventClick(e, slot.event)"
-              @mousedown.stop>
-              <span v-if="slot.isStart || day.date.getDay() === userStore.firstDayOfWeek">
-                <span>{{ slot.event.icon }}</span>
-                {{ slot.event.summary }}
+              :class="{ 'is-start': slot.isStart, 'is-end': slot.isEnd, 'is-continued': !slot.isStart, 'is-label-start': slot.isLabelStart }"
+              :style="{ backgroundColor: getEventBarColor(slot.event), width: slot.isLabelStart ? `calc(${slot.spanDays * 100}% + ${(slot.spanDays - 1) * 4}px)` : undefined }"
+              @click.stop="(e) => handleEventClick(e, slot.event)" @mousedown.stop>
+              <span v-if="slot.isLabelStart">
+                {{ slot.event.icon ?? '📌' }}{{ slot.event.summary }}
               </span>
             </div>
           </div>
@@ -366,6 +407,11 @@ watch(() => [calendarStore.list, userStore.nowUsingDate], async () => {
         overflow: hidden;
         white-space: nowrap;
         text-overflow: ellipsis;
+
+        &.is-label-start {
+          position: relative;
+          z-index: 1;
+        }
 
         &.is-continued {
           border-top-left-radius: 0;

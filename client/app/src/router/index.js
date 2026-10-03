@@ -27,7 +27,7 @@ const router = createRouter({
           },
         },
         {
-          path: '/evt/:id',
+          path: '/evt/detail',
           name: 'EventDetail',
           components: {
             default: () => import('@/views/CalendarMonthHorizonView.vue'),
@@ -36,12 +36,48 @@ const router = createRouter({
           },
         },
         {
-          path: '/evt/:id/edit',
+          path: '/evt/edit',
           name: 'EventEditor',
           components: {
             default: () => import('@/views/CalendarMonthHorizonView.vue'),
             nav: () => import('@/views/UserCalendarsView.vue'),
             sub: () => import('@/views/EventEditorView.vue'),
+          },
+        },
+        {
+          path: '/calendar/sharing',
+          name: 'SharingConfig',
+          components: {
+            default: () => import('@/views/CalendarMonthHorizonView.vue'),
+            nav: () => import('@/views/UserCalendarsView.vue'),
+            sub: () => import('@/views/SharingConfigView.vue'),
+          },
+        },
+        {
+          path: '/calendar/new',
+          name: 'CalendarCreator',
+          components: {
+            default: () => import('@/views/CalendarMonthHorizonView.vue'),
+            nav: () => import('@/views/UserCalendarsView.vue'),
+            sub: () => import('@/views/CalendarCreatorView.vue'),
+          },
+        },
+        {
+          path: '/calendar/detail',
+          name: 'CalendarDetail',
+          components: {
+            default: () => import('@/views/CalendarMonthHorizonView.vue'),
+            nav: () => import('@/views/UserCalendarsView.vue'),
+            sub: () => import('@/views/CaledarDetailView.vue'),
+          },
+        },
+        {
+          path: '/user/config',
+          name: 'UserConfig',
+          components: {
+            default: () => import('@/views/CalendarMonthHorizonView.vue'),
+            nav: () => import('@/views/UserCalendarsView.vue'),
+            sub: () => import('@/views/UserConfigView.vue'),
           },
         },
       ],

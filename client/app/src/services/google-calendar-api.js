@@ -20,7 +20,7 @@ export function listEvents(token, gCalendarId, query = {}) {
  * @param {string} gCalendarId カレンダー ID
  * @param {string} gEventId 予定 ID
  * @param {Object} [query={}] クエリパラメータ
- * @returns {Promise<Response>} API レスポンス
+ * @returns {Promise<GoogleEvent>} API レスポンス
  */
 export function getEvent(token, gCalendarId, gEventId, query = {}) {
   return fetchCalendarAPI(token, 'GET', `/calendars/$gCalendarId/events/$gEventId`, { params: { gCalendarId, gEventId }, query });
@@ -271,7 +271,7 @@ export function watchCalendarListEntry(token, body, query = {}) {
  * @returns {Promise<Response>} API レスポンス
  */
 export function listAcl(token, gCalendarId, query = {}) {
-  return fetchCalendarAPI(token, 'GET', `/calendars/$gCalendarId}/acl`, { params: { gCalendarId }, query });
+  return fetchCalendarAPI(token, 'GET', `/calendars/$gCalendarId/acl`, { params: { gCalendarId }, query });
 }
 
 /**

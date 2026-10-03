@@ -16,7 +16,7 @@ const create = async ({ body, calendarId }) => {
   error.value = '';
   try {
     const event = await eventStore.createEvent(body, calendarId);
-    router.replace({ name: 'EventDetail', params: { id: event.id } });
+    router.replace({ name: 'EventDetail' });
   } catch (err) {
     error.value = err.message || '予定を作成できませんでした。';
   } finally {

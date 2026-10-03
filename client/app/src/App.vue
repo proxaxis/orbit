@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth.js';
 import { useUserStore } from '@/stores/user.js';
 import UserDialog from '@/components/UserDialog.vue';
+import PwaInstallPrompt from '@/components/PwaInstallPrompt.vue';
 
 const authStore = useAuthStore();
 const userStore = useUserStore();
@@ -10,23 +11,16 @@ const userStore = useUserStore();
 /** @type {MediaQueryList|null} @description システムテーマの変更を監視するためのオブジェクト */
 let mQueryList = null;
 
-/**
- * ウィンドウリサイズ時のイベントハンドラ
- * @returns {void}
- */
-const handleWindowResize = () => {
+/** @description ウィンドウリサイズ時のイベントハンドラ */
+function handleWindowResize() {
   userStore.winInnerWidth = window.innerWidth;
-};
+}
 
-/**
- * システムテーマ変更時のイベントハンドラ
- * @param {MediaQueryListEvent} evt イベントオブジェクト
- * @returns {void}
- */
-const handleSystemThemeChange = (evt) => {
+/** @param {MediaQueryListEvent} evt メディアクエリの変更イベント @description システムテーマ変更時のイベントハンドラ */
+function handleSystemThemeChange(evt) {
   userStore.isSystemPrefersDark = evt.matches;
-  if (String(userStore.theme) === 'SYSTEM') userStore.applyTheme('SYSTEM'); // SYSTEM の場合は再適用して DOM を更新
-};
+  if (userStore.userSelectedTheme === 'SYSTEM') userStore.applyTheme('SYSTEM');
+}
 
 watch(() => userStore.hasError, (to) => {
   if (to) {
@@ -37,8 +31,8 @@ watch(() => userStore.hasError, (to) => {
 watch(() => authStore.isAuthenticated, (isAuthenticated) => {
   if (!isAuthenticated) {
     userStore.openUserDialog({
-      title: 'ログインしてください',
-      message: 'カレンダーを同期するには、Google アカウントでログインしてください。',
+      title: 'Login Required',
+      message: 'Login with your Google account to synchronize your calendar.',
     });
   }
 });
@@ -47,7 +41,7 @@ onMounted(async () => {
   if (!userStore.checkUserEnvironment()) return;
 
   // ユーザ設定の適用
-  userStore.applyTheme(userStore.theme);
+  userStore.applyTheme(userStore.userSelectedTheme);
   window.addEventListener('resize', handleWindowResize);
   mQueryList = window.matchMedia('(prefers-color-scheme: dark)');
   mQueryList.addEventListener('change', handleSystemThemeChange);
@@ -56,8 +50,8 @@ onMounted(async () => {
   const token = await authStore.fetchToken();
   if (!token && !authStore.isAuthenticated) {
     userStore.openUserDialog({
-      title: 'ログインしてください',
-      message: 'カレンダーを同期するには、Google アカウントでログインしてください。',
+      title: 'Login Required',
+      message: 'Login with your Google account to synchronize your calendar.',
     });
   }
 });
@@ -72,6 +66,7 @@ onUnmounted(() => {
 <template>
   <router-view />
   <UserDialog />
+  <PwaInstallPrompt />
 </template>
 
 <style lang="scss">
@@ -80,14 +75,15 @@ onUnmounted(() => {
 
 :root {
   color-scheme: light dark;
-  @include var.spread-vars(light);
+  @include var.spread-themes(light);
+  @include var.spread-sizes();
   --nav-min-width: calc(260px - 2rem);
   --sub-min-width: calc(260px - 2rem);
   --border-radius: 6px;
 }
 
 [data-theme='dark'] {
-  @include var.spread-vars(dark);
+  @include var.spread-themes(dark);
 }
 
 * {
@@ -104,6 +100,7 @@ html {
 body {
   background-color: var(--bg-0);
   color: var(--text);
+  line-height: var(--line-height);
 }
 
 li {
@@ -118,7 +115,7 @@ button {
     border: none;
     background: none;
     cursor: pointer;
-    font-size: 1.2rem;
+    font-size: var(--text-size-sm);
     display: flex;
     align-items: center;
     color: var(--text);
@@ -133,8 +130,8 @@ textarea {
   outline: 0;
   border-radius: var(--border-radius);
   border: 1px solid var(--border);
-  padding: 0.4rem 0.6rem;
-  font-size: 1rem;
+  padding: var(--space-xs) var(--space-xxs);
+  font-size: var(--text-size-sm);
 
   &:focus {
     border-color: var(--primary);
@@ -143,7 +140,7 @@ textarea {
 }
 
 select {
-  padding: 0.4rem 0.3rem;
+  padding: var(--space-xs) var(--space-xxs);
 }
 
 .icons {
@@ -157,7 +154,7 @@ select {
 hr {
   border: none;
   border-top: 1px solid var(--border);
-  margin: 1rem 0;
+  margin: var(--space-sm) 0;
 }
 
 details {
@@ -178,7 +175,20 @@ details {
   }
 }
 
-.text-center {
-  text-align: center;
+button[data-app-button="primary"] {
+  background-color: var(--primary);
+  color: var(--bg-0);
+  border-radius: var(--border-radius);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--text-size-sm);
+
+  &:hover {
+    background-color: #0000ffa8;
+  }
+
+  &:disabled {
+    background-color: var(--border);
+    cursor: not-allowed;
+  }
 }
 </style>

@@ -2,20 +2,30 @@
 import { computed, onMounted, ref } from 'vue';
 import dayjs from 'dayjs';
 import { useRoute, useRouter } from 'vue-router';
+import { useEventStore } from '@/stores/event.js';
 import MenuBar from '@/components/MenuBar.vue';
+import CalendarRibbon from '@/components/CalendarRibbon.vue';
 import IconPen from '@/components/icons/IconPen.vue';
 import IconTrash from '@/components/icons/IconTrash.vue';
 import IconLocationDot from '@/components/icons/IconLocationDot.vue';
-import { useEventStore } from '@/stores/event.js';
+import IconXMark from '@/components/icons/IconXMark.vue';
+import { useUserStore } from '@/stores/user.js';
+import IconClock from '@/components/icons/IconClock.vue';
+import IconAlignLeft from '@/components/icons/IconAlignLeft.vue';
 
 const route = useRoute();
 const router = useRouter();
 const eventStore = useEventStore();
+const userStore = useUserStore();
+
+/** @type {Ref<(GoogleEvent & { sourceCalendarId: string })|null>} */
 const event = ref(null);
-const calendar = ref(null);
-const loading = ref(true);
-const error = ref('');
-const deleting = ref(false);
+
+/** @param {GoogleEvent|null} value @returns {string} */
+function getEventIcon(value) {
+  const shared = /** @type {Record<string, string>|undefined} */ (value?.extendedProperties?.shared);
+  return shared?.icon ?? '📅';
+}
 
 const dateText = computed(() => {
   if (!event.value) return '';
@@ -23,75 +33,102 @@ const dateText = computed(() => {
   return `${dayjs(event.value.start.dateTime).format('YYYY-MM-DD HH:mm')} - ${dayjs(event.value.end.dateTime).format('YYYY-MM-DD HH:mm')}`;
 });
 
-onMounted(async () => {
-  try {
-    const result = await eventStore.findEvent(route.params.id);
-    if (!result) throw new Error('予定が見つかりません。');
-    event.value = result.event;
-    calendar.value = result.calendar;
-  } catch (err) {
-    error.value = err.message || '予定を読み込めませんでした。';
-  } finally {
-    loading.value = false;
-  }
-});
+function edit() {
+  router.push({ name: 'EventEditor' });
+}
 
-const remove = async () => {
-  if (!calendar.value || !window.confirm('この予定を削除しますか？')) return;
-  deleting.value = true;
+async function remove() {
+  if (!event.value) throw new Error('You do not have an event selected. You must select an event to remove it.');
+  if (!await userStore.confirm({ title: 'Remove Event', message: 'Are you sure you want to remove this event?' })) return;
+  userStore.setLoading(true, 'Removing the event...');
   try {
-    await eventStore.removeEvent(route.params.id, calendar.value.id);
+    const res = await eventStore.removeEvent(event.value.id, event.value.sourceCalendarId);
+    if (!res) throw new Error('Failed to remove the event.');
     router.replace({ name: 'Home' });
   } catch (err) {
-    error.value = err.message || '予定を削除できませんでした。';
+    userStore.setError(true, err);
   } finally {
-    deleting.value = false;
+    userStore.setLoading(false);
   }
-};
+}
+
+onMounted(async () => {
+  userStore.setLoading(true, 'Loading the event...');
+  try {
+    if (!userStore.nowSelectedEvent) throw new Error('You do not have an event selected. You must select an event to view its details.');
+    const result = await eventStore.getEventById(userStore.nowSelectedEvent.eid, userStore.nowSelectedEvent.cid);
+    if (!result) throw new Error('The event could not be found. Go back to the calendar and select a different event.');
+    event.value = result;
+  } catch (err) {
+    userStore.setError(true, err);
+  } finally {
+    userStore.setLoading(false);
+  }
+});
 </script>
 
 <template>
   <section class="event-view">
     <MenuBar>
       <template #main>
-        <h1 class="title">予定の詳細</h1>
+        <h1 class="title">Event Details</h1>
       </template>
       <template #sub>
-        <div class="actions">
-          <button title="編集" @click="router.push({ name: 'EventEditor', params: { id: route.params.id } })">
-            <IconPen />編集
+        <div class="menu-bar-actions">
+          <button title="Delete" :disabled="!event" @click="remove">
+            <IconTrash />Delete
           </button>
-          <button title="削除" class="danger" :disabled="deleting" @click="remove">
-            <IconTrash />削除
+          <button title="Edit" :disabled="!event" @click="edit">
+            <IconPen size="1.1rem" />Edit
+          </button>
+          <button title="Back" @click="router.push({ name: 'Home' })">
+            <IconXMark size="1.2rem" />Back
           </button>
         </div>
       </template>
     </MenuBar>
-    <p v-if="loading">読み込み中...</p>
-    <p v-else-if="error" class="error">{{ error }}</p>
-    <article v-else class="event-detail">
-      <div class="event-heading"><span class="emoji">{{ event.icon || '📅' }}</span>
-        <div>
-          <h2>{{ event.summary }}</h2>
-          <p>{{ calendar?.summaryOverride || calendar?.summary }}</p>
+
+    <article v-if="!!event">
+      <div class="heading">
+        <h2>{{ getEventIcon(event) }}{{ event?.summary ?? '予定' }}</h2>
+        <div class="calendar-ribbon-wrapper">
+          <CalendarRibbon :gCalendarId="event?.sourceCalendarId ?? ''" />
         </div>
       </div>
       <dl>
         <div>
-          <dt>日時</dt>
-          <dd>{{ dateText }}<span v-if="event.start.timeZone"> ({{ event.start.timeZone }})</span></dd>
+          <dt>
+            <IconClock />
+          </dt>
+          <dd>{{ dateText }}<span v-if="event?.start?.timeZone"> ({{ event.start.timeZone }})</span></dd>
         </div>
-        <div v-if="event.location">
-          <dt>場所</dt>
-          <dd>
-            <IconLocationDot />{{ event.location }}
-          </dd>
+        <div v-if="event?.location">
+          <dt>
+            <IconLocationDot />
+          </dt>
+          <dd>{{ event?.location }}</dd>
         </div>
-        <div v-if="event.description">
-          <dt>説明</dt>
-          <dd class="description">{{ event.description }}</dd>
+        <div v-if="event?.description">
+          <dt>
+            <IconAlignLeft />
+          </dt>
+          <dd>{{ event.description }}</dd>
         </div>
       </dl>
+      <details>
+        <summary>More Information</summary>
+        <ul>
+          <li>Status: <span class="inline-text">{{ event?.status ?? 'Unavailable' }}</span></li>
+          <li>Google Calendar URL: <span class="inline-text">{{ event?.htmlLink ?? 'Unavailable' }}</span></li>
+          <li>Created: <span class="inline-text">{{ event?.created ?? 'Unavailable' }}</span></li>
+          <li>Updated: <span class="inline-text">{{ event?.updated ?? 'Unavailable' }}</span></li>
+          <li>Creator ID: <span class="inline-text">{{ event?.creator?.email ?? 'Unavailable' }}</span></li>
+          <li>Event Type: <span class="inline-text">{{ event?.birthdayProperties?.type ?? 'Unavailable' }}</span></li>
+        </ul>
+      </details>
+    </article>
+    <article v-else>
+      <p>We could not load the event details.</p>
     </article>
   </section>
 </template>
@@ -102,42 +139,33 @@ const remove = async () => {
   // overflow-y: auto;
 }
 
-.actions {
+.menu-bar-actions {
   display: flex;
-  gap: .7rem;
+  gap: var(--space-sm);
+
+  button {
+    display: flex;
+    align-items: center;
+  }
 }
 
-.actions button {
-  gap: .3rem;
-  font-size: .95rem;
-}
-
-.actions .danger {
-  color: var(--danger);
-}
-
-.event-detail {
-  background: var(--bg-1);
-  border-radius: var(--border-radius);
-}
-
-.event-heading {
+.heading {
   display: flex;
-  gap: 0.2rem;
-  align-items: center;
-  padding-bottom: 1.5rem;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-sm);
   border-bottom: 1px solid var(--border);
+
+  h2 {
+    font-size: var(--text-size-lg);
+    font-weight: bold;
+  }
+
+  .calendar-ribbon-wrapper {
+    margin-left: var(--space-sm);
+  }
 }
 
-.emoji {
-  font-size: 2.5rem;
-}
-
-.event-heading h2 {
-  margin-bottom: .25rem;
-}
-
-.event-heading p,
 dt {
   color: var(--text-light);
   font-size: .9rem;
@@ -146,25 +174,28 @@ dt {
 dl {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding-top: 1.5rem;
+  gap: var(--space-sm);
+  padding-top: var(--space-md);
+
+  div {
+    display: grid;
+    grid-template-columns: var(--space-md) 1fr;
+    gap: var(--space-sm);
+
+    dt {
+      display: flex;
+      align-items: center;
+    }
+  }
 }
 
-dl div {
-  display: grid;
-  grid-template-columns: 5rem 1fr;
-  gap: 1rem;
-}
-
-dd {
-  white-space: pre-wrap;
-}
-
-.description {
-  line-height: 1.7;
-}
-
-.error {
-  color: var(--danger);
+.inline-text {
+  font-family: monospace;
+  font-size: var(--text-size-sm);
+  color: rgb(231, 17, 17);
+  background-color: var(--bg-3);
+  padding: var(--space-xxs) var(--space-xs);
+  border-radius: var(--border-radius);
+  word-break: break-all;
 }
 </style>

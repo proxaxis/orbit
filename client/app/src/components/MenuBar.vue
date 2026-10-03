@@ -23,20 +23,18 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 1.2rem;
-  padding: 0.3rem 0 1rem 0;
+  padding-bottom: var(--space-md);
 
   :deep(.title) {
     display: inline;
     user-select: none;
     font-weight: bold;
-    font-size: 1.2rem;
+    font-size: var(--text-size-lg);
   }
 
   .main,
   .sub {
     display: flex;
-    gap: 1rem;
     align-items: center;
     justify-content: center;
   }

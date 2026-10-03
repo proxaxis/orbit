@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { toDayjs } from '@/services/dayjs';
+import dayjs, { toDayjs } from '@/services/dayjs';
 
 /**
  * @typedef {'LIGHT' | 'DARK' | 'SYSTEM'} UserAvailableTheme ユーザが選択可能なテーマ設定
@@ -36,22 +36,32 @@ export const useUserStore = defineStore('user', () => {
   /**
    * エラー情報を設定
    * @param {boolean} state エラー状態フラグ
-   * @param {Error|null} err エラー情報
+   * @param {Error|string|null|unknown} err エラー情報
    * @returns {void}
    */
   function setError(state, err = null) {
     hasError.value = state;
-    error.value = err;
+    if (!state) error.value = null;
+    else {
+      if (err instanceof Error) error.value = err;
+      else error.value = new Error(String(err));
+    }
   }
 
   /** @type {Ref<boolean>} @description ユーザーダイアログを表示しているかどうか */
   const isUserDialogOpen = ref(false);
 
   /** @type {Ref<string>} @description ユーザーダイアログのタイトル */
-  const userDialogTitle = ref('ユーザー');
+  const userDialogTitle = ref('User');
 
   /** @type {Ref<string>} @description ユーザーダイアログのメッセージ */
   const userDialogMessage = ref('');
+
+  /** @type {Ref<'USER' | 'CONFIRM'>} @description ユーザーダイアログの種類 */
+  const userDialogType = ref('USER');
+
+  /** @type {((result: boolean) => void)|null} @description confirm の回答待ちコールバック */
+  let confirmResolver = null;
 
   /**
    * ユーザーダイアログを開く
@@ -59,9 +69,43 @@ export const useUserStore = defineStore('user', () => {
    * @returns {void}
    */
   function openUserDialog(options = {}) {
-    userDialogTitle.value = options.title ?? 'ユーザー';
+    if (confirmResolver) resolveConfirm(false);
+    userDialogType.value = 'USER';
+    userDialogTitle.value = options.title ?? 'User';
     userDialogMessage.value = options.message ?? '';
     isUserDialogOpen.value = true;
+  }
+
+  /**
+   * ユーザに確認を求める
+   * @param {{title?: string, message?: string}} [options={}] 表示内容
+   * @returns {Promise<boolean>} YES なら true、NO または閉じた場合は false
+   */
+  function confirm(options = {}) {
+    if (confirmResolver) confirmResolver(false);
+
+    userDialogType.value = 'CONFIRM';
+    userDialogTitle.value = options.title ?? 'Confirm';
+    userDialogMessage.value = options.message ?? '';
+    isUserDialogOpen.value = true;
+
+    return new Promise((resolve) => {
+      confirmResolver = resolve;
+    });
+  }
+
+  /**
+   * confirm の回答を処理する
+   * @param {boolean} result 回答
+   * @returns {void}
+   */
+  function resolveConfirm(result) {
+    if (confirmResolver) {
+      const resolver = confirmResolver;
+      confirmResolver = null;
+      resolver(result);
+    }
+    isUserDialogOpen.value = false;
   }
 
   /**
@@ -69,6 +113,7 @@ export const useUserStore = defineStore('user', () => {
    * @returns {void}
    */
   function closeUserDialog() {
+    if (userDialogType.value === 'CONFIRM') resolveConfirm(false);
     isUserDialogOpen.value = false;
   }
 
@@ -92,6 +137,8 @@ export const useUserStore = defineStore('user', () => {
   /** @type {Ref<UserAvailableTheme>} @description ユーザ設定のテーマ */
   const userSelectedTheme = ref('SYSTEM');
 
+  const USER_SETTINGS_KEY = 'orbit-user-settings';
+
   /** @type {Ref<boolean>} @description システムのテーマ設定がダークモードかどうか */
   const isSystemPrefersDark = ref(typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)').matches : false);
 
@@ -108,6 +155,7 @@ export const useUserStore = defineStore('user', () => {
    */
   function applyTheme(newTheme) {
     userSelectedTheme.value = newTheme;
+    saveSettings();
 
     if (typeof document === 'undefined') return console.warn('applyTheme called in a non-browser environment. DOM manipulation is skipped.');
 
@@ -115,63 +163,212 @@ export const useUserStore = defineStore('user', () => {
     if (theme.value === 'DARK') document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');
 
-    document.documentElement.setAttribute('data-theme', theme.value);
+    document.documentElement.setAttribute('data-theme', theme.value.toLowerCase());
   }
 
   // #endregion
 
-  // #region カレンダーとスケジュール設定処理
+  // #region カレンダー設定処理
 
   /** @type {Ref<number>} @description 週の開始曜日（デフォルト: 日曜日）*/
   const firstDayOfWeek = ref(0);
 
-  /** @type {Ref<number[]>} @description 定休日と週末の設定（デフォルト: 日曜日と土曜日）*/
-  const weekendDays = ref([6, 0]);
+  /** @type {Ref<string[]>} @description 曜日ラベル（日曜始まりの配列） */
+  const weekdayLabels = ref(['日', '月', '火', '水', '木', '金', '土']);
+
+  /** @type {Ref<string[]>} @description 左ペインに表示するカレンダー ID の順序 */
+  const calendarOrder = ref([]);
+
+  /** @type {Ref<number>} @description 左ペインの幅 */
+  const navPaneWidth = ref(260);
+
+  /** @type {Ref<number>} @description 右ペインの幅 */
+  const subPaneWidth = ref(360);
+
+  /** @type {Ref<{index: number, color: string}[]>} @description 曜日ごとの定休日と文字色の設定 */
+  const weekendDays = ref([
+    { index: 6, color: '#0a0dd6' },
+    { index: 0, color: '#d32f2f' },
+  ]);
+
+  /**
+   * 色を白方向へ補間
+   * @param {string} color HEX形式の色
+   * @param {number} ratio 白へ混ぜる割合
+   * @returns {string} 補間後の色
+   */
+  function lightenColor(color, ratio = 0.5) {
+    const hex = color.replace(/^#/, '');
+    const normalizedHex =
+      hex.length === 3
+        ? hex
+            .split('')
+            .map((value) => value + value)
+            .join('')
+        : hex;
+    if (!/^[0-9a-fA-F]{6}$/.test(normalizedHex)) return color;
+
+    const channels = [0, 2, 4].map((offset) => Number.parseInt(normalizedHex.slice(offset, offset + 2), 16));
+    const lightenedChannels = channels.map((channel) => Math.round(channel + (255 - channel) * ratio));
+    return `#${lightenedChannels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+  }
+
+  /** @param {number} dayIndex 曜日番号（日曜: 0 - 土曜: 6） @param {boolean} [isOtherMonth=false] 他月の日付かどうか @returns {string|null} 設定された休日色 */
+  function getWeekendColor(dayIndex, isOtherMonth = false) {
+    const color = weekendDays.value.find((day) => day.index === dayIndex)?.color ?? null;
+    return color && isOtherMonth ? lightenColor(color) : color;
+  }
 
   /** @type {Ref<boolean>} @description 小型カレンダーの表示有無（デフォルト: true）*/
   const useMiniCalendar = ref(true);
 
-  /** @type {Ref<Date>} @description 現在表示している日付 */
-  const nowUsingDate = ref(new Date());
+  /** @type {Ref<boolean>} @description カレンダーのホイール操作で月を移動するかどうか */
+  const useWheelMonthNavigation = ref(true);
+
+  function saveSettings() {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(
+      USER_SETTINGS_KEY,
+      JSON.stringify({
+        theme: userSelectedTheme.value,
+        firstDayOfWeek: firstDayOfWeek.value,
+        weekendDays: weekendDays.value,
+        useMiniCalendar: useMiniCalendar.value,
+        useWheelMonthNavigation: useWheelMonthNavigation.value,
+        weekdayLabels: weekdayLabels.value,
+        calendarOrder: calendarOrder.value,
+        navPaneWidth: navPaneWidth.value,
+        subPaneWidth: subPaneWidth.value,
+      }),
+    );
+  }
+
+  function loadSettings() {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(USER_SETTINGS_KEY) ?? '{}');
+      if (['LIGHT', 'DARK', 'SYSTEM'].includes(saved.theme)) userSelectedTheme.value = saved.theme;
+      if (Number.isInteger(saved.firstDayOfWeek) && saved.firstDayOfWeek >= 0 && saved.firstDayOfWeek <= 6) firstDayOfWeek.value = saved.firstDayOfWeek;
+      if (Array.isArray(saved.weekendDays)) {
+        weekendDays.value = saved.weekendDays.filter((/** @type {{ index?: number, color?: unknown }} */ day) => typeof day.index === 'number' && Number.isInteger(day.index) && day.index >= 0 && day.index <= 6 && typeof day.color === 'string');
+      }
+      if (typeof saved.useMiniCalendar === 'boolean') useMiniCalendar.value = saved.useMiniCalendar;
+      if (typeof saved.useWheelMonthNavigation === 'boolean') useWheelMonthNavigation.value = saved.useWheelMonthNavigation;
+      if (Array.isArray(saved.weekdayLabels) && saved.weekdayLabels.length === 7 && saved.weekdayLabels.every((/** @type {unknown} */ label) => typeof label === 'string')) {
+        weekdayLabels.value = saved.weekdayLabels;
+      }
+      if (Array.isArray(saved.calendarOrder)) calendarOrder.value = saved.calendarOrder.filter((/** @type {unknown} */ id) => typeof id === 'string');
+      if (Number.isInteger(saved.navPaneWidth) && saved.navPaneWidth >= 260 && saved.navPaneWidth <= 600) navPaneWidth.value = saved.navPaneWidth;
+      if (Number.isInteger(saved.subPaneWidth) && saved.subPaneWidth >= 260 && saved.subPaneWidth <= 600) subPaneWidth.value = saved.subPaneWidth;
+    } catch (error) {
+      console.warn('Failed to load user settings.', error);
+    }
+  }
+
+  /** @param {number} dayIndex */
+  function setFirstDayOfWeek(dayIndex) {
+    if (!Number.isInteger(dayIndex) || dayIndex < 0 || dayIndex > 6) return;
+    firstDayOfWeek.value = dayIndex;
+    saveSettings();
+  }
+
+  /** @param {number} dayIndex @param {string} color */
+  function setWeekendDay(dayIndex, color) {
+    const existing = weekendDays.value.find((day) => day.index === dayIndex);
+    if (existing) weekendDays.value = weekendDays.value.filter((day) => day.index !== dayIndex);
+    else weekendDays.value = [...weekendDays.value, { index: dayIndex, color }];
+    saveSettings();
+  }
+
+  /** @param {number} dayIndex @param {string} color */
+  function setWeekendColor(dayIndex, color) {
+    const day = weekendDays.value.find((item) => item.index === dayIndex);
+    if (!day) return;
+    day.color = color;
+    saveSettings();
+  }
+
+  /** @param {string[]} labels */
+  function setWeekdayLabels(labels) {
+    if (!Array.isArray(labels) || labels.length !== 7) return;
+    weekdayLabels.value = labels.map((label) => String(label).trim().slice(0, 8));
+    saveSettings();
+  }
+
+  /** @param {string[]} calendarIds */
+  function setCalendarOrder(calendarIds) {
+    if (!Array.isArray(calendarIds)) return;
+    calendarOrder.value = [...new Set(calendarIds.filter((id) => typeof id === 'string'))];
+    saveSettings();
+  }
+
+  /** @param {number} width 左ペイン幅 */
+  function setNavPaneWidth(width) {
+    if (!Number.isInteger(width) || width < 260 || width > 600) return;
+    navPaneWidth.value = width;
+    saveSettings();
+  }
+
+  /** @param {number} width 右ペイン幅 */
+  function setSubPaneWidth(width) {
+    if (!Number.isInteger(width) || width < 260 || width > 600) return;
+    subPaneWidth.value = width;
+    saveSettings();
+  }
+
+  loadSettings();
+
+  /** @type {Ref<import('dayjs').Dayjs>} @description 現在表示している日付 */
+  const nowUsingDate = ref(dayjs());
 
   /** 現在表示中の月から前月の1日へ移動 */
   function goPrevMonth() {
-    nowUsingDate.value = new Date(nowUsingDate.value.getFullYear(), nowUsingDate.value.getMonth() - 1, 1);
+    nowUsingDate.value = nowUsingDate.value.subtract(1, 'month').startOf('month');
   }
 
   /** 現在表示中の月から翌月の1日へ移動 */
   function goNextMonth() {
-    nowUsingDate.value = new Date(nowUsingDate.value.getFullYear(), nowUsingDate.value.getMonth() + 1, 1);
+    nowUsingDate.value = nowUsingDate.value.add(1, 'month').startOf('month');
   }
 
   /** 現在表示中の月から今日の日付に移動 */
   function goToday() {
-    const now = new Date();
-    nowUsingDate.value = new Date(now.getFullYear(), now.getMonth(), 1);
+    nowUsingDate.value = dayjs();
   }
 
   /** @type {Ref<string|null>} @description 選択している日付（形式: YYYY-MM-DD） */
-  const nowSelectedDate = ref(toDayjs(new Date()).format('YYYY-MM-DD'));
+  const nowSelectedDate = ref(dayjs().format('YYYY-MM-DD'));
 
-  /** @param {Date} date @description 日付を選択する */
+  /** @param {Dayjs|string|null} date @description 日付を選択する */
   function setNowSelectedDate(date) {
-    nowSelectedDate.value = date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : null;
+    if (date === null) {
+      nowSelectedDate.value = null;
+      return;
+    }
+    nowSelectedDate.value = typeof date === 'string' ? date : date.format('YYYY-MM-DD');
   }
 
   /** @type {Ref<boolean>} @description カレンダーのセルがクリックされたかどうか */
   const isCellClicked = ref(false);
 
-  /** @type {ComputedRef<{index: number, label: string, isWeekend: boolean, isFirstDay: boolean}[]>} 曜日を表す文字列の配列（週の開始曜日と定休日を考慮して並んでいる）*/
+  /** @type {ComputedRef<{index: number, label: string, isWeekend: boolean, weekendColor: string|null, isFirstDay: boolean}[]>} 曜日を表す文字列の配列（週の開始曜日と定休日を考慮して並んでいる）*/
   const daysMap = computed(() => {
+    /** @type {{index: number, label: string, weekendColor: string|null, isWeekend: boolean, isFirstDay: boolean}[]} */
     const template = [
-      { index: 0, label: '日', isWeekend: weekendDays.value.includes(0), isFirstDay: firstDayOfWeek.value === 0 },
-      { index: 1, label: '月', isWeekend: weekendDays.value.includes(1), isFirstDay: firstDayOfWeek.value === 1 },
-      { index: 2, label: '火', isWeekend: weekendDays.value.includes(2), isFirstDay: firstDayOfWeek.value === 2 },
-      { index: 3, label: '水', isWeekend: weekendDays.value.includes(3), isFirstDay: firstDayOfWeek.value === 3 },
-      { index: 4, label: '木', isWeekend: weekendDays.value.includes(4), isFirstDay: firstDayOfWeek.value === 4 },
-      { index: 5, label: '金', isWeekend: weekendDays.value.includes(5), isFirstDay: firstDayOfWeek.value === 5 },
-      { index: 6, label: '土', isWeekend: weekendDays.value.includes(6), isFirstDay: firstDayOfWeek.value === 6 },
+      { index: 0, label: weekdayLabels.value[0], weekendColor: null, isWeekend: false, isFirstDay: false },
+      { index: 1, label: weekdayLabels.value[1], weekendColor: null, isWeekend: false, isFirstDay: false },
+      { index: 2, label: weekdayLabels.value[2], weekendColor: null, isWeekend: false, isFirstDay: false },
+      { index: 3, label: weekdayLabels.value[3], weekendColor: null, isWeekend: false, isFirstDay: false },
+      { index: 4, label: weekdayLabels.value[4], weekendColor: null, isWeekend: false, isFirstDay: false },
+      { index: 5, label: weekdayLabels.value[5], weekendColor: null, isWeekend: false, isFirstDay: false },
+      { index: 6, label: weekdayLabels.value[6], weekendColor: null, isWeekend: false, isFirstDay: false },
     ];
+
+    template.forEach((day) => {
+      day.weekendColor = getWeekendColor(day.index);
+      day.isWeekend = day.weekendColor !== null;
+      day.isFirstDay = firstDayOfWeek.value === day.index;
+    });
 
     const startIndex = firstDayOfWeek.value;
     const arr = [];
@@ -181,11 +378,14 @@ export const useUserStore = defineStore('user', () => {
     return arr;
   });
 
-  /** @type {Ref<{month: string, full: string}>} @description 画面表示に使用する日付フォーマット（dayjs フォーマット）*/
-  const dateFormat = ref({
-    month: 'YYYY-MM',
-    full: 'YYYY-MM-DD',
-  });
+  /** @type {Ref<{eid: string, cid: string}|null>} @description 現在選択されているイベント */
+  const nowSelectedEvent = ref(null);
+
+  /** @param {{eid: string, cid: string}|null} event @description 選択するイベント情報 */
+  function setNowSelectedEvent(event) {
+    if (event === null) return (nowSelectedEvent.value = null);
+    nowSelectedEvent.value = { eid: event.eid, cid: event.cid };
+  }
 
   // #endregion
 
@@ -220,12 +420,19 @@ export const useUserStore = defineStore('user', () => {
     isUserDialogOpen,
     userDialogTitle,
     userDialogMessage,
+    userDialogType,
     userSelectedTheme,
     isSystemPrefersDark,
     theme,
     firstDayOfWeek,
+    weekdayLabels,
+    calendarOrder,
+    navPaneWidth,
+    subPaneWidth,
     weekendDays,
+    getWeekendColor,
     useMiniCalendar,
+    useWheelMonthNavigation,
     winInnerWidth,
     device,
     isMobile,
@@ -235,14 +442,25 @@ export const useUserStore = defineStore('user', () => {
     nowSelectedDate,
     isCellClicked,
     daysMap,
-    dateFormat,
+    nowSelectedEvent,
     goPrevMonth,
     goNextMonth,
     goToday,
     setNowSelectedDate,
     setLoading,
     setError,
+    setNowSelectedEvent,
+    saveSettings,
+    setFirstDayOfWeek,
+    setWeekendDay,
+    setWeekendColor,
+    setWeekdayLabels,
+    setCalendarOrder,
+    setNavPaneWidth,
+    setSubPaneWidth,
     openUserDialog,
+    confirm,
+    resolveConfirm,
     closeUserDialog,
     applyTheme,
     checkUserEnvironment,

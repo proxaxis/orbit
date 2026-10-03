@@ -1,57 +1,64 @@
 <script setup>
 import { onMounted, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRouter } from 'vue-router';
 import MenuBar from '@/components/MenuBar.vue';
 import EventForm from '@/components/EventForm.vue';
-import { useCalendarStore } from '@/stores/calendar.js';
 import { useEventStore } from '@/stores/event.js';
+import { useUserStore } from '@/stores/user.js';
+import IconXMark from '@/components/icons/IconXMark.vue';
 
-const route = useRoute();
 const router = useRouter();
-const calendarStore = useCalendarStore();
 const eventStore = useEventStore();
+const userStore = useUserStore();
+
+/** @type {Ref<(GoogleEvent & { sourceCalendarId: string })|null>} */
 const event = ref(null);
-const calendar = ref(null);
-const loading = ref(true);
-const saving = ref(false);
-const error = ref('');
 
 onMounted(async () => {
   try {
-    const result = await eventStore.findEvent(route.params.id);
-    if (!result) throw new Error('予定が見つかりません。');
-    event.value = { ...result.event, calendarId: result.calendar.id };
-    calendar.value = result.calendar;
+    if (!userStore.nowSelectedEvent) throw new Error('You do not have an event selected. You must select an event to edit it.');
+    userStore.setLoading(true, 'Loading the event...');
+    const result = await eventStore.getEventById(userStore.nowSelectedEvent.eid, userStore.nowSelectedEvent.cid);
+    if (!result) throw new Error('The event could not be found. Go back to the calendar and select a different event.');
+    event.value = result;
   } catch (err) {
-    error.value = err.message || '予定を読み込めませんでした。';
+    userStore.setError(true, err);
   } finally {
-    loading.value = false;
+    userStore.setLoading(false);
   }
 });
 
-const update = async ({ body, calendarId }) => {
-  saving.value = true;
-  error.value = '';
+/** @param {{ body: Record<string, unknown> }} payload */
+async function update(payload) {
+  const { body } = payload;
   try {
-    await eventStore.updateEvent(route.params.id, body, calendarId || calendar.value?.id);
-    router.replace({ name: 'EventDetail', params: { id: route.params.id } });
+    if (!userStore.nowSelectedEvent) throw new Error('You do not have an event selected. You must select an event to update it.');
+    userStore.setLoading(true, 'Updating the event...');
+    await eventStore.updateEvent(userStore.nowSelectedEvent.eid, userStore.nowSelectedEvent.cid, body);
+    router.replace({ name: 'EventDetail' });
   } catch (err) {
-    error.value = err.message || '予定を更新できませんでした。';
+    userStore.setError(true, err);
   } finally {
-    saving.value = false;
+    userStore.setLoading(false);
   }
 };
 </script>
 
 <template>
   <section class="event-view">
-    <MenuBar><template #main>
-        <h1 class="title">予定を編集</h1>
-      </template></MenuBar>
-    <p v-if="loading">読み込み中...</p>
-    <p v-else-if="error" class="error">{{ error }}</p>
-    <EventForm v-else :initial-event="event" :calendars="calendarStore.list" :loading="saving" submit-label="更新"
-      @submit="update" @cancel="router.back()" />
+    <MenuBar>
+      <template #main>
+        <h1 class="title">Edit Event</h1>
+      </template>
+      <template #sub>
+        <div class="menu-bar-actions">
+          <button title="Don't save and close" @click="router.push({ name: 'Home' })">
+            <IconXMark size="1.2rem" />Close
+          </button>
+        </div>
+      </template>
+    </MenuBar>
+    <EventForm submit-label="Update" @submit="update" @cancel="router.back()" />
   </section>
 </template>
 

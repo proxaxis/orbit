@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch } from 'vue';
+import dayjs, { isEventOnDate, toDayjs } from '@/services/dayjs.js';
 import { useCalendarStore } from '@/stores/calendar.js';
 import { useUserStore } from '@/stores/user.js';
 import { useEventStore } from '@/stores/event.js';
@@ -8,20 +9,12 @@ const calendarStore = useCalendarStore();
 const userStore = useUserStore();
 const eventStore = useEventStore();
 
-/** @type {Ref<GoogleEvent[]>} */
+/** @type {Ref<(GoogleEvent & { sourceCalendarId: string })[]>} */
 const events = ref([]);
-
-/** @param {Date} date Date を YYYY-MM-DD 形式の文字列に変換する */
-const formatDate = (date) => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
 
 /**
  * @typedef {Object} CalendarCell
- * @property {Date} date
+ * @property {Dayjs} date
  * @property {string} dateString
  * @property {number} dayNumber
  * @property {number} dayOfWeek
@@ -33,35 +26,32 @@ const formatDate = (date) => {
 
 /** @type {ComputedRef<CalendarCell[]>} */
 const calendarDays = computed(() => {
-  const year = userStore.nowUsingDate.getFullYear();
-  const month = userStore.nowUsingDate.getMonth();
+  const year = userStore.nowUsingDate.year();
+  const month = userStore.nowUsingDate.month();
 
-  const firstDayOfMonth = new Date(year, month, 1);
-  const lastDayOfMonth = new Date(year, month + 1, 0);
+  const firstDayOfMonth = toDayjs(year, month, 1);
+  const lastDayOfMonth = toDayjs(year, month + 1, 0);
 
-  const startDayOffset = (firstDayOfMonth.getDay() - userStore.firstDayOfWeek + 7) % 7;
-  const startDate = new Date(year, month, 1 - startDayOffset);
 
-  const totalCells = Math.ceil((startDayOffset + lastDayOfMonth.getDate()) / 7) * 7;
-  const todayStr = formatDate(new Date());
+  const startDayOffset = (firstDayOfMonth.day() - userStore.firstDayOfWeek + 7) % 7;
+  const startDate = toDayjs(year, month, 1 - startDayOffset);
+
+  const totalCells = Math.ceil((startDayOffset + lastDayOfMonth.date()) / 7) * 7;
+  const todayStr = dayjs().format('YYYY-MM-DD');
   const days = [];
   for (let i = 0; i < totalCells; i++) {
-    const d = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i);
-    const dateString = formatDate(d);
-    const day = userStore.daysMap[d.getDay()];
+    const d = toDayjs(startDate.year(), startDate.month(), startDate.date() + i);
+    const dateString = d.format('YYYY-MM-DD');
+    const day = userStore.daysMap.find((item) => item.index === d.day());
 
-    // 予定の有無を判定（存在判定のみのため some で効率化）
-    const hasEvent = Array.from(events.value).some((event) => {
-      const eventDate = (event.start?.dateTime || event.start?.date || '').slice(0, 10);
-      return eventDate === dateString;
-    });
+    const hasEvent = Array.from(events.value).some((event) => isEventOnDate(event, d));
 
     days.push({
       date: d,
       dateString,
-      dayNumber: d.getDate(),
+      dayNumber: d.date(),
       dayOfWeek: day.index,
-      isCurrentMonth: d.getMonth() === month,
+      isCurrentMonth: d.month() === month,
       isToday: dateString === todayStr,
       isWeekend: day.isWeekend,
       hasEvent,
@@ -85,16 +75,20 @@ function handleCellClick(cell) {
   }
 }
 
-onMounted(async () => {
-  events.value = await eventStore.listEvents(userStore.nowUsingDate.getFullYear(), userStore.nowUsingDate.getMonth());
-});
+watch(
+  () => [calendarStore.list, userStore.nowUsingDate],
+  async () => {
+    events.value = await eventStore.listEvents(userStore.nowUsingDate.year(), userStore.nowUsingDate.month());
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
   <div class="calendar-mini">
     <!-- ナビゲーションバー -->
     <header>
-      <h3>{{ `${userStore.nowUsingDate.getFullYear()}年 ${userStore.nowUsingDate.getMonth() + 1}月` }}</h3>
+      <h3>{{ `${userStore.nowUsingDate.year()}年 ${userStore.nowUsingDate.month() + 1}月` }}</h3>
       <nav>
         <button type="button" @click="userStore.goToday">今月</button>
         <button type="button" @click="userStore.goPrevMonth">&lt;</button>
@@ -106,26 +100,18 @@ onMounted(async () => {
     <table>
       <thead>
         <tr>
-          <th
-            v-for="d in userStore.daysMap"
-            :key="d.index"
-            :data-weekend="d.isWeekend"
-          >
+          <th v-for="d in userStore.daysMap" :key="d.index" :data-weekend="d.isWeekend"
+            :style="{ color: d.weekendColor ?? undefined }">
             {{ d.label }}
           </th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="rowIdx in Math.ceil(calendarDays.length / 7)" :key="rowIdx">
-          <td
-            v-for="cell in calendarDays.slice((rowIdx - 1) * 7, rowIdx * 7)"
-            :key="cell.dateString"
-            :data-current-month="cell.isCurrentMonth"
-            :data-today="cell.isToday"
-            :data-weekend="cell.isWeekend"
-            :data-selected="userStore.nowSelectedDate === cell.dateString ? true : null"
-            @click="handleCellClick(cell)"
-          >
+          <td v-for="cell in calendarDays.slice((rowIdx - 1) * 7, rowIdx * 7)" :key="cell.dateString"
+            :data-current-month="cell.isCurrentMonth" :data-today="cell.isToday" :data-weekend="cell.isWeekend"
+            :style="{ color: userStore.getWeekendColor(cell.date.day(), !cell.isCurrentMonth) ?? undefined }"
+            :data-selected="userStore.nowSelectedDate === cell.dateString ? true : null" @click="handleCellClick(cell)">
             <span class="day-number">{{ cell.dayNumber }}</span>
             <!-- 予定が存在する場合のみドットを表示 -->
             <i v-if="cell.hasEvent" class="dot"></i>

@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/auth.js';
 import { useUserStore } from '@/stores/user.js';
 import GoogleLogin from '@/components/GoogleLogin.vue';
 import GoogleLogout from '@/components/GoogleLogout.vue';
+import IconXMark from '@/components/icons/IconXMark.vue';
 
 const authStore = useAuthStore();
 const userStore = useUserStore();
@@ -25,8 +26,8 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
         <section class="user-dialog" role="dialog" aria-modal="true" :aria-label="userStore.userDialogTitle">
           <header class="user-dialog-header">
             <h2>{{ userStore.userDialogTitle }}</h2>
-            <button type="button" class="close-button" aria-label="閉じる" @click="userStore.closeUserDialog">
-              <span aria-hidden="true">×</span>
+            <button type="button" class="close-button" aria-label="Close" @click="userStore.closeUserDialog">
+              <span aria-hidden="true"><IconXMark /></span>
             </button>
           </header>
 
@@ -34,9 +35,12 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
             {{ userStore.userDialogMessage }}
           </p>
 
-          <div class="user-dialog-content">
-            <p v-if="authStore.isAuthenticated">Google アカウントでログインしています。</p>
-            <p v-else>Google アカウントでログインすると、カレンダーを同期できます。</p>
+          <div v-if="userStore.userDialogType === 'CONFIRM'" class="user-dialog-actions">
+            <button type="button" class="confirm-button" @click="userStore.resolveConfirm(true)">YES</button>
+            <button type="button" class="cancel-button" @click="userStore.resolveConfirm(false)">NO</button>
+          </div>
+
+          <div v-else class="user-dialog-content">
             <GoogleLogout />
             <GoogleLogin />
           </div>
@@ -98,6 +102,31 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 
 .user-dialog-message {
   padding-bottom: 0;
+}
+
+.user-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+}
+
+.confirm-button,
+.cancel-button {
+  min-width: 4rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius);
+}
+
+.confirm-button {
+  border-color: var(--primary);
+  background-color: var(--primary);
+  color: var(--bg-1);
+}
+
+.cancel-button:hover {
+  background-color: var(--bg-2);
 }
 
 .user-dialog-content {

@@ -9,7 +9,8 @@ declare global {
   type ComputedRef<T> = _ComputedRef<T>;
   type ShallowRef<T> = _ShallowRef<T>;
   type Watch = _Watch;
-  
+  type Dayjs = import('dayjs').Dayjs;
+
   /**
    * 環境変数関連の型定義 - Vite で定義された環境変数は import.meta.env.* で格納される
    * @see https://vitejs.dev/guide/env-and-mode.html
@@ -17,9 +18,9 @@ declare global {
 
   interface ImportMeta {
     readonly env: {
-      readonly BASE_URL?: string|undefined;
-      readonly VITE_BFF_BASE_URL?: string|undefined;
-      readonly VITE_GOOGLE_CALENDAR_API_BASE_URL?: string|undefined;
+      readonly BASE_URL?: string | undefined;
+      readonly VITE_BFF_BASE_URL?: string | undefined;
+      readonly VITE_GOOGLE_CALENDAR_API_BASE_URL?: string | undefined;
     };
   }
 
@@ -140,16 +141,7 @@ declare global {
     /** 予定の表現から出席者が省略されているかどうか（デフォルト: false）*/
     attendeesOmitted: boolean;
     /** イベントの拡張プロパティ */
-    extendedProperties: {
-      /** 非公開プロパティ */
-      private: {
-        (key): string;
-      };
-      /** 共有プロパティ */
-      shared: {
-        (key): string;
-      };
-    };
+    extendedProperties?: ExtendedProperties;
     /** 主催者以外の参加者が他のユーザーを予定に招待できるかどうか（デフォルト: true）*/
     guestsCanInviteOthers?: boolean;
     /** 主催者以外の参加者が予定を変更できるかどうか（デフォルト: false）*/
