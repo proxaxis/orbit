@@ -6,7 +6,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - ./redis:/data
+      - nv_redis:/data
 
   # Server
   server:
@@ -20,9 +20,6 @@ services:
       - .env
     environment:
       - NODE_ENV=development
-      - PORT=8787
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
     volumes:
       - ./server/app:/app
       - /app/node_modules
@@ -30,6 +27,7 @@ services:
       - redis
     tty: true
     stdin_open: true
+    command: sleep infinity
 
   # Client
   client:
@@ -50,6 +48,7 @@ services:
       - server
     tty: true
     stdin_open: true
+    command: sleep infinity
 
 volumes:
-  redis_data:
+  nv_redis:

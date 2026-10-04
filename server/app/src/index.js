@@ -3,8 +3,29 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { getSignedCookie, setSignedCookie, deleteCookie } from 'hono/cookie';
 import { google } from 'googleapis';
+import Redis from 'ioredis';
 
 const app = new Hono();
+
+// Redis クライアント初期化
+const redis = new Redis({
+  host: process.env.REDIS_HOST,
+  port: Number(process.env.REDIS_PORT),
+  password: process.env.REDIS_PASSWORD,
+  lazyConnect: false,
+});
+
+redis.on('connect', () => {
+  console.log('Connected to Redis server');
+});
+
+redis.on('error', (err) => {
+  console.error('Redis connection error:', err);
+});
+
+// セッションキーのヘルパー関数（プレフィックスを付与して管理を容易にする）
+const getSessionKey = (sessionId) => `session:${sessionId}`;
+const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30日（Cookieの有効期限と揃える）
 
 // CORS 設定（Vite 開発サーバーからの Cookie 送信を許可）
 app.use(
@@ -23,11 +44,6 @@ const getOAuth2Client = () => new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_SECRET,
   process.env.GOOGLE_REDIRECT_URI
 );
-
-/**
- * 簡易セッションストレージ
- */
-const refreshTokens = new Map();
 
 // ログイン開始 - Google の OAuth 認証画面へリダイレクト
 app.get('/auth/login', (c) => {
@@ -48,7 +64,7 @@ app.get('/auth/login', (c) => {
   return c.redirect(authUrl);
 });
 
-// OAuth コールバック - 認可コードからトークンを取得し、HttpOnly Cookie を発行
+// OAuth コールバック - 認可コードからトークンを取得し、Redisに保存して HttpOnly Cookie を発行
 app.get('/auth/callback', async (c) => {
   const code = c.req.query('code');
   if (!code) {
@@ -58,10 +74,16 @@ app.get('/auth/callback', async (c) => {
   const client = getOAuth2Client();
   const { tokens } = await client.getToken(code);
 
-  // セッション ID を生成してリフレッシュトークンを保存
   const sessionId = crypto.randomUUID();
+
+  // Redis にリフレッシュトークンを保存（TTL: 30日）
   if (tokens.refresh_token) {
-    refreshTokens.set(sessionId, tokens.refresh_token);
+    await redis.set(
+      getSessionKey(sessionId),
+      tokens.refresh_token,
+      'EX',
+      SESSION_TTL_SECONDS
+    );
   }
 
   // 署名付き HttpOnly Cookie をブラウザに付与
@@ -75,15 +97,14 @@ app.get('/auth/callback', async (c) => {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'Lax',
       path: '/',
-      maxAge: 60 * 60 * 24 * 30, // 30日間
+      maxAge: SESSION_TTL_SECONDS,
     }
   );
 
-  // フロントエンドのカレンダー画面へ戻す
   return c.redirect(process.env.CLIENT_URL ?? '');
 });
 
-// 有効な Google Access Token を取得および更新 - Vue 側が Google API を直接叩く前に呼び出す
+// 有効な Google Access Token を取得および更新
 app.get('/api/token', async (c) => {
   const sessionId = await getSignedCookie(
     c,
@@ -93,17 +114,22 @@ app.get('/api/token', async (c) => {
 
   console.log('Session ID:', sessionId);
 
-  if (!sessionId || !refreshTokens.has(sessionId)) {
+  if (!sessionId) {
+    return c.json({ error: 'UNAUTHORIZED' }, 401);
+  }
+
+  // Redis からリフレッシュトークンを取得
+  const refreshToken = await redis.get(getSessionKey(sessionId));
+
+  if (!refreshToken) {
     console.log('Unauthorized access attempt: No valid session or refresh token found.');
     return c.json({ error: 'UNAUTHORIZED' }, 401);
   }
 
-  const refreshToken = refreshTokens.get(sessionId);
   const client = getOAuth2Client();
   client.setCredentials({ refresh_token: refreshToken });
 
   try {
-    // リフレッシュトークンを使って常に有効なアクセストークンを取得
     const { token } = await client.getAccessToken();
     return c.json({ gAccessToken: token });
   } catch (err) {
@@ -112,7 +138,7 @@ app.get('/api/token', async (c) => {
   }
 });
 
-// ログアウト - セッションを破棄し、Cookie を削除
+// ログアウト - Redis のセッションキーを破棄し、Cookie を削除
 app.post('/auth/logout', async (c) => {
   const sessionId = await getSignedCookie(
     c,
@@ -121,7 +147,7 @@ app.post('/auth/logout', async (c) => {
   );
 
   if (sessionId) {
-    refreshTokens.delete(sessionId);
+    await redis.del(getSessionKey(sessionId));
   }
   deleteCookie(c, 'session_id');
 
@@ -129,7 +155,7 @@ app.post('/auth/logout', async (c) => {
 });
 
 // サーバー起動
-const port = Number(process.env.SERVER_PORT);
+const port = Number(process.env.SERVER_PORT || process.env.PORT || 8787);
 console.log(`Server is running on http://localhost:${port}`);
 
 serve({
