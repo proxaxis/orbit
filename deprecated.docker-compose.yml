@@ -1,13 +1,4 @@
 services:
-  # Redis
-  redis:
-    image: redis:7-alpine
-    container_name: orbit_redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - ./redis:/data
-
   # Server
   server:
     build:
@@ -21,16 +12,11 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=8787
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
     volumes:
       - ./server/app:/app
       - /app/node_modules
-    depends_on:
-      - redis
     tty: true
     stdin_open: true
-
   # Client
   client:
     build:
@@ -50,6 +36,3 @@ services:
       - server
     tty: true
     stdin_open: true
-
-volumes:
-  redis_data:
