@@ -12,7 +12,7 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    image: orbit-server:0.0.1
+    image: orbit-server:${RELEASE_VERSION:-temp}
     container_name: orbit_server_prod
     restart: unless-stopped
     ports:
@@ -34,8 +34,8 @@ services:
     build:
       context: ./client
       dockerfile: Dockerfile
-    image: orbit-client:0.0.1
-    container_name: orbit_client_pro
+    image: orbit-client:${RELEASE_VERSION:-temp}
+    container_name: orbit_client_prod
     restart: unless-stopped
     ports:
       - "5173:5173"
@@ -57,7 +57,7 @@ services:
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
-      - TUNNEL_TOKEN=replace-your-cloudflare-tunnel-token
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
       - client
       - server

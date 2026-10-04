@@ -1,10 +1,17 @@
 # Orbit: Unify Your Tasks and Time. Execute with Focus.
 
 ### 環境変数
-以下の 2 つのファイルを用意:
+以下の 3 つのファイルを用意:
 
+* `./.env`
 * `./client/app/.env`
 * `./server/app/.env`
+
+コンテナ用環境変数には以下の内容を書き込み:
+```.env
+CLOUDFLARE_TUNNEL_TOKEN=<Cloudflare Tunnel Token>
+RELEASE_VERSION=<Release Version for Production>
+```
 
 クライアント用環境変数には以下の内容を書き込み:
 ```.env
