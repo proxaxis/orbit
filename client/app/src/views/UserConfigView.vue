@@ -2,21 +2,24 @@
 import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user.js';
+import { clearOfflineCache, deleteOffline, USER_SETTINGS_KEY } from '@/services/offline-storage.js';
 import MenuBar from '@/components/MenuBar.vue';
 import IconGear from '@/components/icons/IconGear.vue';
 import IconFloppyDisk from '@/components/icons/IconFloppyDisk.vue';
+import IconTrash from '@/components/icons/IconTrash.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
 
 const router = useRouter();
 const userStore = useUserStore();
 const savedMessage = ref('');
 
-const dayNames = ['日曜日', '月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日'];
+const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const draft = reactive({
   theme: userStore.userSelectedTheme,
   firstDayOfWeek: userStore.firstDayOfWeek,
   useMiniCalendar: userStore.useMiniCalendar,
   useWheelMonthNavigation: userStore.useWheelMonthNavigation,
+  maxEventBarsPerCell: userStore.maxEventBarsPerCell,
   labels: [...userStore.weekdayLabels],
   weekendDays: userStore.weekendDays.map((day) => ({ ...day })),
 });
@@ -40,10 +43,43 @@ function save() {
   userStore.setFirstDayOfWeek(Number(draft.firstDayOfWeek));
   userStore.useMiniCalendar = draft.useMiniCalendar;
   userStore.useWheelMonthNavigation = draft.useWheelMonthNavigation;
+  userStore.maxEventBarsPerCell = Math.min(10, Math.max(1, Number(draft.maxEventBarsPerCell)));
   userStore.weekendDays = draft.weekendDays.map((day) => ({ ...day }));
   userStore.setWeekdayLabels(draft.labels);
   userStore.saveSettings();
   savedMessage.value = '設定を保存しました。';
+}
+
+async function clearCache() {
+  const confirmed = await userStore.confirm({
+    title: 'キャッシュを削除',
+    message: '設定以外のオフラインデータとアプリのキャッシュを削除します。続行しますか？',
+  });
+  if (!confirmed) return;
+
+  try {
+    await clearOfflineCache([USER_SETTINGS_KEY]);
+    window.location.reload();
+  } catch (error) {
+    console.warn('Failed to clear offline cache.', error);
+    savedMessage.value = 'キャッシュを削除できませんでした。';
+  }
+}
+
+async function clearSettings() {
+  const confirmed = await userStore.confirm({
+    title: '設定を削除',
+    message: '保存したユーザー設定を削除して初期設定に戻します。続行しますか？',
+  });
+  if (!confirmed) return;
+
+  try {
+    await deleteOffline(USER_SETTINGS_KEY);
+    window.location.reload();
+  } catch (error) {
+    console.warn('Failed to clear user settings.', error);
+    savedMessage.value = '設定を削除できませんでした。';
+  }
 }
 </script>
 
@@ -51,13 +87,13 @@ function save() {
   <section class="user-config-view">
     <MenuBar>
       <template #main>
-        <h1 class="title">
-          <IconGear />ユーザー設定
-        </h1>
+        <h1 class="title">ユーザー設定</h1>
       </template>
-      <template #sub><button title="戻る" @click="router.push({ name: 'Home' })">
-          <IconXMark />戻る
-        </button></template>
+      <template #sub>
+        <button title="戻る" @click="router.push({ name: 'Home' })">
+          <IconXMark />
+        </button>
+      </template>
     </MenuBar>
 
     <form class="config-form" @submit.prevent="save">
@@ -72,6 +108,9 @@ function save() {
         </label>
         <label class="switch-row"><input v-model="draft.useMiniCalendar" type="checkbox" />小型カレンダーを表示する</label>
         <label class="switch-row"><input v-model="draft.useWheelMonthNavigation" type="checkbox" />スクロールで月を移動する</label>
+        <label>セルに表示する予定バーの最大本数
+          <input v-model.number="draft.maxEventBarsPerCell" type="number" min="1" max="10" required />
+        </label>
       </section>
 
       <section class="config-section">
@@ -108,6 +147,18 @@ function save() {
         </div>
       </section>
 
+      <section class="config-section">
+        <h2>データ管理</h2>
+        <p class="hint">設定のデータを削除します。</p>
+        <button type="button" class="clear-cache-button" @click="clearSettings">
+          <IconTrash />設定を削除
+        </button>
+        <p class="hint">設定以外の全てのオフラインデータを削除します。</p>
+        <button type="button" class="clear-cache-button" @click="clearCache">
+          <IconTrash />キャッシュを削除
+        </button>
+      </section>
+
       <p v-if="savedMessage" class="saved">{{ savedMessage }}</p>
       <div class="actions">
         <button type="button" @click="router.push({ name: 'Home' })">キャンセル</button>
@@ -120,11 +171,6 @@ function save() {
 </template>
 
 <style lang="scss" scoped>
-.user-config-view {
-  width: 100%;
-  padding: var(--space-md);
-}
-
 .title {
   display: inline-flex;
   align-items: center;
@@ -219,6 +265,18 @@ label {
   font-size: var(--text-size-sm);
 }
 
+.clear-cache-button {
+  align-self: flex-start;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius);
+
+  &:hover {
+    background-color: var(--bg-2);
+  }
+}
+
 @media (max-width: 600px) {
   .user-config-view {
     padding: var(--space-sm);
@@ -226,6 +284,15 @@ label {
 
   .labels-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.icon-x-mark {
+  padding: var(--space-xs);
+
+  &:hover {
+    background-color: var(--bg-2);
+    border-radius: 50%;
   }
 }
 </style>

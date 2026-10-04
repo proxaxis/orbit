@@ -1,42 +1,58 @@
 <template>
   <header class="menu-bar">
-    <div class="main">
-      <slot name="main">
-        <div class="dummy"></div>
-      </slot>
-    </div>
     <div>
-      <slot name="center">
-        <div class="dummy"></div>
-      </slot>
+      <div class="main">
+        <slot name="main">
+          <div class="dummy"></div>
+        </slot>
+      </div>
+      <div>
+        <slot name="center">
+          <div class="dummy"></div>
+        </slot>
+      </div>
+      <div class="sub">
+        <slot name="sub">
+          <div class="dummy"></div>
+        </slot>
+      </div>
     </div>
-    <div class="sub">
-      <slot name="sub">
-        <div class="dummy"></div>
-      </slot>
-    </div>
+    <p>
+      <slot></slot>
+    </p>
   </header>
 </template>
 
 <style lang="scss" scoped>
-.menu-bar {
+header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: var(--space-md);
+  flex-direction: column;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--space-sm);
+  margin-bottom: var(--space-sm);
 
-  :deep(.title) {
-    display: inline;
-    user-select: none;
-    font-weight: bold;
-    font-size: var(--text-size-lg);
+  &>div {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    :deep(.title) {
+      display: inline;
+      font-weight: bold;
+      font-size: var(--text-size-lg);
+    }
+
+    .main,
+    .sub {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
   }
 
-  .main,
-  .sub {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  &>p {
+    font-size: var(--text-size-sm);
+    color: var(--text-light);
   }
 }
 </style>

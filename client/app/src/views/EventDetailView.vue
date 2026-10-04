@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import dayjs from 'dayjs';
-import { useRoute, useRouter } from 'vue-router';
+import { useRouter } from 'vue-router';
+import dayjs from '@/services/dayjs.js';
 import { useEventStore } from '@/stores/event.js';
 import MenuBar from '@/components/MenuBar.vue';
 import CalendarRibbon from '@/components/CalendarRibbon.vue';
@@ -13,24 +13,39 @@ import { useUserStore } from '@/stores/user.js';
 import IconClock from '@/components/icons/IconClock.vue';
 import IconAlignLeft from '@/components/icons/IconAlignLeft.vue';
 
-const route = useRoute();
 const router = useRouter();
 const eventStore = useEventStore();
 const userStore = useUserStore();
 
-/** @type {Ref<(GoogleEvent & { sourceCalendarId: string })|null>} */
+/** @type {Ref<HandyCalendarEvent|null>} */
 const event = ref(null);
+/** @type {Ref<boolean>} 参加ステータス更新中かどうか */
+const isUpdatingAttendance = ref(false);
 
-/** @param {GoogleEvent|null} value @returns {string} */
-function getEventIcon(value) {
-  const shared = /** @type {Record<string, string>|undefined} */ (value?.extendedProperties?.shared);
-  return shared?.icon ?? '📅';
+const myAttendee = computed(() => event.value?.raw?.attendees?.find((attendee) => attendee.self) ?? null);
+
+/** @param {'accepted'|'declined'} responseStatus 本人の参加ステータスを更新します。 */
+async function respondToInvitation(responseStatus) {
+  if (!event.value || !myAttendee.value || isUpdatingAttendance.value) return;
+  const attendees = (event.value.raw.attendees ?? []).map((attendee) => attendee.self ? { ...attendee, responseStatus } : attendee);
+
+  isUpdatingAttendance.value = true;
+  userStore.setLoading(true, responseStatus === 'accepted' ? '承諾しています...' : '辞退しています...');
+  try {
+    await eventStore.updateEvent(event.value.id, event.value.calendarId, { attendees });
+    event.value.raw.attendees = attendees;
+  } catch (err) {
+    userStore.setError(true, err);
+  } finally {
+    isUpdatingAttendance.value = false;
+    userStore.setLoading(false);
+  }
 }
 
 const dateText = computed(() => {
   if (!event.value) return '';
-  if (event.value.start.date) return `${event.value.start.date} - ${dayjs(event.value.end.date).subtract(1, 'day').format('YYYY-MM-DD')}`;
-  return `${dayjs(event.value.start.dateTime).format('YYYY-MM-DD HH:mm')} - ${dayjs(event.value.end.dateTime).format('YYYY-MM-DD HH:mm')}`;
+  if (event.value.isAllDay) return `${event.value.startDateTime.format('YYYY-MM-DD')} - ${dayjs(event.value.endDateTime).subtract(1, 'day').format('YYYY-MM-DD')}`;
+  return `${dayjs(event.value.startDateTime).format('YYYY-MM-DD HH:mm')} - ${dayjs(event.value.endDateTime).format('YYYY-MM-DD HH:mm')}`;
 });
 
 function edit() {
@@ -42,7 +57,7 @@ async function remove() {
   if (!await userStore.confirm({ title: 'Remove Event', message: 'Are you sure you want to remove this event?' })) return;
   userStore.setLoading(true, 'Removing the event...');
   try {
-    const res = await eventStore.removeEvent(event.value.id, event.value.sourceCalendarId);
+    const res = await eventStore.removeEvent(event.value.id, event.value.calendarId);
     if (!res) throw new Error('Failed to remove the event.');
     router.replace({ name: 'Home' });
   } catch (err) {
@@ -68,21 +83,21 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="event-view">
+  <section class="event-detail-view">
     <MenuBar>
       <template #main>
-        <h1 class="title">Event Details</h1>
+        <h1 class="title">イベントの詳細</h1>
       </template>
       <template #sub>
         <div class="menu-bar-actions">
           <button title="Delete" :disabled="!event" @click="remove">
-            <IconTrash />Delete
+            <IconTrash />
           </button>
           <button title="Edit" :disabled="!event" @click="edit">
-            <IconPen size="1.1rem" />Edit
+            <IconPen size="1.1rem" />
           </button>
           <button title="Back" @click="router.push({ name: 'Home' })">
-            <IconXMark size="1.2rem" />Back
+            <IconXMark size="1.2rem" />
           </button>
         </div>
       </template>
@@ -90,9 +105,9 @@ onMounted(async () => {
 
     <article v-if="!!event">
       <div class="heading">
-        <h2>{{ getEventIcon(event) }}{{ event?.summary ?? '予定' }}</h2>
+        <h2>{{ event.icon ?? '📌' }}{{ event?.summary }}</h2>
         <div class="calendar-ribbon-wrapper">
-          <CalendarRibbon :gCalendarId="event?.sourceCalendarId ?? ''" />
+          <CalendarRibbon :gCalendarId="event?.calendarId" />
         </div>
       </div>
       <dl>
@@ -100,7 +115,7 @@ onMounted(async () => {
           <dt>
             <IconClock />
           </dt>
-          <dd>{{ dateText }}<span v-if="event?.start?.timeZone"> ({{ event.start.timeZone }})</span></dd>
+          <dd>{{ dateText }}<span v-if="event?.raw.start?.timeZone"> ({{ event?.raw.start?.timeZone }})</span></dd>
         </div>
         <div v-if="event?.location">
           <dt>
@@ -115,15 +130,36 @@ onMounted(async () => {
           <dd>{{ event.description }}</dd>
         </div>
       </dl>
+      <section v-if="myAttendee" class="attendance-section" aria-label="参加回答">
+        <h3>参加回答</h3>
+        <p>現在の回答: {{ myAttendee.responseStatus === 'accepted' ? '承諾' : myAttendee.responseStatus === 'declined' ? '辞退' :
+          '未回答' }}</p>
+        <div class="attendance-actions">
+          <button type="button" class="accept-button" :disabled="isUpdatingAttendance"
+            @click="respondToInvitation('accepted')">承諾</button>
+          <button type="button" class="decline-button" :disabled="isUpdatingAttendance"
+            @click="respondToInvitation('declined')">辞退</button>
+        </div>
+      </section>
+      <details v-if="event.raw.attendees?.length" class="attendees-section">
+        <summary>参加者（{{ event.raw.attendees.length }}人）</summary>
+        <ul>
+          <li v-for="attendee in event.raw.attendees" :key="attendee.email || attendee.id">
+            <span>{{ attendee.displayName || attendee.email || '不明な参加者' }}</span>
+            <small>{{ attendee.responseStatus || '未回答' }}</small>
+          </li>
+        </ul>
+      </details>
       <details>
         <summary>More Information</summary>
         <ul>
-          <li>Status: <span class="inline-text">{{ event?.status ?? 'Unavailable' }}</span></li>
-          <li>Google Calendar URL: <span class="inline-text">{{ event?.htmlLink ?? 'Unavailable' }}</span></li>
-          <li>Created: <span class="inline-text">{{ event?.created ?? 'Unavailable' }}</span></li>
-          <li>Updated: <span class="inline-text">{{ event?.updated ?? 'Unavailable' }}</span></li>
-          <li>Creator ID: <span class="inline-text">{{ event?.creator?.email ?? 'Unavailable' }}</span></li>
-          <li>Event Type: <span class="inline-text">{{ event?.birthdayProperties?.type ?? 'Unavailable' }}</span></li>
+          <li>Status: <span class="inline-text">{{ event.raw.status ?? 'Unavailable' }}</span></li>
+          <li>Google Calendar URL: <span class="inline-text">{{ event.raw.htmlLink ?? 'Unavailable' }}</span></li>
+          <li>Created: <span class="inline-text">{{ event.raw.created ?? 'Unavailable' }}</span></li>
+          <li>Updated: <span class="inline-text">{{ event.raw.updated ?? 'Unavailable' }}</span></li>
+          <li>Creator ID: <span class="inline-text">{{ event.raw.creator?.email ?? 'Unavailable' }}</span></li>
+          <li>Event Type: <span class="inline-text">{{ event.raw.birthdayProperties?.type ?? 'Unavailable' }}</span>
+          </li>
         </ul>
       </details>
     </article>
@@ -134,11 +170,6 @@ onMounted(async () => {
 </template>
 
 <style lang="scss" scoped>
-.event-view {
-  width: 100%;
-  // overflow-y: auto;
-}
-
 .menu-bar-actions {
   display: flex;
   gap: var(--space-sm);
@@ -189,13 +220,84 @@ dl {
   }
 }
 
+details {
+  margin-left: var(--space-xs);
+  margin-top: var(--space-sm);
+}
+
 .inline-text {
   font-family: monospace;
-  font-size: var(--text-size-sm);
-  color: rgb(231, 17, 17);
+  color: var(--danger);
   background-color: var(--bg-3);
   padding: var(--space-xxs) var(--space-xs);
   border-radius: var(--border-radius);
   word-break: break-all;
+}
+
+.attendance-section,
+.attendees-section {
+  margin-top: var(--space-md);
+  padding: var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius);
+  background: var(--bg-1);
+}
+
+.attendance-section h3 {
+  font-size: var(--text-size-md);
+}
+
+.attendance-section p,
+.attendees-section small {
+  color: var(--text-light);
+  font-size: var(--text-size-sm);
+}
+
+.attendance-actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.attendance-actions button {
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius);
+}
+
+.accept-button:hover:not(:disabled) {
+  color: var(--primary);
+}
+
+.decline-button:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.attendees-section ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+}
+
+.attendees-section li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.icon-trash,
+.icon-pen,
+.icon-x-mark {
+  padding: var(--space-xs);
+
+  &:hover {
+    background-color: var(--bg-2);
+    border-radius: 50%;
+  }
+}
+
+.icon-trash {
+  fill: var(--danger);
 }
 </style>

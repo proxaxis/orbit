@@ -1,26 +1,26 @@
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth.js';
 import { useCalendarStore } from '@/stores/calendar.js';
+import { useUserStore } from '@/stores/user.js';
 import * as gCalAPI from '@/services/google-calendar-api.js';
 import MenuBar from '@/components/MenuBar.vue';
 import ColorPicker from '@/components/ColorPicker.vue';
 import TimezoneSelecter from '@/components/TimezoneSelecter.vue';
 import CalendarRibbon from '@/components/CalendarRibbon.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
-import IconFloppyDisk from '@/components/icons/IconFloppyDisk.vue';
+import AskLoginMessage from '@/components/AskLoginMessage.vue';
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const calendarStore = useCalendarStore();
+const userStore = useUserStore();
 
-const isLoading = ref(false);
+/** @type {Ref<{listEntry: GoogleCalendarListEntry|null, calendar: GoogleCalendarResource|null}>} */
+const source = ref({ listEntry: null, calendar: null });
 const isSaving = ref(false);
-const errorMessage = ref('');
-const savedMessage = ref('');
-const calendarData = ref(null);
 const form = reactive({
   summary: '',
   description: '',
@@ -29,252 +29,233 @@ const form = reactive({
   color: '#54a0ff',
 });
 
-const calendarId = computed(() => typeof route.query.calendarId === 'string' ? route.query.calendarId : '');
-const calendarEntry = computed(() => calendarStore.list.find((calendar) => calendar.id === calendarId.value));
-const isOwner = computed(() => calendarEntry.value?.accessRole === 'owner' || calendarEntry.value?.primary === true);
-const canEditCalendar = computed(() => isOwner.value || calendarEntry.value?.accessRole === 'writer');
-const hasToken = computed(() => !!authStore.token);
+/** @type {ComputedRef<string|null>} 対象のカレンダー ID */
+const theCalendarId = computed(() => typeof route.query.cid === 'string' ? route.query.cid : null);
+/** @type {ComputedRef<GoogleCalendarListEntry|null>} */
+const storedCalendarEntry = computed(() => calendarStore.list.find((calendar) => calendar.id === theCalendarId.value) ?? null);
+/** @type {ComputedRef<boolean>} カレンダーのオーナーかどうか */
+const isOwner = computed(() => storedCalendarEntry.value?.accessRole === 'owner' || storedCalendarEntry.value?.primary === true);
+/** @type {ComputedRef<boolean>} カレンダーを編集できる権限を持っているかどうか */
+const canEditCalendar = computed(() => isOwner.value || storedCalendarEntry.value?.accessRole === 'writer');
 
-function setFormValues(calendar, entry) {
-  Object.assign(form, {
-    summary: entry?.summaryOverride || calendar?.summary || entry?.summary || '',
-    description: calendar?.description || entry?.description || '',
-    location: calendar?.location || entry?.location || '',
-    timeZone: calendar?.timeZone || entry?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-    color: entry?.backgroundColor || '#54a0ff',
-  });
-}
-
-async function loadCalendar() {
-  errorMessage.value = '';
-  savedMessage.value = '';
-  calendarData.value = null;
-  if (!calendarId.value || !hasToken.value) return;
-
-  isLoading.value = true;
-  try {
-    const [calendar, entry] = await Promise.all([
-      gCalAPI.getCalendar(authStore.token, calendarId.value),
-      gCalAPI.getCalendarListEntry(authStore.token, calendarId.value),
-    ]);
-    calendarData.value = calendar;
-    setFormValues(calendar, entry || calendarEntry.value);
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : String(error);
-    setFormValues(calendarData.value, calendarEntry.value);
-  } finally {
-    isLoading.value = false;
+/** @returns {string|null} フォームに入力されたカレンダー名の有効性をチェックする */
+function checkInputSummary() {
+  if (!form.summary.trim()) {
+    return 'The calendar name is not specified. Please enter a name for the calendar.';
   }
+  return null;
 }
 
 async function save() {
-  errorMessage.value = '';
-  savedMessage.value = '';
-  if (!calendarId.value || !hasToken.value) return;
-  if (!form.summary.trim()) {
-    errorMessage.value = 'カレンダー名を入力してください。';
-    return;
-  }
+  if (!theCalendarId.value || !authStore.isAuthenticated) return;
+  if (checkInputSummary() !== null) return;
 
   isSaving.value = true;
+  userStore.setLoading(true, 'Saving the calendar settings...');
   try {
-    const listBody = {
-      backgroundColor: form.color,
-      foregroundColor: '#000000',
-      ...(!isOwner.value ? { summaryOverride: form.summary.trim() } : {}),
-    };
-    const updatedEntry = await gCalAPI.patchCalendarListEntry(authStore.token, calendarId.value, listBody);
-    let updatedCalendar = calendarData.value;
+    // カレンダーリストエントリの更新
+    const newListEntry = await gCalAPI.patchCalendarListEntry(
+      authStore.token,
+      theCalendarId.value,
+      {
+        backgroundColor: form.color,
+        foregroundColor: '#000000',
+        ...(!isOwner.value ? { summaryOverride: form.summary.trim() } : {}),
+      },
+    );
+
+    // カレンダーの更新
+    let newCalendar = source.value.calendar;
     if (canEditCalendar.value) {
-      updatedCalendar = await gCalAPI.patchCalendar(authStore.token, calendarId.value, {
+      newCalendar = await gCalAPI.patchCalendar(authStore.token, theCalendarId.value, {
         summary: form.summary.trim(),
         description: form.description.trim(),
         location: form.location.trim(),
         timeZone: form.timeZone,
       });
     }
-    calendarData.value = updatedCalendar || calendarData.value;
+    source.value.calendar = newCalendar;
+    const currentEntry = source.value.listEntry ?? storedCalendarEntry.value;
+    if (!currentEntry) throw new Error('The selected calendar could not be found.');
     calendarStore.updateCalendar({
-      ...(calendarEntry.value || {}),
-      ...(updatedEntry || {}),
-      ...(updatedCalendar || {}),
-      id: calendarId.value,
-      summary: isOwner.value ? form.summary.trim() : (updatedEntry?.summaryOverride || form.summary.trim()),
-      summaryOverride: isOwner.value ? undefined : form.summary.trim(),
+      ...currentEntry,
+      ...(newListEntry ?? {}),
+      id: theCalendarId.value,
+      summary: isOwner.value ? form.summary.trim() : (newListEntry?.summaryOverride ?? form.summary.trim()),
+      ...(isOwner.value ? { summaryOverride: undefined } : { summaryOverride: form.summary.trim() }),
       backgroundColor: form.color,
       foregroundColor: '#000000',
     });
-    savedMessage.value = '設定を保存しました。';
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : String(error);
+  } catch (err) {
+    userStore.setError(true, err);
   } finally {
     isSaving.value = false;
+    userStore.setLoading(false);
   }
 }
 
-watch([calendarId, () => authStore.token], loadCalendar, { immediate: true });
-onMounted(() => {
-  if (!calendarId.value) errorMessage.value = '設定するカレンダーが選択されていません。';
-});
+watch([theCalendarId, () => authStore.isAuthenticated], async () => {
+  source.value = { listEntry: null, calendar: null };
+  if (!theCalendarId.value || typeof theCalendarId.value !== 'string' || !authStore.isAuthenticated) return;
+
+  userStore.setLoading(true, 'Loading the calendar...');
+  try {
+    source.value.listEntry = await gCalAPI.getCalendarListEntry(authStore.token, theCalendarId.value);
+    source.value.calendar = await gCalAPI.getCalendar(authStore.token, theCalendarId.value);
+    if (!source.value.listEntry) source.value.listEntry = storedCalendarEntry.value;
+    Object.assign(form, {
+      summary: source.value?.listEntry?.summaryOverride ?? source.value?.calendar?.summary ?? source.value?.listEntry?.summary ?? '',
+      description: source.value?.calendar?.description ?? source.value?.listEntry?.description ?? '',
+      location: source.value?.calendar?.location ?? source.value?.listEntry?.location ?? '',
+      timeZone: source.value?.calendar?.timeZone ?? source.value?.listEntry?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+      color: source.value?.listEntry?.backgroundColor ?? '#ffffff',
+    });
+  } catch (err) {
+    userStore.setError(true, err);
+  } finally {
+    userStore.setLoading(false);
+  }
+}, { immediate: true });
 </script>
 
 <template>
-  <section class="calendar-detail-view">
+  <div class="calendar-detail-view">
     <MenuBar>
       <template #main>
-        <h1 class="title">カレンダーの詳細</h1>
+        <h1 class="title">カレンダー設定</h1>
       </template>
       <template #sub>
         <button title="戻る" @click="router.push({ name: 'Home' })">
-          <IconXMark />戻る
+          <IconXMark />
         </button>
       </template>
+
+      カレンダーの表示に関する設定
     </MenuBar>
 
-    <div class="content">
-      <div v-if="calendarEntry" class="heading">
-        <CalendarRibbon :gCalendarId="calendarId" />
-        <div>
-          <h2>{{ calendarEntry.summary }}</h2>
-          <p>{{ isOwner ? 'このカレンダーの共有元設定' : 'あなたのカレンダー一覧での表示設定' }}</p>
-        </div>
+    <AskLoginMessage v-if="!authStore.isAuthenticated">
+      カレンダーの表示設定を変更するには Google アカウントでログインする必要があります
+    </AskLoginMessage>
+
+    <section v-if="authStore.isAuthenticated">
+      <div v-if="source.listEntry || source.calendar" class="section-heading">
+        <span>設定対象のカレンダー:</span>
+        <CalendarRibbon v-if="theCalendarId" :gCalendarId="theCalendarId" />
+        <p v-else>カレンダーが選択されていません</p>
       </div>
-      <p v-if="!hasToken" class="empty-state">設定を変更するには Google アカウントでログインしてください。</p>
-      <p v-else-if="isLoading" class="empty-state">カレンダー情報を読み込んでいます...</p>
-      <p v-else-if="errorMessage && !calendarEntry" class="error">{{ errorMessage }}</p>
-      <form v-else class="detail-form" @submit.prevent="save">
-        <div class="section-heading">
-          <h2>基本情報</h2><span v-if="!canEditCalendar">共有元の情報は読み取り専用です</span>
+
+      <form @submit.prevent="save">
+        <div class="form-heading">
+          <h2>基本情報</h2><span v-if="!canEditCalendar">読み取り専用</span>
         </div>
-        <label>カレンダー名
-          <input v-model="form.summary" required maxlength="100" :readonly="!canEditCalendar" />
-          <small v-if="!canEditCalendar">変更した名前は自分のカレンダー一覧だけに表示されます。</small>
+
+        <label>
+          カレンダー名称
+          <input v-model="form.summary" required maxlength="100" />
+          <p v-if="!canEditCalendar">変更した名前は自分のカレンダーだけに表示されます</p>
         </label>
-        <label>説明 <textarea v-model="form.description" rows="4" maxlength="500"
-            :readonly="!canEditCalendar"></textarea></label>
-        <label>場所 <input v-model="form.location" maxlength="255" :readonly="!canEditCalendar" /></label>
-        <label>デフォルトタイムゾーン
+        <label>
+          説明
+          <textarea v-model="form.description" rows="4" maxlength="500" :readonly="!canEditCalendar"></textarea>
+          <p v-if="!canEditCalendar">変更できません</p>
+        </label>
+        <label>
+          場所
+          <input v-model="form.location" maxlength="255" :readonly="!canEditCalendar" />
+          <p v-if="!canEditCalendar">変更できません</p>
+        </label>
+        <label>
+          デフォルトタイムゾーン
           <TimezoneSelecter v-if="canEditCalendar" v-model="form.timeZone" />
           <input v-else :value="form.timeZone" readonly />
+          <p v-if="!canEditCalendar">変更できません</p>
         </label>
-        <div class="section-heading">
-          <h2>表示設定</h2><span>この端末のカレンダー一覧に適用</span>
+
+        <div class="form-heading">
+          <h2>表示設定</h2><span>この端末のカレンダーのみに適用</span>
         </div>
-        <label>色
+
+        <label>
+          色
           <ColorPicker v-model="form.color" />
         </label>
-        <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
-        <p v-if="savedMessage" class="saved">{{ savedMessage }}</p>
         <div class="actions">
           <button type="button" @click="router.push({ name: 'Home' })">キャンセル</button>
-          <button data-app-button="primary" type="submit" :disabled="isSaving || isLoading">
-            <IconFloppyDisk />{{ isSaving ? '保存中...' : '保存' }}
-          </button>
+          <button data-app-button="primary" type="submit" :disabled="userStore.isLoading">保存</button>
         </div>
       </form>
-    </div>
-  </section>
+    </section>
+  </div>
 </template>
 
 <style lang="scss" scoped>
-.calendar-detail-view {
-  width: 100%;
-  padding: var(--space-md);
-}
-
-.content {
-  max-width: 720px;
-  margin: 0 auto;
-}
-
-.heading {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-xl);
-  padding-bottom: var(--space-md);
-  border-bottom: 1px solid var(--border);
-}
-
-.heading h2 {
-  font-size: var(--text-size-lg);
-}
-
-.heading p,
-small,
-.section-heading span {
-  color: var(--text-light);
-  font-size: var(--text-size-xs);
-}
-
-.detail-form {
+.section-heading {
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+
+  span {
+    font-size: var(--text-size-sm);
+    color: var(--text-light);
+  }
+}
+
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.form-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  margin-top: var(--space-md);
+
+  h2 {
+    font-size: var(--text-size-md);
+  }
+
+  span {
+    font-size: var(--text-size-sm);
+    color: var(--text-light);
+  }
 }
 
 label {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
   font-size: var(--text-size-xs);
-}
 
-textarea {
-  resize: vertical;
-}
+  textarea {
+    resize: vertical;
+  }
 
-input[readonly],
-textarea[readonly] {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.section-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  padding-top: var(--space-sm);
-  border-bottom: 1px solid var(--border);
-}
-
-.section-heading h2 {
-  font-size: var(--text-size-md);
+  p {
+    font-size: var(--text-size-xs);
+    color: var(--text-light);
+  }
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-sm);
-  padding-top: var(--space-sm);
+  margin-top: var(--space-sm);
+
+  button {
+    width: 5rem;
+  }
 }
 
-.actions button {
-  min-height: 2.25rem;
-  padding: var(--space-xs) var(--space-sm);
-  gap: var(--space-xs);
-}
+.icon-x-mark {
+  padding: var(--space-xs);
 
-.error {
-  color: var(--danger);
-  font-size: var(--text-size-sm);
-}
-
-.saved {
-  color: var(--primary);
-  font-size: var(--text-size-sm);
-}
-
-.empty-state {
-  padding: var(--space-xl) 0;
-  color: var(--text-light);
-  text-align: center;
-}
-
-@media (max-width: 720px) {
-  .calendar-detail-view {
-    padding: var(--space-sm);
+  &:hover {
+    background-color: var(--bg-2);
+    border-radius: 50%;
   }
 }
 </style>

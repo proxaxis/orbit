@@ -6,12 +6,14 @@ import EventForm from '@/components/EventForm.vue';
 import { useEventStore } from '@/stores/event.js';
 import { useUserStore } from '@/stores/user.js';
 import IconXMark from '@/components/icons/IconXMark.vue';
+import { usePeopleStore } from '@/stores/people.js';
 
 const router = useRouter();
 const eventStore = useEventStore();
 const userStore = useUserStore();
+const peopleStore = usePeopleStore();
 
-/** @type {Ref<(GoogleEvent & { sourceCalendarId: string })|null>} */
+/** @type {Ref<HandyCalendarEvent|null>} */
 const event = ref(null);
 
 onMounted(async () => {
@@ -28,14 +30,17 @@ onMounted(async () => {
   }
 });
 
-/** @param {{ body: Record<string, unknown> }} payload */
+/** @param {{ body: Record<string, unknown>, peopleToCreate?: string[] }} payload */
 async function update(payload) {
-  const { body } = payload;
+  const { body, peopleToCreate = [] } = payload;
   try {
     if (!userStore.nowSelectedEvent) throw new Error('You do not have an event selected. You must select an event to update it.');
     userStore.setLoading(true, 'Updating the event...');
     await eventStore.updateEvent(userStore.nowSelectedEvent.eid, userStore.nowSelectedEvent.cid, body);
-    router.replace({ name: 'EventDetail' });
+    if (peopleToCreate.length) {
+      peopleStore.setPendingRegistrationEmails(peopleToCreate);
+      router.replace({ name: 'PeopleEditor' });
+    } else router.replace({ name: 'EventDetail' });
   } catch (err) {
     userStore.setError(true, err);
   } finally {
@@ -53,7 +58,7 @@ async function update(payload) {
       <template #sub>
         <div class="menu-bar-actions">
           <button title="Don't save and close" @click="router.push({ name: 'Home' })">
-            <IconXMark size="1.2rem" />Close
+            <IconXMark size="1.2rem" />
           </button>
         </div>
       </template>
@@ -63,11 +68,12 @@ async function update(payload) {
 </template>
 
 <style lang="scss" scoped>
-.event-view {
-  width: 100%;
-}
+.icon-x-mark {
+  padding: var(--space-xs);
 
-.error {
-  color: var(--danger);
+  &:hover {
+    background-color: var(--bg-2);
+    border-radius: 50%;
+  }
 }
 </style>

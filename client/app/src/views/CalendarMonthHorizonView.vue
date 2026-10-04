@@ -1,34 +1,46 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, inject, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { toDayjs } from '@/services/dayjs.js';
 import { useEventStore } from '@/stores/event.js';
 import { useUserStore } from '@/stores/user.js';
 import { useCalendarStore } from '@/stores/calendar.js';
 import DropdownMenu from '@/components/DropdownMenu.vue';
+import IconCaretLeft from '@/components/icons/IconCaretLeft.vue';
+import IconCaretRight from '@/components/icons/IconCaretRight.vue';
+import IconCalendar from '@/components/icons/IconCalendar.vue';
+import IconBars from '@/components/icons/IconBars.vue';
+import IconGear from '@/components/icons/IconGear.vue';
+import IconUserGroup from '@/components/icons/IconUserGroup.vue';
 
 const router = useRouter();
 const eventStore = useEventStore();
 const userStore = useUserStore();
 const calendarStore = useCalendarStore();
 
-/** @type {Ref<{ open: (event: MouseEvent) => void, close: () => void }|null>} コンテキストメニュー表示用のドロップダウンへの直接の参照 */
-const rfDropdownForContextMenu = ref(null);
+/** @type {(pane: 'main'|'nav'|'sub') => void} 左ペイン開閉操作 */
+const selectPane = inject('selectPane', /** @type {(pane: 'main'|'nav'|'sub') => void} */(() => { }));
 const lastWheelNavigationAt = ref(0);
 
-/** @type {Ref<GoogleEvent[]>} 全てのカレンダーに登録されたイベントのうち、指定された月に登録されたもの */
-const eventsSource = ref([]);
+/** @type {Ref<{x: number, y: number}|null>} 月移動スワイプの開始位置 */
+const swipeStart = ref(null);
 
-/** @type {ComputedRef<(GoogleEvent & { _instanceStart: Dayjs, _instanceEnd: Dayjs })[]>} 計算用に整形したイベント情報 */
-const events = computed(() => Array.from(eventsSource.value).map((e) => ({
-  ...e,
-  _instanceStart: toDayjs(e.start?.dateTime || e.start?.date || undefined),
-  _instanceEnd: toDayjs(e.end?.dateTime || e.end?.date || undefined),
-})));
+/** @type {Ref<number|null>} 日付セル長押しタイマー */
+const longPressTimer = ref(null);
 
-/** @param {GoogleEvent & { sourceCalendarId: string }} event @returns {string|undefined} カレンダー設定に基づくイベントバーの色 */
-const getEventBarColor = (event) => {
-  return calendarStore.list.find((calendar) => calendar.id === event.sourceCalendarId)?.backgroundColor ?? event.color;
+/** @type {Ref<boolean>} 長押し後のクリックを抑制するフラグ */
+const suppressNextCellClick = ref(false);
+
+/** @type {Ref<{ open: (event: MouseEvent) => void, close: () => void }|null>} コンテキストメニュー表示用のドロップダウンへの直接の参照 */
+const rfDropdownForContextMenu = ref(null);
+
+/** @type {Ref<HandyCalendarEvent[]>} 全てのカレンダーに登録されたイベントのうち、指定された月に登録されたもの */
+const events = ref([]);
+
+/** @param {HandyCalendarEvent} evt @returns {string} イベント設定またはカレンダー設定に基づくイベントバーの色 */
+function getEventBarColor(evt) {
+  if (!!evt.calendarBackgroundColor && evt.calendarBackgroundColor.startsWith('#')) return evt.calendarBackgroundColor;
+  return '#2196f3'; // デフォルトの青色
 };
 
 /** @type {ComputedRef<{date: Dayjs, key: string, isToday: boolean, isOtherMonth: boolean, isSelected: boolean}[]>} @description カレンダーメインの日付配列 */
@@ -87,7 +99,7 @@ const getMonthDayEvents = (date) => {
   return layoutMap.value.get(dateKey) || [];
 };
 
-/** @type {ComputedRef<Map<string, {event: GoogleEvent, isStart: boolean, isEnd: boolean, isLabelStart: boolean, spanDays: number}[]>>} @description イベントの配置情報を保持するマップ */
+/** @type {ComputedRef<Map<string, {event: HandyCalendarEvent, isStart: boolean, isEnd: boolean, isLabelStart: boolean, spanDays: number}[]>>} @description イベントの配置情報を保持するマップ */
 const layoutMap = computed(() => {
   const map = new Map();
   const days = calDaysArray.value;
@@ -104,36 +116,31 @@ const layoutMap = computed(() => {
 
     // この週に関係するイベントを抽出
     const weekEvents = Array.from(events.value)
-      .filter((e) => e._instanceStart.isBefore(weekEnd) && e._instanceEnd.isAfter(weekStart))
+      .filter((e) => e.startDateTime.isBefore(weekEnd) && e.endDateTime.isAfter(weekStart))
       .sort((a, b) => {
         // ソート: 開始日時順 > 期間が長い順
-        const sa = a._instanceStart;
-        const sb = b._instanceStart;
-        if (sa.unix() !== sb.unix()) return sa.unix() - sb.unix();
-        const durA = a._instanceEnd.unix() - sa.unix();
-        const durB = b._instanceEnd.unix() - sb.unix();
+        if (a.startDateTime.unix() !== b.startDateTime.unix()) return a.startDateTime.unix() - b.startDateTime.unix();
+        const durA = a.endDateTime.unix() - a.startDateTime.unix();
+        const durB = b.endDateTime.unix() - b.startDateTime.unix();
         return durB - durA;
       });
 
     /** @type {boolean[][]} @description スロットの埋まり具合を管理する配列（例: slots[row][dayIndex]）*/
     const slots = [];
 
-    weekEvents.forEach((ev) => {
-      const evStart = ev._instanceStart;
-      const evEnd = ev._instanceEnd;
-
+    weekEvents.forEach((evt) => {
       // 週内での開始・終了インデックスを計算 (0-6)
       let startIndex = 0;
       let endIndex = 6;
 
       // 開始日時が週の開始日より後であれば、開始インデックスを計算
-      if (evStart.isAfter(weekStart)) {
-        startIndex = evStart.diff(weekStart, 'day');
+      if (evt.startDateTime.isAfter(weekStart)) {
+        startIndex = evt.startDateTime.diff(weekStart, 'day');
       }
-      if (evEnd.isBefore(weekEnd)) {
-        endIndex = evEnd.diff(weekStart, 'day');
+      if (evt.endDateTime.isBefore(weekEnd)) {
+        endIndex = evt.endDateTime.diff(weekStart, 'day');
         // 00:00終了の場合は前日までとする
-        if (evEnd.hour() === 0 && evEnd.minute() === 0 && evEnd.isAfter(evStart)) {
+        if (evt.endDateTime.hour() === 0 && evt.endDateTime.minute() === 0 && evt.endDateTime.isAfter(evt.startDateTime)) {
           endIndex -= 1;
         }
       }
@@ -145,7 +152,9 @@ const layoutMap = computed(() => {
 
       // 空いている行を探す
       let row = 0;
+      if (userStore.maxEventBarsPerCell <= 0) return;
       while (true) {
+        if (row >= userStore.maxEventBarsPerCell) return;
         if (!slots[row]) slots[row] = new Array(7).fill(false);
         let isFree = true;
         for (let i = startIndex; i <= endIndex; i++) {
@@ -178,7 +187,7 @@ const layoutMap = computed(() => {
         // イベント表示範囲内であれば情報をセット
         if (i >= startIndex && i <= endIndex) {
           daySlots[row] = {
-            event: ev,
+            event: evt,
             isStart: i === startIndex,
             isEnd: i === endIndex,
             isLabelStart: i === startIndex || i === 0,
@@ -193,13 +202,79 @@ const layoutMap = computed(() => {
 
 /**
  * イベントクリック時の処理
- * @param {Event} e - クリックイベント
- * @param {Object} event - イベント情報
+ * @param {Event} clickEvent - クリックイベント
+ * @param {HandyCalendarEvent} evt - イベント情報
  */
-const handleEventClick = (e, event) => {
-  e.stopPropagation();
-  // router.push({ name: 'EventDetail', query: { id: event.id } });
+const handleEventClick = (clickEvent, evt) => {
+  clickEvent.stopPropagation();
+  userStore.setNowSelectedEvent({ eid: evt.id, cid: evt.calendarId });
+  router.push({ name: 'EventDetail' });
 };
+
+/** @param {Dayjs} date 日付セルをクリックした日付 */
+function handleCellClick(date) {
+  if (suppressNextCellClick.value) {
+    suppressNextCellClick.value = false;
+    return;
+  }
+  selectDateCell(date);
+}
+
+/** @param {HandyCalendarEvent} evt @returns {boolean} 自分以外の参加者がいるか */
+function hasOtherAttendees(evt) {
+  return evt.raw?.attendees?.some((attendee) => !attendee.self) ?? false;
+}
+
+/** @param {TouchEvent} evt @param {Dayjs} date 長押し対象の日付 */
+function startCellLongPress(evt, date) {
+  if (!userStore.isMobile || evt.touches.length !== 1) return;
+  const touch = evt.touches[0];
+  cancelCellLongPress();
+  longPressTimer.value = window.setTimeout(() => {
+    suppressNextCellClick.value = true;
+    selectDateCell(date);
+    const menuEvent = new MouseEvent('contextmenu', {
+      bubbles: true,
+      clientX: touch.clientX,
+      clientY: touch.clientY,
+    });
+    rfDropdownForContextMenu.value?.open(menuEvent);
+  }, 500);
+}
+
+/** 長押しタイマーを解除 */
+function cancelCellLongPress() {
+  if (longPressTimer.value !== null) {
+    window.clearTimeout(longPressTimer.value);
+    longPressTimer.value = null;
+  }
+}
+
+/** @param {TouchEvent} evt 日付セル上の移動イベント */
+function handleCellTouchMove(evt) {
+  if (evt.touches.length !== 1) cancelCellLongPress();
+}
+
+/** @param {TouchEvent} evt 月表示のタッチ開始イベント */
+function startMonthSwipe(evt) {
+  if (!userStore.isMobile || evt.touches.length !== 1) return;
+  const touch = evt.touches[0];
+  swipeStart.value = { x: touch.clientX, y: touch.clientY };
+}
+
+/** @param {TouchEvent} evt 月表示のタッチ終了イベント */
+function finishMonthSwipe(evt) {
+  const start = swipeStart.value;
+  swipeStart.value = null;
+  if (!start || !userStore.isMobile || evt.changedTouches.length !== 1) return;
+
+  const touch = evt.changedTouches[0];
+  const deltaX = touch.clientX - start.x;
+  const deltaY = touch.clientY - start.y;
+  if (Math.abs(deltaX) < 60 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.25) return;
+  if (deltaX > 0) userStore.goPrevMonth();
+  else userStore.goNextMonth();
+}
 
 /** @param {Dayjs} date 日付セルで選択された日付 */
 const selectDateCell = (date) => {
@@ -268,14 +343,38 @@ const getMonthCellClass = (day) => {
   return classes;
 };
 
-watch(() => [calendarStore.list, userStore.nowUsingDate], async () => {
-  // カレンダーリストがロードされたり、月が変わったりしたらイベントを取得または再取得
-  eventsSource.value = await eventStore.listEvents(userStore.nowUsingDate.year(), userStore.nowUsingDate.month());
+// カレンダーリストがロードされたり、月が変わったりしたらイベントを取得または再取得
+watch(() => [calendarStore.listVisibleCalendars, userStore.nowUsingDate], async () => {
+  events.value = await eventStore.listEvents(userStore.nowUsingDate.year(), userStore.nowUsingDate.month());
 }, { immediate: true });
 </script>
 
 <template>
-  <div class="month-horizontal-view" @wheel="handleCalendarWheel">
+  <div class="month-horizontal-view" @wheel="handleCalendarWheel" @touchstart="startMonthSwipe"
+    @touchend="finishMonthSwipe" @touchcancel="cancelCellLongPress">
+    <header class="month-toolbar">
+      <div class="month-actions">
+        <button v-if="userStore.isMobile || userStore.isTablet" type="button" title="カレンダーを開閉" aria-label="カレンダーを開閉"
+          @click="selectPane('nav')">
+          <IconBars />
+        </button>
+        <button type="button" title="前月へ戻る" aria-label="前月へ戻る" @click="userStore.goPrevMonth()">
+          <IconCaretLeft />
+        </button>
+        <button type="button" title="今日に戻る" aria-label="今日に戻る" @click.prevent="userStore.goToday()">
+          <IconCalendar />
+        </button>
+        <button type="button" title="次月へ進む" aria-label="次月へ進む" @click="userStore.goNextMonth()">
+          <IconCaretRight />
+        </button>
+      </div>
+      <div class="month-title">
+        <h1>{{ userStore.nowUsingDate.format('YYYY年 M月') }}</h1>
+        <button type="button" title="ユーザー設定" aria-label="ユーザー設定" @click="router.push({ name: 'UserConfig' })">
+          <IconGear />
+        </button>
+      </div>
+    </header>
     <div class="month-header">
       <div v-for="(map, i) in userStore.daysMap" :key="i" :style="{ color: map.weekendColor ?? undefined }">
         {{ map.label }}
@@ -285,7 +384,9 @@ watch(() => [calendarStore.list, userStore.nowUsingDate], async () => {
     <div class="month-grid">
       <div v-for="(day, idx) in calDaysArray" :key="day.key || idx" :class="getMonthCellClass(day)"
         :style="{ color: userStore.getWeekendColor(day.date.day(), day.isOtherMonth) ?? undefined }"
-        @click="selectDateCell(day.date)" @contextmenu.prevent="openContextMenu($event, day.date)">
+        @click="handleCellClick(day.date)" @contextmenu.prevent="openContextMenu($event, day.date)"
+        @touchstart.stop="startCellLongPress($event, day.date)" @touchmove.stop="handleCellTouchMove"
+        @touchend.stop="cancelCellLongPress" @touchcancel.stop="cancelCellLongPress">
         <div class="day-num"
           :style="{ color: userStore.getWeekendColor(day.date.day(), day.isOtherMonth) ?? undefined }">
           {{ day.date.date() }}
@@ -299,6 +400,7 @@ watch(() => [calendarStore.list, userStore.nowUsingDate], async () => {
               @click.stop="(e) => handleEventClick(e, slot.event)" @mousedown.stop>
               <span v-if="slot.isLabelStart">
                 {{ slot.event.icon ?? '📌' }}{{ slot.event.summary }}
+                <IconUserGroup v-if="hasOtherAttendees(slot.event)" size="0.75rem" />
               </span>
             </div>
           </div>
@@ -319,6 +421,57 @@ watch(() => [calendarStore.list, userStore.nowUsingDate], async () => {
   flex-direction: column;
   overflow: auto;
   height: 100%;
+
+  .month-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 0 0 auto;
+    padding: var(--space-sm) var(--space-md);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-0);
+
+    @media (max-width: 768px) {
+      padding: var(--space-sm) var(--space-md);
+    }
+
+    .month-title {
+      display: flex;
+      align-items: center;
+      gap: var(--space-md);
+
+      h1 {
+        font-size: var(--text-size-xl);
+        line-height: 1.4;
+      }
+
+      button {
+        justify-content: center;
+        padding: var(--space-xs);
+        border-radius: var(--border-radius);
+
+        &:hover {
+          background: var(--bg-2);
+        }
+      }
+    }
+  }
+
+  .month-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+
+    button {
+      justify-content: center;
+      padding: var(--space-xs);
+      border-radius: var(--border-radius);
+
+      &:hover {
+        background: var(--bg-2);
+      }
+    }
+  }
 
   .month-header {
     display: grid;
@@ -362,7 +515,7 @@ watch(() => [calendarStore.list, userStore.nowUsingDate], async () => {
     }
 
     &.is-today .day-num {
-      background: var(--accent);
+      background: #94111180;
       color: white;
       border-radius: 50%;
       width: 24px;
@@ -373,7 +526,7 @@ watch(() => [calendarStore.list, userStore.nowUsingDate], async () => {
     }
 
     &.is-selected {
-      background-color: var(--selected-cell, rgba(33, 150, 243, 0.1));
+      background-color: var(--selected);
     }
 
     .day-num {

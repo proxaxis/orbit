@@ -27,7 +27,9 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
           <header class="user-dialog-header">
             <h2>{{ userStore.userDialogTitle }}</h2>
             <button type="button" class="close-button" aria-label="Close" @click="userStore.closeUserDialog">
-              <span aria-hidden="true"><IconXMark /></span>
+              <span aria-hidden="true">
+                <IconXMark />
+              </span>
             </button>
           </header>
 
@@ -58,7 +60,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
   display: grid;
   place-items: center;
   padding: 1rem;
-  background-color: rgb(0 0 0 / 55%);
+  background-color: var(--overlay);
 }
 
 .user-dialog {

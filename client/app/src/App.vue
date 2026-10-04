@@ -1,11 +1,13 @@
 <script setup>
 import { onMounted, onUnmounted, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth.js';
+import { useCalendarStore } from '@/stores/calendar.js';
 import { useUserStore } from '@/stores/user.js';
 import UserDialog from '@/components/UserDialog.vue';
 import PwaInstallPrompt from '@/components/PwaInstallPrompt.vue';
 
 const authStore = useAuthStore();
+const calendarStore = useCalendarStore();
 const userStore = useUserStore();
 
 /** @type {MediaQueryList|null} @description システムテーマの変更を監視するためのオブジェクト */
@@ -40,6 +42,8 @@ watch(() => authStore.isAuthenticated, (isAuthenticated) => {
 onMounted(async () => {
   if (!userStore.checkUserEnvironment()) return;
 
+  await userStore.settingsReady;
+
   // ユーザ設定の適用
   userStore.applyTheme(userStore.userSelectedTheme);
   window.addEventListener('resize', handleWindowResize);
@@ -48,6 +52,7 @@ onMounted(async () => {
 
   // Google ログイン状態の確認とトークンの取得
   const token = await authStore.fetchToken();
+  if (token) await calendarStore.loadCalendars();
   if (!token && !authStore.isAuthenticated) {
     userStore.openUserDialog({
       title: 'Login Required',
@@ -139,51 +144,46 @@ textarea {
   }
 }
 
+input[readonly],
+textarea[readonly] {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 select {
   padding: var(--space-xs) var(--space-xxs);
 }
 
 .icons {
   fill: var(--text);
-
-  &.danger {
-    fill: var(--danger);
-  }
-}
-
-hr {
-  border: none;
-  border-top: 1px solid var(--border);
-  margin: var(--space-sm) 0;
 }
 
 details {
+  * {
+    font-size: var(--text-size-sm);
+  }
+
   summary {
     cursor: pointer;
     user-select: none;
-    margin-bottom: 0.9rem;
-
-    &:hover {
-      color: var(--primary);
-    }
-  }
-
-  &[open] {
-    summary {
-      color: var(--primary);
-    }
+    font-size: var(--text-size-md);
+    text-decoration: underline;
   }
 }
 
 button[data-app-button="primary"] {
   background-color: var(--primary);
-  color: var(--bg-0);
+  color: var(--text);
   border-radius: var(--border-radius);
   padding: var(--space-xs) var(--space-sm);
   font-size: var(--text-size-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
   &:hover {
-    background-color: #0000ffa8;
+    background-color: var(--primary);
+    opacity: 0.65;
   }
 
   &:disabled {

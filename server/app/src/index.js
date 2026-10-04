@@ -34,12 +34,14 @@ app.get('/auth/login', (c) => {
   const client = getOAuth2Client();
 
   const authUrl = client.generateAuthUrl({
-    access_type: 'offline', // 長期保持用リフレッシュトークンを要求
-    prompt: 'consent',     // 初回以外でも確実に refresh_token を取得
+    access_type: 'offline',
+    prompt: 'consent',
     scope: [
       'https://www.googleapis.com/auth/calendar',
       'https://www.googleapis.com/auth/calendar.events',
       'https://www.googleapis.com/auth/userinfo.profile',
+      'https://www.googleapis.com/auth/contacts',
+      'https://www.googleapis.com/auth/contacts.other.readonly',
     ],
   });
 

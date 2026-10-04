@@ -16,6 +16,7 @@ import MenuBar from '@/components/MenuBar.vue';
 import IconLocationDot from '@/components/icons/IconLocationDot.vue';
 import IconArrowsRotate from '@/components/icons/IconArrowsRotate.vue';
 import IconCircleInfo from '@/components/icons/IconCircleInfo.vue';
+import IconUserGroup from '@/components/icons/IconUserGroup.vue';
 
 const router = useRouter();
 const calendarStore = useCalendarStore();
@@ -35,17 +36,33 @@ function setDropdownRef(index, instance) {
   rfsDrompdownMenu.value[index] = /** @type {{ open: (event: MouseEvent) => void, close: () => void }} */ (instance);
 }
 
-/** @type {Ref<(GoogleEvent & { sourceCalendarId: string })[]>} 選択中の日付の全てのカレンダーのイベントリスト */
-const eventsSource = ref([]);
+/** @type {Ref<HandyCalendarEvent[]>} 選択中の日付の全てのカレンダーのイベントリスト */
+const events = ref([]);
+
+/**
+ * イベントの日付を文字列に変換
+ * @param {HandyCalendarEvent} evt - イベント情報
+ * @returns {string} 日付の文字列
+ */
+function getDateText(evt) {
+  if (!evt) return '';
+  if (evt.isAllDay) return `${evt.startDateTime.format('YYYY-MM-DD')} - ${dayjs(evt.endDateTime).subtract(1, 'day').format('YYYY-MM-DD')}`;
+  return `${dayjs(evt.startDateTime).format('YYYY-MM-DD HH:mm')} - ${dayjs(evt.endDateTime).format('YYYY-MM-DD HH:mm')}`;
+}
+
+/** @param {HandyCalendarEvent} evt @returns {boolean} 自分以外の参加者がいるか */
+function hasOtherAttendees(evt) {
+  return evt.raw?.attendees?.some((attendee) => !attendee.self) ?? false;
+}
 
 /**
  * イベントクリック時の処理
  * @param {Event} e - クリックイベント
- * @param {(GoogleEvent & { sourceCalendarId: string })} evt - イベント情報
+ * @param {HandyCalendarEvent} evt - イベント情報
  */
 const handleEventClick = (e, evt) => {
   e.stopPropagation();
-  userStore.setNowSelectedEvent({ eid: evt.id, cid: evt.sourceCalendarId });
+  userStore.setNowSelectedEvent({ eid: evt.id, cid: evt.calendarId });
   router.push({ name: 'EventDetail' });
 };
 
@@ -81,23 +98,11 @@ const onSelectContextMenu = (rfIndex, action, ...args) => {
   rfsDrompdownMenu.value?.[rfIndex]?.close();
 };
 
-/**
- * 画面表示用に時間をフォーマット
- * @param {(GoogleEvent & { sourceCalendarId: string })} event - イベント
- * @returns {string} 時間表示
- */
-const formatTime = (event) => {
-  if (event.start.date) return '終日';
-  const s = dayjs(event.start.dateTime);
-  const e = dayjs(event.end.dateTime);
-  return `${s.format('HH:mm')} - ${e.format('HH:mm')}`;
-};
-
-watch(() => [calendarStore.list, userStore.nowSelectedDate], async () => {
+watch(() => [calendarStore.listVisibleCalendars, userStore.nowSelectedDate], async () => {
   if (!userStore.nowSelectedDate) return;
   // カレンダーリストがロードされたり、選択日が変わったりしたらイベントを取得または再取得
   const date = toDayjs(userStore.nowSelectedDate);
-  eventsSource.value = await eventStore.listEventsByDate(date.year(), date.month(), date.date());
+  events.value = await eventStore.listEventsByDate(date.year(), date.month(), date.date());
 }, { immediate: true });
 </script>
 
@@ -105,19 +110,21 @@ watch(() => [calendarStore.list, userStore.nowSelectedDate], async () => {
   <div class="date-events-view">
     <MenuBar>
       <template #center>
-        <h2 class="title">{{ dayjs(userStore.nowSelectedDate).format('YYYY年 MM月 D日 (ddd)') }}</h2>
+        <h2 class="title">{{ dayjs(userStore.nowSelectedDate ?? undefined).format('YYYY年 MM月 D日 (ddd)') }}</h2>
       </template>
     </MenuBar>
 
     <ul>
-      <li v-for="(evt, i) in eventsSource" :key="evt.id" @click.stop="handleEventClick($event, evt)">
+      <li v-for="(evt, i) in events" :key="evt.id" @click.stop="handleEventClick($event, evt)">
         <div class="face">
-          <CalendarRibbon :gCalendarId="evt.sourceCalendarId" :useLabel="false" />
-          <IconArrowsRotate size="0.7rem" v-if="evt.recurrence" />
+          <CalendarRibbon :gCalendarId="evt.calendarId" :useLabel="false" />
+          <IconArrowsRotate size="0.7rem" v-if="!!evt.raw.recurrence" />
         </div>
         <div class="info">
-          <div>{{ evt.icon ?? '📅' }}{{ evt.summary }}</div>
-          <div>{{ formatTime(evt) }}</div>
+          <div>{{ evt.icon ?? '📌' }}{{ evt.summary }}
+            <IconUserGroup v-if="hasOtherAttendees(evt)" size="0.8rem" />
+          </div>
+          <div>{{ getDateText(evt) }}</div>
           <div v-if="evt.location">
             <IconLocationDot size="0.7rem" />
             <span>{{ evt.location }}</span>
@@ -130,21 +137,21 @@ watch(() => [calendarStore.list, userStore.nowSelectedDate], async () => {
               <IconEllipsisVertical />
             </button>
           </template>
-          <button @click="onSelectContextMenu(i, 'ShowDetail', evt.id, evt.sourceCalendarId)">
+          <button @click="onSelectContextMenu(i, 'ShowDetail', evt.id, evt.calendarId)">
             <IconCircleInfo />詳細
           </button>
-          <button @click="onSelectContextMenu(i, 'EditEvent', evt.id, evt.sourceCalendarId)">
+          <button @click="onSelectContextMenu(i, 'EditEvent', evt.id, evt.calendarId)">
             <IconPen />編集
           </button>
-          <button @click="onSelectContextMenu(i, 'DeleteEvent', evt.id, evt.sourceCalendarId)">
+          <button @click="onSelectContextMenu(i, 'DeleteEvent', evt.id, evt.calendarId)">
             <IconTrash />削除
           </button>
-          <button @click="onSelectContextMenu(i, 'CloneEvent', evt.id, evt.sourceCalendarId)">
+          <button @click="onSelectContextMenu(i, 'CloneEvent', evt.id, evt.calendarId)">
             <IconCopy />複製
           </button>
         </DropdownMenu>
       </li>
-      <li v-if="eventsSource.length === 0" class="no-event">予定はありません</li>
+      <li v-if="events.length === 0" class="no-event">予定はありません</li>
     </ul>
   </div>
 </template>
@@ -172,7 +179,7 @@ li {
   align-items: flex-start;
   cursor: pointer;
   background: var(--bg-2);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px var(--shadow);
 
   &:hover {
     background-color: var(--bg-3);

@@ -52,38 +52,17 @@ const handleTextInput = (event) => {
   <div class="color-picker">
     <div class="picker-controls">
       <div class="preview-wrapper">
-        <input 
-          type="color" 
-          :value="inputValue" 
-          @input="updateColor($event.target.value)"
-          class="native-input"
-        />
-        <div 
-          class="color-preview" 
-          :style="{ backgroundColor: inputValue }"
-        ></div>
+        <input type="color" :value="inputValue" @input="updateColor($event.target.value)" class="native-input" />
+        <div class="color-preview" :style="{ backgroundColor: inputValue }"></div>
       </div>
 
-      <input 
-        type="text" 
-        :value="inputValue" 
-        @input="handleTextInput"
-        maxlength="7"
-        class="text-input"
-      />
+      <input type="text" :value="inputValue" @input="handleTextInput" maxlength="7" class="text-input" />
     </div>
 
     <div class="preset-grid">
-      <button
-        v-for="color in presetColors"
-        :key="color"
-        type="button"
-        class="preset-btn"
-        :style="{ backgroundColor: color }"
-        :class="{ active: color.toLowerCase() === inputValue.toLowerCase() }"
-        @click="updateColor(color)"
-        :aria-label="color"
-      ></button>
+      <button v-for="color in presetColors" :key="color" type="button" class="preset-btn"
+        :style="{ backgroundColor: color }" :class="{ active: color.toLowerCase() === inputValue.toLowerCase() }"
+        @click="updateColor(color)" :aria-label="color"></button>
     </div>
   </div>
 </template>
@@ -94,59 +73,59 @@ const handleTextInput = (event) => {
   flex-direction: column;
   gap: 8px;
 
-	.picker-controls {
-		display: flex;
-		gap: 8px;
-		align-items: center;
+  .picker-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
 
-		.preview-wrapper {
-			position: relative;
-			width: 40px;
-			height: 40px;
-			border-radius: 50%;
-			overflow: hidden;
-			border: 2px solid #ddd;
-			cursor: pointer;
+    .preview-wrapper {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 2px solid var(--border);
+      cursor: pointer;
 
-			&:hover {
-				border-color: #aaa;
-			}
-		}
+      &:hover {
+        border-color: var(--border-color);
+      }
+    }
 
-		.text-input {
-			flex: 1;
-			padding: 8px 12px;
-			font-family: monospace;
-			text-transform: uppercase;
-			font-size: 14px;
-		}
-	}
+    .text-input {
+      flex: 1;
+      padding: 8px 12px;
+      font-family: monospace;
+      text-transform: uppercase;
+      font-size: 14px;
+    }
+  }
 
-	.preset-grid {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 8px;
-		margin-top: 4px;
+  .preset-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
 
-		.preset-btn {
-			width: 24px;
-			height: 24px;
-			border-radius: 50%;
-			border: 1px solid rgba(0, 0, 0, 0.1);
-			cursor: pointer;
-			transition: transform 0.1s, box-shadow 0.1s;
-			padding: 0;
+    .preset-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.1s;
+      padding: 0;
 
-			&:hover {
-				transform: scale(1.1);
-			}
+      &:hover {
+        transform: scale(1.1);
+      }
 
-			&.active {
-				box-shadow: 0 0 0 2px white, 0 0 0 4px #007bff;
-				border-color: transparent;
-			}
-		}
-	}
+      &.active {
+        box-shadow: 0 0 0 2px var(--bg-0), 0 0 0 4px var(--primary);
+        border-color: transparent;
+      }
+    }
+  }
 }
 
 /* ネイティブのinput[type=color]を透明にして前面に配置 */

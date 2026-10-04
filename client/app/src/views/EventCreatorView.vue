@@ -1,47 +1,47 @@
 <script setup>
-import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import MenuBar from '@/components/MenuBar.vue';
 import EventForm from '@/components/EventForm.vue';
-import { useCalendarStore } from '@/stores/calendar.js';
 import { useEventStore } from '@/stores/event.js';
+import { useUserStore } from '@/stores/user.js';
+import { usePeopleStore } from '@/stores/people.js';
 
 const router = useRouter();
-const calendarStore = useCalendarStore();
 const eventStore = useEventStore();
-const loading = ref(false);
-const error = ref('');
-const create = async ({ body, calendarId }) => {
-  loading.value = true;
-  error.value = '';
+const userStore = useUserStore();
+const peopleStore = usePeopleStore();
+
+/**
+ * イベントを作成する
+ * @param {object} param
+ * @param {object} param.body イベント作成のリクエストボディ
+ * @param {string} param.calendarId イベントを作成するカレンダー
+ */
+async function submit({ body, calendarId, peopleToCreate = [] }) {
+  userStore.setLoading(true, 'Creating event...');
   try {
     const event = await eventStore.createEvent(body, calendarId);
-    router.replace({ name: 'EventDetail' });
+    if (!event) throw new Error('Failed to create event. No event returned.');
+    if (peopleToCreate.length) {
+      peopleStore.setPendingRegistrationEmails(peopleToCreate);
+      router.push({ name: 'PeopleEditor' });
+    } else router.push({ name: 'EventDetail' });
   } catch (err) {
-    error.value = err.message || '予定を作成できませんでした。';
+    userStore.setError(true, err);
   } finally {
-    loading.value = false;
+    userStore.setLoading(false);
   }
 };
 </script>
 
 <template>
   <section class="event-view">
-    <MenuBar><template #main>
-        <h1 class="title">予定を作成</h1>
-      </template></MenuBar>
-    <p v-if="error" class="error">{{ error }}</p>
-    <EventForm :calendars="calendarStore.list" :loading="loading" @submit="create" @cancel="router.back()" />
+    <MenuBar>
+      <template #main>
+        <h1 class="title">イベント作成</h1>
+      </template>
+      新しいイベント（予定）を作成します
+    </MenuBar>
+    <EventForm @submit="submit" @cancel="router.back()" />
   </section>
 </template>
-
-<style lang="scss" scoped>
-.event-view {
-  width: 100%;
-}
-
-.error {
-  color: var(--danger);
-  margin-bottom: 1rem;
-}
-</style>

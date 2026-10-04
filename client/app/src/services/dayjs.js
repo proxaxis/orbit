@@ -5,7 +5,7 @@ dayjs.locale('ja');
 
 /**
  * 日付を dayjs オブジェクトに変換
- * @param {number|string|Date} [arg1] 年、日付文字列、または Date オブジェクト
+ * @param {number|string|Date|dayjs.Dayjs} [arg1] 年、日付文字列、Date オブジェクト、または dayjs オブジェクト
  * @param {number} [arg2] 月インデックス (0~11)
  * @param {number} [arg3] 日
  * @returns {dayjs.Dayjs}
@@ -23,6 +23,10 @@ export function toDayjs(arg1 = undefined, arg2 = undefined, arg3 = undefined) {
   else if (typeof arg1 === 'string') {
     return dayjs(arg1);
   }
+  // dayjs オブジェクトの場合
+  else if (dayjs.isDayjs(arg1)) {
+    return arg1;
+  }
   // Date オブジェクトの場合
   else if (arg1 instanceof Date) {
     return dayjs(arg1);
@@ -33,13 +37,13 @@ export function toDayjs(arg1 = undefined, arg2 = undefined, arg3 = undefined) {
 
 /**
  * 指定した日付とイベントの時間帯が重なっているか判定
- * @param {{start?: {date?: string, dateTime?: string}, end?: {date?: string, dateTime?: string}}} event
- * @param {dayjs.Dayjs} date
- * @returns {boolean}
+ * @param {{startDateTime?: dayjs.Dayjs, endDateTime?: dayjs.Dayjs}} evt イベントの開始日時と終了日時を持つオブジェクト
+ * @param {dayjs.Dayjs} date 判定する日付
+ * @returns {boolean} 重なっているかどうか
  */
-export function isEventOnDate(event, date) {
-  const eventStart = toDayjs(event.start?.dateTime ?? event.start?.date ?? undefined);
-  const eventEnd = toDayjs(event.end?.dateTime ?? event.end?.date ?? undefined);
+export function isEventOnDate({ startDateTime, endDateTime }, date) {
+  const eventStart = toDayjs(startDateTime);
+  const eventEnd = toDayjs(endDateTime);
   const dateStart = date.startOf('day');
   const dateEnd = dateStart.add(1, 'day');
 

@@ -45,7 +45,16 @@ const router = createRouter({
           },
         },
         {
-          path: '/calendar/sharing',
+          path: '/people/edit',
+          name: 'PeopleEditor',
+          components: {
+            default: () => import('@/views/CalendarMonthHorizonView.vue'),
+            nav: () => import('@/views/UserCalendarsView.vue'),
+            sub: () => import('@/views/PeopleEditor.vue'),
+          },
+        },
+        {
+          path: '/cal/sharing',
           name: 'SharingConfig',
           components: {
             default: () => import('@/views/CalendarMonthHorizonView.vue'),
@@ -54,7 +63,7 @@ const router = createRouter({
           },
         },
         {
-          path: '/calendar/new',
+          path: '/cal/new',
           name: 'CalendarCreator',
           components: {
             default: () => import('@/views/CalendarMonthHorizonView.vue'),
@@ -63,7 +72,16 @@ const router = createRouter({
           },
         },
         {
-          path: '/calendar/detail',
+          path: '/cal/add',
+          name: 'CalendarAdder',
+          components: {
+            default: () => import('@/views/CalendarMonthHorizonView.vue'),
+            nav: () => import('@/views/UserCalendarsView.vue'),
+            sub: () => import('@/views/CalendarAdder.vue'),
+          },
+        },
+        {
+          path: '/cal/detail',
           name: 'CalendarDetail',
           components: {
             default: () => import('@/views/CalendarMonthHorizonView.vue'),
@@ -72,7 +90,7 @@ const router = createRouter({
           },
         },
         {
-          path: '/user/config',
+          path: '/usr/config',
           name: 'UserConfig',
           components: {
             default: () => import('@/views/CalendarMonthHorizonView.vue'),

@@ -3,130 +3,136 @@ import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth.js';
 import { useCalendarStore } from '@/stores/calendar.js';
+import { useUserStore } from '@/stores/user.js';
 import * as gCalAPI from '@/services/google-calendar-api.js';
+import { getRandomCalendarListColorId } from '@/services/google-calendar-colors.js';
 import MenuBar from '@/components/MenuBar.vue';
 import ColorPicker from '@/components/ColorPicker.vue';
 import TimezoneSelecter from '@/components/TimezoneSelecter.vue';
 import IconCalendar from '@/components/icons/IconCalendar.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
+import AskLoginMessage from '@/components/AskLoginMessage.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
 const calendarStore = useCalendarStore();
-const isSubmitting = ref(false);
-const errorMessage = ref('');
+const userStore = useUserStore();
 
-const form = reactive({
+/** @type {Ref<string | null>} */
+const formErrorMessage = ref(null);
+
+const vmForm = reactive({
   summary: '',
   description: '',
   location: '',
-  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-  color: '#54a0ff',
+  timeZone: userStore.timeZone,
+  color: getRandomCalendarListColorId().backgroundColor,
 });
 
-async function createCalendar() {
-  errorMessage.value = '';
-  if (!form.summary.trim()) {
-    errorMessage.value = 'カレンダー名を入力してください。';
-    return;
+function checkFormInput() {
+  formErrorMessage.value = null;
+  if (!vmForm.summary.trim()) {
+    formErrorMessage.value = 'Calendar name is not entered. Please enter a calendar name.';
+    return false;
   }
-  if (!authStore.token) {
-    errorMessage.value = 'カレンダーを作成するには Google アカウントでログインしてください。';
-    return;
-  }
+  return true;
+}
 
-  isSubmitting.value = true;
+/** カレンダーを追加するリクエストを送信し、キャッシュに保存する */
+async function submit() {
+  if (!checkFormInput()) return;
+
+  userStore.setLoading(true, 'Creating calendar...');
   try {
     const body = {
-      summary: form.summary.trim(),
-      description: form.description.trim() || undefined,
-      location: form.location.trim() || undefined,
-      timeZone: form.timeZone,
+      summary: vmForm.summary.trim(),
+      description: vmForm.description.trim() || undefined,
+      location: vmForm.location.trim() || undefined,
+      timeZone: vmForm.timeZone,
     };
-    const created = await gCalAPI.insertCalendar(authStore.token, body);
-    if (!created?.id) throw new Error('カレンダーを作成できませんでした。');
-    await gCalAPI.patchCalendarListEntry(authStore.token, created.id, { backgroundColor: form.color, foregroundColor: '#000000' });
-    calendarStore.addCalendar({ ...created, backgroundColor: form.color, foregroundColor: '#000000', accessRole: 'owner' });
-    router.replace({ name: 'Home' });
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : String(error);
+    const resource = /** @type {GoogleCalendarResource} */ (await gCalAPI.insertCalendar(authStore.token, body));
+    if (!resource?.id) throw new Error('Failed to create calendar. No calendar ID returned.');
+    /** @type {GoogleCalendarListEntry} */
+    const returnEntry = await gCalAPI.patchCalendarListEntry(authStore.token, resource.id, { backgroundColor: vmForm.color, foregroundColor: '#000000' });
+    /** @type {GoogleCalendarListEntry} */
+    const entry = {
+      kind: 'calendar#calendarListEntry',
+      etag: returnEntry.etag ?? '',
+      id: returnEntry.id,
+      summary: returnEntry.summary,
+      description: returnEntry.description,
+      location: returnEntry.location,
+      timeZone: returnEntry.timeZone,
+      backgroundColor: vmForm.color,
+      foregroundColor: '#000000',
+      accessRole: 'owner',
+      defaultReminders: [],
+      autoAcceptInvitations: false,
+    };
+    calendarStore.addCalendar(entry);
+    router.push({ name: 'Home' });
+  } catch (err) {
+    userStore.setError(true, err);
   } finally {
-    isSubmitting.value = false;
+    userStore.setLoading(false);
   }
 }
 </script>
 
 <template>
-  <section class="calendar-creator-view">
+  <div class="calendar-creator-view">
     <MenuBar>
       <template #main>
         <h1 class="title">カレンダーを作成</h1>
       </template>
       <template #sub>
-        <button title="キャンセル" @click="router.back">
-          <IconXMark />キャンセル
+        <button title="Don't save and close" @click="router.back">
+          <IconXMark />
         </button>
       </template>
+
+      予定をまとめるためのカレンダーを作成します
     </MenuBar>
 
-    <form class="calendar-form" @submit.prevent="createCalendar">
-      <div class="form-heading">
-        <IconCalendar />
-        <div>
-          <h2>新しいカレンダー</h2>
-          <p>予定をまとめるためのカレンダーを作成します。</p>
+    <AskLoginMessage v-if="!authStore.token">
+      <span v-if="!authStore.isAuthenticated">カレンダーを作成するにはログインが必要です</span>
+      <span v-if="userStore.isOffline">オフラインではカレンダーを作成できません</span>
+    </AskLoginMessage>
+
+    <section v-else>
+      <form @submit.prevent="submit">
+        <label>
+          カレンダー名称 <input v-model="vmForm.summary" autofocus required maxlength="100" placeholder="例: プロジェクト予定" />
+        </label>
+        <label>
+          説明 <textarea v-model="vmForm.description" rows="4" maxlength="500" placeholder="このカレンダーの用途や補足"></textarea>
+        </label>
+        <label>
+          場所 <input v-model="vmForm.location" maxlength="255" placeholder="例: 東京オフィス" />
+        </label>
+        <label>
+          タイムゾーン
+          <TimezoneSelecter v-model="vmForm.timeZone" />
+        </label>
+        <label>
+          カレンダーの色
+          <ColorPicker v-model="vmForm.color" />
+        </label>
+        <p v-if="formErrorMessage" class="error" role="alert">{{ formErrorMessage }}</p>
+        <div class="actions">
+          <button type="button" @click="router.back">キャンセル</button>
+          <button data-app-button="primary" type="submit" :disabled="userStore.isLoading">カレンダーを作成</button>
         </div>
-      </div>
-      <label>カレンダー名 <input v-model="form.summary" autofocus required maxlength="100"
-          placeholder="例: プロジェクト予定" /></label>
-      <label>説明 <textarea v-model="form.description" rows="4" maxlength="500"
-          placeholder="このカレンダーの用途や補足"></textarea></label>
-      <label>場所 <input v-model="form.location" maxlength="255" placeholder="例: 東京オフィス" /></label>
-      <label>タイムゾーン
-        <TimezoneSelecter v-model="form.timeZone" />
-      </label>
-      <label>カレンダーの色
-        <ColorPicker v-model="form.color" />
-      </label>
-      <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
-      <div class="actions">
-        <button type="button" @click="router.back">キャンセル</button>
-        <button data-app-button="primary" type="submit" :disabled="isSubmitting">{{ isSubmitting ? '作成中...' : 'カレンダーを作成'
-          }}</button>
-      </div>
-    </form>
-  </section>
+      </form>
+    </section>
+  </div>
 </template>
 
 <style lang="scss" scoped>
-.calendar-creator-view {
-  width: 100%;
-  padding: var(--space-md);
-}
-
-.calendar-form {
+form {
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
-  max-width: 42rem;
-  margin: 0 auto;
-}
-
-.form-heading {
-  display: flex;
-  align-items: center;
   gap: var(--space-sm);
-  padding-bottom: var(--space-sm);
-  border-bottom: 1px solid var(--border);
-}
-
-.form-heading h2 {
-  font-size: var(--text-size-lg);
-}
-
-.form-heading p {
-  color: var(--text-light);
-  font-size: var(--text-size-xs);
 }
 
 label {
@@ -147,19 +153,17 @@ textarea {
   padding-top: var(--space-sm);
 }
 
-.actions button {
-  min-height: 2.25rem;
-  padding: var(--space-xs) var(--space-sm);
-}
-
 .error {
   color: var(--danger);
   font-size: var(--text-size-sm);
 }
 
-@media (max-width: 720px) {
-  .calendar-creator-view {
-    padding: var(--space-sm);
+.icon-x-mark {
+  padding: var(--space-xs);
+
+  &:hover {
+    background-color: var(--bg-2);
+    border-radius: 50%;
   }
 }
 </style>

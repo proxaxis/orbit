@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import dayjs, { toDayjs } from '@/services/dayjs';
+import dayjs from '@/services/dayjs';
+import { readOffline, writeOffline, USER_SETTINGS_KEY } from '@/services/offline-storage.js';
 
 /**
  * @typedef {'LIGHT' | 'DARK' | 'SYSTEM'} UserAvailableTheme ユーザが選択可能なテーマ設定
@@ -130,14 +131,18 @@ export const useUserStore = defineStore('user', () => {
     return true;
   };
 
+  /** @type {ComputedRef<boolean>} @description オフラインかどうか */
+  const isOffline = computed(() => typeof navigator !== 'undefined' && !navigator.onLine);
+
+  /** @type {ComputedRef<string>} @description タイムゾーン（例: Asia/Tokyo）*/
+  const timeZone = computed(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
+
   // #endregion
 
   // #region テーマ設定処理
 
   /** @type {Ref<UserAvailableTheme>} @description ユーザ設定のテーマ */
   const userSelectedTheme = ref('SYSTEM');
-
-  const USER_SETTINGS_KEY = 'orbit-user-settings';
 
   /** @type {Ref<boolean>} @description システムのテーマ設定がダークモードかどうか */
   const isSystemPrefersDark = ref(typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)').matches : false);
@@ -178,6 +183,9 @@ export const useUserStore = defineStore('user', () => {
 
   /** @type {Ref<string[]>} @description 左ペインに表示するカレンダー ID の順序 */
   const calendarOrder = ref([]);
+
+  /** @type {Ref<string[]>} @description 非表示にするカレンダー ID */
+  const hiddenCalendarIds = ref([]);
 
   /** @type {Ref<number>} @description 左ペインの幅 */
   const navPaneWidth = ref(260);
@@ -225,28 +233,28 @@ export const useUserStore = defineStore('user', () => {
   /** @type {Ref<boolean>} @description カレンダーのホイール操作で月を移動するかどうか */
   const useWheelMonthNavigation = ref(true);
 
-  function saveSettings() {
-    if (typeof localStorage === 'undefined') return;
-    localStorage.setItem(
-      USER_SETTINGS_KEY,
-      JSON.stringify({
-        theme: userSelectedTheme.value,
-        firstDayOfWeek: firstDayOfWeek.value,
-        weekendDays: weekendDays.value,
-        useMiniCalendar: useMiniCalendar.value,
-        useWheelMonthNavigation: useWheelMonthNavigation.value,
-        weekdayLabels: weekdayLabels.value,
-        calendarOrder: calendarOrder.value,
-        navPaneWidth: navPaneWidth.value,
-        subPaneWidth: subPaneWidth.value,
-      }),
-    );
+  /** @type {Ref<number>} @description 月表示のセルに表示するイベントバーの最大本数 */
+  const maxEventBarsPerCell = ref(3);
+
+  async function saveSettings() {
+    await writeOffline(USER_SETTINGS_KEY, {
+      theme: userSelectedTheme.value,
+      firstDayOfWeek: firstDayOfWeek.value,
+      weekendDays: weekendDays.value,
+      useMiniCalendar: useMiniCalendar.value,
+      useWheelMonthNavigation: useWheelMonthNavigation.value,
+      maxEventBarsPerCell: maxEventBarsPerCell.value,
+      weekdayLabels: weekdayLabels.value,
+      calendarOrder: calendarOrder.value,
+      hiddenCalendarIds: hiddenCalendarIds.value,
+      navPaneWidth: navPaneWidth.value,
+      subPaneWidth: subPaneWidth.value,
+    });
   }
 
-  function loadSettings() {
-    if (typeof localStorage === 'undefined') return;
+  async function loadSettings() {
     try {
-      const saved = JSON.parse(localStorage.getItem(USER_SETTINGS_KEY) ?? '{}');
+      const saved = await readOffline(USER_SETTINGS_KEY, {});
       if (['LIGHT', 'DARK', 'SYSTEM'].includes(saved.theme)) userSelectedTheme.value = saved.theme;
       if (Number.isInteger(saved.firstDayOfWeek) && saved.firstDayOfWeek >= 0 && saved.firstDayOfWeek <= 6) firstDayOfWeek.value = saved.firstDayOfWeek;
       if (Array.isArray(saved.weekendDays)) {
@@ -254,10 +262,14 @@ export const useUserStore = defineStore('user', () => {
       }
       if (typeof saved.useMiniCalendar === 'boolean') useMiniCalendar.value = saved.useMiniCalendar;
       if (typeof saved.useWheelMonthNavigation === 'boolean') useWheelMonthNavigation.value = saved.useWheelMonthNavigation;
+      if (Number.isInteger(saved.maxEventBarsPerCell) && saved.maxEventBarsPerCell >= 1 && saved.maxEventBarsPerCell <= 10) {
+        maxEventBarsPerCell.value = saved.maxEventBarsPerCell;
+      }
       if (Array.isArray(saved.weekdayLabels) && saved.weekdayLabels.length === 7 && saved.weekdayLabels.every((/** @type {unknown} */ label) => typeof label === 'string')) {
         weekdayLabels.value = saved.weekdayLabels;
       }
       if (Array.isArray(saved.calendarOrder)) calendarOrder.value = saved.calendarOrder.filter((/** @type {unknown} */ id) => typeof id === 'string');
+      if (Array.isArray(saved.hiddenCalendarIds)) hiddenCalendarIds.value = [...new Set(saved.hiddenCalendarIds.filter((/** @type {unknown} */ id) => typeof id === 'string'))];
       if (Number.isInteger(saved.navPaneWidth) && saved.navPaneWidth >= 260 && saved.navPaneWidth <= 600) navPaneWidth.value = saved.navPaneWidth;
       if (Number.isInteger(saved.subPaneWidth) && saved.subPaneWidth >= 260 && saved.subPaneWidth <= 600) subPaneWidth.value = saved.subPaneWidth;
     } catch (error) {
@@ -302,6 +314,13 @@ export const useUserStore = defineStore('user', () => {
     saveSettings();
   }
 
+  /** @param {string} calendarId @param {boolean} isVisible */
+  function setCalendarVisibility(calendarId, isVisible) {
+    if (typeof calendarId !== 'string') return;
+    hiddenCalendarIds.value = isVisible ? hiddenCalendarIds.value.filter((id) => id !== calendarId) : [...new Set([...hiddenCalendarIds.value, calendarId])];
+    saveSettings();
+  }
+
   /** @param {number} width 左ペイン幅 */
   function setNavPaneWidth(width) {
     if (!Number.isInteger(width) || width < 260 || width > 600) return;
@@ -316,7 +335,7 @@ export const useUserStore = defineStore('user', () => {
     saveSettings();
   }
 
-  loadSettings();
+  const settingsReady = loadSettings();
 
   /** @type {Ref<import('dayjs').Dayjs>} @description 現在表示している日付 */
   const nowUsingDate = ref(dayjs());
@@ -333,10 +352,12 @@ export const useUserStore = defineStore('user', () => {
 
   /** 現在表示中の月から今日の日付に移動 */
   function goToday() {
-    nowUsingDate.value = dayjs();
+    const today = dayjs();
+    nowUsingDate.value = today;
+    nowSelectedDate.value = today.format('YYYY-MM-DD');
   }
 
-  /** @type {Ref<string|null>} @description 選択している日付（形式: YYYY-MM-DD） */
+  /** @type {Ref<GoogleApiDateString|null>} @description 選択している日付（形式: YYYY-MM-DD） */
   const nowSelectedDate = ref(dayjs().format('YYYY-MM-DD'));
 
   /** @param {Dayjs|string|null} date @description 日付を選択する */
@@ -427,12 +448,14 @@ export const useUserStore = defineStore('user', () => {
     firstDayOfWeek,
     weekdayLabels,
     calendarOrder,
+    hiddenCalendarIds,
     navPaneWidth,
     subPaneWidth,
     weekendDays,
     getWeekendColor,
     useMiniCalendar,
     useWheelMonthNavigation,
+    maxEventBarsPerCell,
     winInnerWidth,
     device,
     isMobile,
@@ -443,6 +466,8 @@ export const useUserStore = defineStore('user', () => {
     isCellClicked,
     daysMap,
     nowSelectedEvent,
+    isOffline,
+    timeZone,
     goPrevMonth,
     goNextMonth,
     goToday,
@@ -451,11 +476,14 @@ export const useUserStore = defineStore('user', () => {
     setError,
     setNowSelectedEvent,
     saveSettings,
+    settingsReady,
+    loadSettings,
     setFirstDayOfWeek,
     setWeekendDay,
     setWeekendColor,
     setWeekdayLabels,
     setCalendarOrder,
+    setCalendarVisibility,
     setNavPaneWidth,
     setSubPaneWidth,
     openUserDialog,

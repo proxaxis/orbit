@@ -29,6 +29,8 @@ export const useCalendarStore = defineStore('calendar', () => {
   /** @type {ComputedRef<GoogleCalendarListEntry[]>} 書き込み権限を持つカレンダーのリスト */
   const listWritableCalendars = computed(() => list.value.filter((cal) => cal.accessRole === 'writer' || cal.accessRole === 'owner' || cal.primary));
 
+  const listVisibleCalendars = computed(() => list.value.filter((cal) => !userStore.hiddenCalendarIds.includes(cal.id)));
+
   /** @param {GoogleCalendarListEntry} calendar */
   function addCalendar(calendar) {
     if (!calendar?.id) return;
@@ -43,27 +45,43 @@ export const useCalendarStore = defineStore('calendar', () => {
     writeOffline('calendars', Array.from(_gCalendarsList.value));
   }
 
-  onMounted(async () => {
-    const savedCalendars = readOffline('calendars', []);
-    if (Array.isArray(savedCalendars) && savedCalendars.length > 0) {
-      _gCalendarsList.value = new Set(savedCalendars);
-    }
+  /** @param {string} calendarId @returns {{ colorId?: string; backgroundColor?: string; foregroundColor?: string }} */
+  function getCalendarColor(calendarId) {
+    const calendar = list.value.find((cal) => cal.id === calendarId);
+    return {
+      colorId: calendar?.colorId,
+      backgroundColor: calendar?.backgroundColor,
+      foregroundColor: calendar?.foregroundColor,
+    };
+  }
 
-    if (!authStore.token || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
+  async function loadCalendars() {
+    const savedCalendars = await readOffline('calendars', []);
+    if (Array.isArray(savedCalendars) && savedCalendars.length > 0) _gCalendarsList.value = new Set(savedCalendars);
+    if (!authStore.isAuthenticated || userStore.isOffline) return;
+
+    userStore.setLoading(true, 'Loading calendars...');
     try {
       const response = await gCalAPI.listCalendarList(authStore.token);
-      const calendars = Array.isArray(response?.items) ? response.items : [];
-      _gCalendarsList.value = new Set(calendars);
-      writeOffline('calendars', calendars);
-    } catch (error) {
-      console.warn('Calendar list could not be refreshed. Using offline data.', error);
+      const listEntries = Array.isArray(response?.items) ? response.items : [];
+      _gCalendarsList.value = new Set(listEntries);
+      writeOffline('calendars', listEntries);
+    } catch (err) {
+      userStore.setError(true, err);
+    } finally {
+      userStore.setLoading(false);
     }
-  });
+  }
+
+  onMounted(loadCalendars);
 
   return {
     list,
     listWritableCalendars,
+    listVisibleCalendars,
     addCalendar,
     updateCalendar,
+    getCalendarColor,
+    loadCalendars,
   };
 });

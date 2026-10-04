@@ -4,12 +4,15 @@ import dayjs, { isEventOnDate, toDayjs } from '@/services/dayjs.js';
 import { useCalendarStore } from '@/stores/calendar.js';
 import { useUserStore } from '@/stores/user.js';
 import { useEventStore } from '@/stores/event.js';
+import IconCaretLeft from '@/components/icons/IconCaretLeft.vue';
+import IconCaretRight from '@/components/icons/IconCaretRight.vue';
+import IconCalendar from '@/components/icons/IconCalendar.vue';
 
 const calendarStore = useCalendarStore();
 const userStore = useUserStore();
 const eventStore = useEventStore();
 
-/** @type {Ref<(GoogleEvent & { sourceCalendarId: string })[]>} */
+/** @type {Ref<HandyCalendarEvent[]>} */
 const events = ref([]);
 
 /**
@@ -43,8 +46,8 @@ const calendarDays = computed(() => {
     const d = toDayjs(startDate.year(), startDate.month(), startDate.date() + i);
     const dateString = d.format('YYYY-MM-DD');
     const day = userStore.daysMap.find((item) => item.index === d.day());
-
-    const hasEvent = Array.from(events.value).some((event) => isEventOnDate(event, d));
+    if (!day) continue;
+    const hasEvent = Array.from(events.value).some((evt) => isEventOnDate(evt, d));
 
     days.push({
       date: d,
@@ -76,7 +79,7 @@ function handleCellClick(cell) {
 }
 
 watch(
-  () => [calendarStore.list, userStore.nowUsingDate],
+  () => [calendarStore.listVisibleCalendars, userStore.nowUsingDate],
   async () => {
     events.value = await eventStore.listEvents(userStore.nowUsingDate.year(), userStore.nowUsingDate.month());
   },
@@ -90,9 +93,15 @@ watch(
     <header>
       <h3>{{ `${userStore.nowUsingDate.year()}年 ${userStore.nowUsingDate.month() + 1}月` }}</h3>
       <nav>
-        <button type="button" @click="userStore.goToday">今月</button>
-        <button type="button" @click="userStore.goPrevMonth">&lt;</button>
-        <button type="button" @click="userStore.goNextMonth">&gt;</button>
+        <button type="button" @click="userStore.goPrevMonth">
+          <IconCaretLeft />
+        </button>
+        <button type="button" @click="userStore.goToday">
+          <IconCalendar />
+        </button>
+        <button type="button" @click="userStore.goNextMonth">
+          <IconCaretRight />
+        </button>
       </nav>
     </header>
 
@@ -127,8 +136,7 @@ watch(
   display: inline-flex;
   flex-direction: column;
   width: 100%;
-  background-color: var(--bg-color);
-  border: 1px solid var(--border-color);
+  background-color: var(--bg-1);
   border-radius: 8px;
   user-select: none;
   box-sizing: border-box;
@@ -143,7 +151,7 @@ watch(
       margin: 0;
       font-size: 0.95rem;
       font-weight: 600;
-      color: #333;
+      color: var(--text);
     }
 
     nav {
@@ -152,19 +160,18 @@ watch(
 
       button {
         padding: 2px 7px;
-        background-color: var(--bg-color);
-        border: 1px solid var(--border-color);
+        background-color: var(--bg-1);
         border-radius: 4px;
         font-size: 0.75rem;
         cursor: pointer;
         transition: background-color 0.15s ease;
 
         &:hover {
-          background-color: #ebebeb;
+          background-color: var(--bg-2);
         }
 
         &:active {
-          background-color: #ddd;
+          background-color: var(--bg-3);
         }
       }
     }
@@ -183,10 +190,10 @@ watch(
           vertical-align: middle;
           font-size: 0.75rem;
           font-weight: 600;
-          color: #777;
+          color: var(--text-light);
 
           &[data-weekend='true'] {
-            color: #d32f2f;
+            color: var(--danger);
           }
         }
       }
@@ -202,10 +209,10 @@ watch(
           cursor: pointer;
           border-radius: 4px;
           transition: background-color 0.12s ease;
-          color: #ccc;
+          color: var(--text-light);
 
           &:hover {
-            background-color: #f2f2f2;
+            background-color: var(--bg-2);
           }
 
           .day-number {
@@ -226,23 +233,23 @@ watch(
             width: 4px;
             height: 4px;
             border-radius: 50%;
-            background-color: #1a73e8;
+            background-color: var(--primary);
           }
 
           // 当月日付
           &[data-current-month='true'] {
-            color: #333;
+            color: var(--text);
 
             &[data-weekend='true'] {
-              color: #d32f2f;
+              color: var(--danger);
             }
           }
 
           // 今日の日付
           &[data-today='true'] {
             .day-number {
-              background-color: #e8f0fe;
-              color: #1a73e8;
+              background-color: var(--bg-2);
+              color: var(--primary);
               font-weight: 700;
               border-radius: 50%;
             }
@@ -250,16 +257,14 @@ watch(
 
           // 選択中セル
           &[data-selected='true'] {
-            background-color: #1a73e8 !important;
-            color: #fff !important;
+            background-color: var(--selected);
 
             .day-number {
-              background-color: transparent !important;
-              color: #fff !important;
+              background-color: transparent;
             }
 
             .dot {
-              background-color: #fff;
+              background-color: var(--bg-0);
             }
           }
         }

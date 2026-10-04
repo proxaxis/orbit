@@ -65,7 +65,7 @@ onUnmounted(() => {
 .pwa-install__backdrop {
   position: absolute;
   inset: 0;
-  background: rgb(0 0 0 / 45%);
+  background: var(--overlay);
 }
 
 .pwa-install__dialog {

@@ -51,16 +51,16 @@ onMounted(() => {
 
 <template>
   <div class="timezone-selecter">
-		<select class="timezone-input" :value="modelValue" @change="onSelectChange">
-			<option value="" disabled>タイムゾーンを選択</option>
-			<option v-for="tz in timezones" :key="tz" :value="tz">
-				{{ tz.replace(/_/g, ' ') }}
-			</option>
-		</select>
-		
-		<button title="現在の場所のタイムゾーンを設定" type="button" class="btn-current-location" @click="setLocalTimezone">
-			現在地
-		</button>
+    <select class="timezone-input" :value="modelValue" @change="onSelectChange">
+      <option value="" disabled>タイムゾーンを選択</option>
+      <option v-for="tz in timezones" :key="tz" :value="tz">
+        {{ tz.replace(/_/g, ' ') }}
+      </option>
+    </select>
+
+    <button title="現在の場所のタイムゾーンを設定" type="button" class="btn-current-location" @click="setLocalTimezone">
+      現在地
+    </button>
   </div>
 </template>
 
@@ -71,12 +71,12 @@ onMounted(() => {
 }
 
 .timezone-input {
-	width: calc(100% - 1.2rem);
+  width: calc(100% - 1.2rem);
   border-radius: var(--border-radius);
   cursor: pointer;
 
   &:focus {
-    border-color: #007bff;
+    border-color: var(--primary);
     outline: none;
   }
 }
@@ -88,8 +88,8 @@ onMounted(() => {
   font-size: 14px;
   white-space: nowrap;
 
-	&:hover {
-		background-color: var(--bg-2);
-	}
+  &:hover {
+    background-color: var(--bg-2);
+  }
 }
 </style>
