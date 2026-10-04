@@ -37,3 +37,9 @@ SERVER_PORT=8787
 REDIS_HOST=redis
 REDIS_PORT=6379
 ```
+
+### 本番環境の実行
+開発サーバと重複しないようにポート番号とプロジェクト名を分けて起動する:
+```bash
+docker compose -p orbit-prod -f prod.docker-compose.yml up -d
+```
