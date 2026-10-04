@@ -1,2 +1,32 @@
-# orbit
-Orbit: Unify your tasks and time. Execute with focus.
+# Orbit: Unify Your Tasks and Time. Execute with Focus.
+
+### 環境変数
+以下の 2 つのファイルを用意:
+
+* `./client/app/.env`
+* `./server/app/.env`
+
+クライアント用環境変数には以下の内容を書き込み:
+```.env
+VITE_BFF_BASE_URL=http://localhost:8787
+VITE_GOOGLE_CALENDAR_API_BASE_URL=https://www.googleapis.com/calendar/v3
+VITE_GOOGLE_PEOPLE_API_BASE_URL=https://people.googleapis.com/v1
+```
+
+サーバ用環境変数には以下の内容を書き込み:
+```.env
+# Google OAuth 2.0 Credentials
+GOOGLE_CLIENT_ID=<Google OAuth Client ID>
+GOOGLE_CLIENT_SECRET=<Google OAuth Client Secret>
+GOOGLE_REDIRECT_URI=http://localhost:8787/auth/callback
+
+# BFF Session and Encryption Key
+SESSION_SECRET=<Session and Encryption Key>
+
+CLIENT_URL=http://localhost:5173
+SERVER_PORT=8787
+
+# Database Configuration
+REDIS_HOST=redis
+REDIS_PORT=6379
+```
