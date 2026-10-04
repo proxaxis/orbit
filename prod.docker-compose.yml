@@ -16,7 +16,7 @@ services:
     container_name: orbit_server_prod
     restart: unless-stopped
     ports:
-      - "8787:8787"
+      - "18787:18787"
     env_file:
       - .env
     environment:
@@ -38,7 +38,7 @@ services:
     container_name: orbit_client_prod
     restart: unless-stopped
     ports:
-      - "5173:5173"
+      - "15173:15173"
     env_file:
       - .env
     environment:
