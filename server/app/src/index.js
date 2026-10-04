@@ -24,7 +24,7 @@ redis.on('error', (err) => {
 });
 
 // セッションキーのヘルパー関数（プレフィックスを付与して管理を容易にする）
-const getSessionKey = (sessionId) => `session:${sessionId}`;
+const getSessionKey = (/** @type {string} */ sessionId) => `session:${sessionId}`;
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30日（Cookieの有効期限と揃える）
 
 // CORS 設定（Vite 開発サーバーからの Cookie 送信を許可）
@@ -91,7 +91,7 @@ app.get('/auth/callback', async (c) => {
     c,
     'session_id',
     sessionId,
-    process.env.SESSION_SECRET || 'fallback-secret-key-min-32-chars',
+    process.env.SESSION_SECRET ?? 'E3LgvqwIuHPlBTmUBKtoi0KM99HcIObfAPeEaEy732YKx6YDm20sxIfCHKlWxmrF',
     {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -108,7 +108,7 @@ app.get('/auth/callback', async (c) => {
 app.get('/api/token', async (c) => {
   const sessionId = await getSignedCookie(
     c,
-    process.env.SESSION_SECRET || 'fallback-secret-key-min-32-chars',
+    process.env.SESSION_SECRET ?? 'E3LgvqwIuHPlBTmUBKtoi0KM99HcIObfAPeEaEy732YKx6YDm20sxIfCHKlWxmrF',
     'session_id'
   );
 
@@ -142,7 +142,7 @@ app.get('/api/token', async (c) => {
 app.post('/auth/logout', async (c) => {
   const sessionId = await getSignedCookie(
     c,
-    process.env.SESSION_SECRET || 'fallback-secret-key-min-32-chars',
+    process.env.SESSION_SECRET ?? 'E3LgvqwIuHPlBTmUBKtoi0KM99HcIObfAPeEaEy732YKx6YDm20sxIfCHKlWxmrF',
     'session_id'
   );
 
@@ -155,10 +155,11 @@ app.post('/auth/logout', async (c) => {
 });
 
 // サーバー起動
-const port = Number(process.env.SERVER_PORT || process.env.PORT || 8787);
-console.log(`Server is running on http://localhost:${port}`);
+const port = Number(process.env.SERVER_PORT);
+console.log(`Server is running on ${port}`);
 
 serve({
   fetch: app.fetch,
   port,
+  hostname: '0.0.0.0',
 });
