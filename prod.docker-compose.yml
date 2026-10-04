@@ -1,3 +1,5 @@
+name: orbit_prod
+
 services:
   # Redis
   redis:
@@ -6,6 +8,7 @@ services:
     volumes:
       - nv_redis:/data
     restart: unless-stopped
+    command: redis-server --port 16379
 
   # Server
   server:
@@ -20,7 +23,7 @@ services:
     env_file:
       - .env
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
     volumes:
       - ./server/app:/app
       - /app/node_modules
@@ -42,15 +45,16 @@ services:
     env_file:
       - .env
     environment:
-      - NODE_ENV=development
-    volumes:
-      - ./client/app:/app
-      - /app/node_modules
+      - NODE_ENV=production
+    # volumes:
+    #   - ./client/app:/app
+    #   - /app/node_modules
     depends_on:
       - server
     tty: true
     stdin_open: true
 
+  # Cloudflare Tunnel
   tunnel:
     image: cloudflare/cloudflared:latest
     container_name: orbit_tunnel_prod

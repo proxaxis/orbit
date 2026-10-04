@@ -11,6 +11,6 @@ RUN chown -R node:node /app
 
 USER node
 
-EXPOSE 8787
+EXPOSE 18787
 
 CMD ["npm", "run", "dev"]

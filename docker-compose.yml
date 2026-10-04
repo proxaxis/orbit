@@ -1,3 +1,5 @@
+name: orbit
+
 services:
   # Redis
   redis:
