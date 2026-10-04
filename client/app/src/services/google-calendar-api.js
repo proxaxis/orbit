@@ -445,7 +445,7 @@ async function fetchCalendarAPI(token, method, endpoint, { params = {}, query = 
     }
   });
 
-  console.log(`Calling Google Calendar API: ${method} ${epUrl.toString()}`);
+  // console.log(`Calling Google Calendar API: ${method} ${epUrl.toString()}`);
 
   /**
    * API を fetch で呼び出す
