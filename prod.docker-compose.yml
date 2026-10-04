@@ -1,0 +1,64 @@
+services:
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: orbit_redis_prod
+    volumes:
+      - nv_redis:/data
+    restart: unless-stopped
+
+  # Server
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: orbit_server_prod
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./server/app:/app
+      - /app/node_modules
+    depends_on:
+      - redis
+    tty: true
+    stdin_open: true
+
+  # Client
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: orbit_client_pro
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./client/app:/app
+      - /app/node_modules
+    depends_on:
+      - server
+    tty: true
+    stdin_open: true
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: orbit_tunnel_prod
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=replace-your-cloudflare-tunnel-token
+    depends_on:
+      - client
+      - server
+
+volumes:
+  nv_redis:
