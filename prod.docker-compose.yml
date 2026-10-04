@@ -12,6 +12,7 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
+    image: orbit-server:0.0.1
     container_name: orbit_server_prod
     restart: unless-stopped
     ports:
@@ -33,6 +34,7 @@ services:
     build:
       context: ./client
       dockerfile: Dockerfile
+    image: orbit-client:0.0.1
     container_name: orbit_client_pro
     restart: unless-stopped
     ports:
