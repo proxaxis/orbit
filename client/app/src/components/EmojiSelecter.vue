@@ -243,14 +243,11 @@ onBeforeUnmount(() => {
 
 <style lang="scss" scoped>
 .open-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: calc(var(--space-xs) - 1px) var(--space-md);
-  border-radius: var(--border-radius);
+  background-color: var(--bg-2);
   border: 1px solid var(--border);
-  background: var(--bg-1);
-  cursor: pointer;
+  &:hover {
+    background-color: var(--bg-3);
+  }
 }
 
 .open-emoji,
@@ -285,7 +282,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-sm) var(--space-md);
+  padding: var(--space-sm) var(--space-xs) var(--space-sm) calc(var(--space-sm) * 2);
   background: var(--bg-1);
 }
 
@@ -295,14 +292,10 @@ onBeforeUnmount(() => {
 }
 
 .close-btn {
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  cursor: pointer;
-  font-size: 20px;
-  line-height: 1;
-  display: grid;
-  place-items: center;
+  background: transparent;
+  &:hover {
+    background-color: var(--bg-2);
+  }
 }
 
 .modal-body {
@@ -321,19 +314,15 @@ onBeforeUnmount(() => {
 
 .search-input {
   flex: 1;
-  padding: var(--space-xs) var(--space-sm);
-  border: 1px solid var(--border);
-  background: var(--bg-1);
-  border-radius: var(--border-radius);
 }
 
 .random-btn {
-  padding: calc(var(--space-xs) - 1px) var(--space-sm);
-  border-radius: var(--border-radius);
+  background: var(--bg-2);
   border: 1px solid var(--border);
-  background: var(--bg-1);
-  cursor: pointer;
-  white-space: nowrap;
+  padding: var(--space-xs) var(--space-sm);
+  &:hover {
+    background-color: var(--bg-3);
+  }
 }
 
 // .preview {
@@ -408,19 +397,11 @@ onBeforeUnmount(() => {
 }
 
 .emoji-btn {
-  border: 1px solid transparent;
-  border-radius: var(--border-radius);
-  cursor: pointer;
+  background: transparent;
   font-size: var(--text-size-xxl);
-  height: 36px;
-  display: grid;
-  place-items: center;
-  transition:
-    transform 0.1s,
-    border-color 0.1s;
 
   &:hover {
-    transform: translateY(-1px);
+    transform: translateY(-4px);
     border-color: var(--border);
   }
 

@@ -124,9 +124,7 @@ defineExpose({
 }
 
 .dropdown-button {
-  cursor: pointer;
   user-select: none;
-  display: flex;
 }
 
 .dropdown-content {
@@ -134,26 +132,22 @@ defineExpose({
   gap: var(--space-sm);
   margin-top: var(--space-xs);
   background-color: var(--bg-1);
+  border-radius: var(--border-radius);
   min-width: 160px;
   box-shadow: 0 4px 12px var(--shadow);
-  border-radius: var(--border-radius);
-  border: 1px solid var(--border);
   z-index: 9999;
   overflow: hidden;
   padding: var(--space-xs) 0;
 
-  :deep(button) {
-    width: 100%;
-    padding: var(--space-xs) var(--space-md);
-    background: none;
-    border: none;
+  :deep(> button) {
+    /* ドロップダウン内のボタンは App.vue 定義の共通スタイルを上書きする */
+    border-radius: 0;
     text-align: left;
-    cursor: pointer;
-    font-size: 1rem;
-    color: var(--text);
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+    justify-content: flex-start;
+    width: calc(100% - var(--space-xs) * 2);
+    font-size: var(--text-size-md);
+    background-color: var(--bg-1);
+    padding: var(--space-sm) var(--space-md);
 
     &:hover {
       background-color: var(--bg-2);

@@ -11,24 +11,22 @@ function handleLogin() {
 
 <template>
   <button class="google-login" v-if="!authStore.isAuthenticated" @click="handleLogin">
-    <icon-google />
-    <slot>Login with Google</slot>
+    <IconGoogle />
+    <slot>Googleでログイン</slot>
   </button>
 </template>
 
 <style lang="scss" scoped>
-.google-login {
+button {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-sm) var(--space-md);
-  font-size: var(--text-size-md);
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--text-size-lg);
   background-color: var(--bg-2);
-  border: none;
   border-radius: var(--border-radius);
-  cursor: pointer;
-  transition: background-color 0.2s ease-in-out;
+  width: 100%;
 
   &:hover {
     background-color: var(--bg-3);

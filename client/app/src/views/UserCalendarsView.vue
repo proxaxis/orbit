@@ -13,6 +13,13 @@ import DropdownMenu from '@/components/DropdownMenu.vue';
 import GoogleLogin from '@/components/GoogleLogin.vue';
 import IconEllipsisVertical from '@/components/icons/IconEllipsisVertical.vue';
 import IconUserLock from '@/components/icons/IconUserLock.vue';
+import IconEyeSlash from '@/components/icons/IconEyeSlash.vue';
+import AppInstallButton from '@/components/AppInstallButton.vue';
+import IconUserGroup from '@/components/icons/IconUserGroup.vue';
+import IconCircleInfo from '@/components/icons/IconCircleInfo.vue';
+import IconCalendarPlus from '@/components/icons/IconCalendarPlus.vue';
+import IconCloudArrowDown from '@/components/icons/IconCloudArrowDown.vue';
+import IconEye from '@/components/icons/IconEye.vue';
 
 const router = useRouter();
 const calendarStore = useCalendarStore();
@@ -109,65 +116,70 @@ function hideAllCalendars() {
 
 <template>
   <div class="user-calendars-view">
-    <MiniCalendar v-if="userStore.useMiniCalendar" />
+    <div>
+      <MiniCalendar v-if="userStore.useMiniCalendar" />
 
-    <MenuBar>
-      <template #main>
-        <span class="title">カレンダー</span>
-      </template>
-      <template #sub>
-        <DropdownMenu>
-          <template #button>
-            <button>
-              <IconEllipsisVertical />
-            </button>
-          </template>
-          <button @click="router.push({ name: 'CalendarCreator' })">カレンダーを作成</button>
-          <button @click="router.push({ name: 'CalendarAdder' })">他のカレンダーを追加</button>
-          <button @click="showAllCalendars">全てのカレンダーを表示</button>
-          <button @click="hideAllCalendars">全てのカレンダーを非表示</button>
-        </DropdownMenu>
-      </template>
-    </MenuBar>
-
-    <AskLoginMessage v-if="!authStore.isAuthenticated">
-      カレンダーを表示するには Google アカウントでログインする必要があります
-      <div class="google-login-wrapper">
-        <GoogleLogin />
-      </div>
-    </AskLoginMessage>
-
-    <ul v-if="authStore.isAuthenticated">
-      <li
-        v-for="c in calendarStore.list"
-        :key="c.id"
-        :title="c.description"
-        draggable="true"
-        :class="{ 'is-dragging': draggedCalendarId === c.id, 'is-drag-over': dragOverCalendarId === c.id }"
-        @dragstart="startDragging(c.id)"
-        @dragover.prevent="setDragOver(c.id)"
-        @drop.prevent="dropCalendar(c.id)"
-        @dragend="
-          draggedCalendarId = null;
-          dragOverCalendarId = null;
-        ">
-        <input type="checkbox" :id="`iptbx-${c.id}`" :checked="!userStore.hiddenCalendarIds.includes(c.id)" :style="{ accentColor: c.backgroundColor, borderColor: c.backgroundColor }" @change="userStore.setCalendarVisibility(c.id, /** @type {HTMLInputElement} */ ($event.target).checked)" />
-        <div class="list-item">
-          <label :for="`iptbx-${c.id}`" :title="c.description">
-            <CalendarRibbon :gCalendarId="c.id" />
-            <IconUserLock v-if="isPrivateCalendar(c)" class="privacy-icon" size="0.85rem" title="非公開カレンダー" />
-          </label>
+      <MenuBar>
+        <template #main>
+          <span class="title">カレンダー</span>
+        </template>
+        <template #sub>
           <DropdownMenu>
             <template #button>
-              <IconEllipsisVertical />
+              <button class="icon-ellipsis-vertical-wrapper" title="カレンダーの操作">
+                <IconEllipsisVertical />
+              </button>
             </template>
-            <button @click="userStore.setCalendarVisibility(c.id, false)">非表示</button>
-            <button @click="router.push({ name: 'CalendarDetail', query: { cid: c.id } })">カレンダーの詳細</button>
-            <button @click="router.push({ name: 'SharingConfig', query: { cid: c.id } })">共有設定</button>
+            <button @click="router.push({ name: 'CalendarCreator' })"><IconCalendarPlus />カレンダーを作成</button>
+            <button @click="router.push({ name: 'CalendarAdder' })"><IconCloudArrowDown />他のカレンダーを追加</button>
+            <button @click="showAllCalendars"><IconEye />全てのカレンダーを表示</button>
+            <button @click="hideAllCalendars"><IconEyeSlash />全てのカレンダーを非表示</button>
           </DropdownMenu>
+        </template>
+      </MenuBar>
+
+      <AskLoginMessage v-if="!authStore.isAuthenticated">
+        カレンダーを表示するには Google アカウントでログインする必要があります
+        <div class="google-login-wrapper">
+          <GoogleLogin />
         </div>
-      </li>
-    </ul>
+      </AskLoginMessage>
+
+      <ul v-if="authStore.isAuthenticated">
+        <li
+          v-for="c in calendarStore.list"
+          :key="c.id"
+          :title="c.description"
+          draggable="true"
+          :class="{ 'is-dragging': draggedCalendarId === c.id, 'is-drag-over': dragOverCalendarId === c.id }"
+          @dragstart="startDragging(c.id)"
+          @dragover.prevent="setDragOver(c.id)"
+          @drop.prevent="dropCalendar(c.id)"
+          @dragend="
+            draggedCalendarId = null;
+            dragOverCalendarId = null;
+          ">
+          <input type="checkbox" :id="`iptbx-${c.id}`" :checked="!userStore.hiddenCalendarIds.includes(c.id)" :style="{ accentColor: c.backgroundColor, borderColor: c.backgroundColor }" @change="userStore.setCalendarVisibility(c.id, /** @type {HTMLInputElement} */ ($event.target).checked)" />
+          <div class="list-item">
+            <label :for="`iptbx-${c.id}`" :title="c.description">
+              <CalendarRibbon :gCalendarId="c.id" />
+              <IconUserLock v-if="isPrivateCalendar(c)" class="privacy-icon" size="0.85rem" title="非公開カレンダー" />
+            </label>
+            <DropdownMenu>
+              <template #button>
+                <IconEllipsisVertical />
+              </template>
+              <button @click="userStore.setCalendarVisibility(c.id, false)"><IconEyeSlash />非表示</button>
+              <button @click="router.push({ name: 'CalendarDetail', query: { cid: c.id } })"><IconCircleInfo />カレンダーの詳細</button>
+              <button @click="router.push({ name: 'SharingConfig', query: { cid: c.id } })"><IconUserGroup />共有設定</button>
+            </DropdownMenu>
+          </div>
+        </li>
+      </ul>
+    </div>
+    <div v-if="!userStore.isAppInstalled">
+      <AppInstallButton />
+    </div>
   </div>
 </template>
 
@@ -175,18 +187,30 @@ function hideAllCalendars() {
 .user-calendars-view {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  justify-content: space-between;
+  gap: var(--space-sm);
   width: 100%;
+  height: 100%;
+
+  > div:nth-child(1) {
+    flex-grow: 1;
+  }
+
+  > div:nth-child(2) {
+    border-top: 1px solid var(--border);
+    padding-top: var(--space-sm);
+  }
 }
 
 ul {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
+  overflow-y: auto;
 
   li {
     display: flex;
-    border-radius: 0.3rem;
+    border-radius: var(--border-radius);
     padding: var(--space-xs) 0 var(--space-xs) 0;
     gap: var(--space-sm);
 
@@ -224,21 +248,18 @@ ul {
   }
 }
 
-.dropdown-menu {
-  display: flex;
-  align-items: center;
-}
-
-.icon-ellipsis-vertical {
-  padding: var(--space-xs);
+.icon-ellipsis-vertical-wrapper {
+  // カレンダーリストのボタンとそろえるために padding を調整
+  padding: var(--space-sm) 0 var(--space-sm) var(--space-sm);
+  background-color: var(--bg-1);
 
   &:hover {
     background-color: var(--bg-2);
-    border-radius: 50%;
   }
 }
 
 .google-login-wrapper {
+  width: calc(100% - var(--space-sm) * 2);
   margin-top: var(--space-sm);
 }
 

@@ -74,7 +74,7 @@ async function submit() {
         <h1 class="title"><IconCalendar />他のカレンダーを追加</h1>
       </template>
       <template #sub>
-        <button type="button" title="閉じる" @click="router.back">
+        <button type="button" title="追加せず戻る" @click="router.back" class="icon-x-mark-wrapper">
           <IconXMark />
         </button>
       </template>
@@ -82,7 +82,7 @@ async function submit() {
       共有されたカレンダーや、購読したいカレンダーを一覧へ追加します
     </MenuBar>
 
-    <AskLoginMessage v-if="!authStore.token">
+    <AskLoginMessage v-if="!authStore.isAuthenticated || userStore.isOffline">
       <span v-if="userStore.isOffline">オフラインのため、カレンダーを追加できません</span>
       <span v-if="!authStore.isAuthenticated">カレンダーを追加するには Google アカウントでログインする必要があります</span>
     </AskLoginMessage>
@@ -99,7 +99,7 @@ async function submit() {
         <ColorPicker v-model="vmForm.colorId" />
       </label>
       <div class="actions">
-        <button type="button" @click="router.back">キャンセル</button>
+        <button data-app-button="secondary" type="button" @click="router.back">キャンセル</button>
         <button data-app-button="primary" type="submit" :disabled="userStore.isLoading">カレンダーを追加</button>
       </div>
     </form>
@@ -134,13 +134,16 @@ small,
   gap: var(--space-sm);
 }
 
-.actions button {
-  min-height: 2.25rem;
-  padding: var(--space-xs) var(--space-sm);
-}
-
 .error {
   color: var(--danger);
   font-size: var(--text-size-sm);
+}
+
+.icon-x-mark-wrapper {
+  background-color: var(--bg-1);
+
+  &:hover {
+    background-color: var(--bg-2);
+  }
 }
 </style>

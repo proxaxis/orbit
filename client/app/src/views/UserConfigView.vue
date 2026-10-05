@@ -90,7 +90,7 @@ async function clearSettings() {
         <h1 class="title">ユーザー設定</h1>
       </template>
       <template #sub>
-        <button title="戻る" @click="router.push({ name: 'Home' })">
+        <button title="変更せず戻る" @click="router.back" class="icon-x-mark-wrapper">
           <IconXMark />
         </button>
       </template>
@@ -158,7 +158,7 @@ async function clearSettings() {
 
       <p v-if="savedMessage" class="saved">{{ savedMessage }}</p>
       <div class="actions">
-        <button type="button" @click="router.push({ name: 'Home' })">キャンセル</button>
+        <button data-app-button="secondary" type="button" @click="router.back">キャンセル</button>
         <button data-app-button="primary" type="submit"><IconFloppyDisk />保存</button>
       </div>
     </form>
@@ -234,7 +234,7 @@ label {
 }
 
 .not-set {
-  grid-column: 2;
+  grid-column: 4;
 }
 
 .labels-grid {
@@ -272,22 +272,11 @@ label {
   }
 }
 
-@media (max-width: 600px) {
-  .user-config-view {
-    padding: var(--space-sm);
-  }
-
-  .labels-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.icon-x-mark {
-  padding: var(--space-xs);
+.icon-x-mark-wrapper {
+  background-color: var(--bg-1);
 
   &:hover {
     background-color: var(--bg-2);
-    border-radius: 50%;
   }
 }
 </style>

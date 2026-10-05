@@ -16,6 +16,7 @@ import IconLocationDot from '@/components/icons/IconLocationDot.vue';
 import IconArrowsRotate from '@/components/icons/IconArrowsRotate.vue';
 import IconCircleInfo from '@/components/icons/IconCircleInfo.vue';
 import IconUserGroup from '@/components/icons/IconUserGroup.vue';
+import IconAnglesRight from '@/components/icons/IconAnglesRight.vue';
 
 const router = useRouter();
 const calendarStore = useCalendarStore();
@@ -41,12 +42,12 @@ const events = ref([]);
 /**
  * イベントの日付を文字列に変換
  * @param {HandyCalendarEvent} evt - イベント情報
- * @returns {string} 日付の文字列
+ * @returns {{ startText: string, endText: string }} 日付の文字列
  */
 function getDateText(evt) {
-  if (!evt) return '';
-  if (evt.isAllDay) return `${evt.startDateTime.format('YYYY-MM-DD')} - ${dayjs(evt.endDateTime).subtract(1, 'day').format('YYYY-MM-DD')}`;
-  return `${dayjs(evt.startDateTime).format('YYYY-MM-DD HH:mm')} - ${dayjs(evt.endDateTime).format('YYYY-MM-DD HH:mm')}`;
+  if (!evt) return { startText: '', endText: '' };
+  if (evt.isAllDay) return { startText: `${evt.startDateTime.format('MM月 DD日 (ddd)')}`, endText: `${dayjs(evt.endDateTime).subtract(1, 'day').format('MM月 DD日 (ddd)')}` };
+  return { startText: `${dayjs(evt.startDateTime).format('MM月 DD日 (ddd) HH:mm')}`, endText: `${dayjs(evt.endDateTime).format('MM月 DD日 (ddd) HH:mm')}` };
 }
 
 /** @param {HandyCalendarEvent} evt @returns {boolean} 自分以外の参加者がいるか */
@@ -113,7 +114,7 @@ watch(
   <div class="date-events-view">
     <MenuBar>
       <template #center>
-        <h2 class="title">{{ dayjs(userStore.nowSelectedDate ?? undefined).format('YYYY年 MM月 D日 (ddd)') }}</h2>
+        <h2 class="title">{{ dayjs(userStore.nowSelectedDate ?? undefined).format('YYYY年 MM月 D日 (ddd)') }} <small>{{ events.length }}件</small></h2>
       </template>
     </MenuBar>
 
@@ -128,7 +129,7 @@ watch(
             {{ evt.icon ?? '📌' }}{{ evt.summary }}
             <IconUserGroup v-if="hasOtherAttendees(evt)" size="0.8rem" />
           </div>
-          <div>{{ getDateText(evt) }}</div>
+          <div><span>{{ getDateText(evt).startText }}</span> <IconAnglesRight /> <span>{{ getDateText(evt).endText }}</span></div>
           <div v-if="evt.location">
             <IconLocationDot size="0.7rem" />
             <span>{{ evt.location }}</span>
@@ -137,7 +138,7 @@ watch(
 
         <DropdownMenu :ref="(el) => setDropdownRef(i, el)">
           <template #button>
-            <button>
+            <button class="icon-ellipsis-vertical-wrapper">
               <IconEllipsisVertical />
             </button>
           </template>
@@ -223,11 +224,21 @@ li {
   // 時間
   div:nth-child(2) {
     font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: space-between ;
   }
 
   // 場所
   div:nth-child(3) {
     font-size: var(--text-size-sm);
+  }
+}
+
+.icon-ellipsis-vertical-wrapper {
+  background-color: var(--bg-2);
+  &:hover {
+    background-color: var(--bg-4);
   }
 }
 </style>

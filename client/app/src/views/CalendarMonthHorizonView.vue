@@ -12,6 +12,7 @@ import IconCalendar from '@/components/icons/IconCalendar.vue';
 import IconBars from '@/components/icons/IconBars.vue';
 import IconGear from '@/components/icons/IconGear.vue';
 import IconUserGroup from '@/components/icons/IconUserGroup.vue';
+import IconArrowsRotate from '@/components/icons/IconArrowsRotate.vue';
 
 const router = useRouter();
 const eventStore = useEventStore();
@@ -439,24 +440,27 @@ watch(
 <template>
   <div class="month-horizontal-view" @wheel="handleCalendarWheel" @touchstart="startMonthSwipe" @touchmove="handleMonthSwipeMove" @touchend="finishMonthSwipe" @touchcancel="finishMonthSwipe">
     <header class="month-toolbar">
-      <div class="month-actions">
+      <div>
         <button v-if="userStore.isMobile || userStore.isTablet" type="button" title="カレンダーを開閉" aria-label="カレンダーを開閉" @click="selectPane('nav')">
           <IconBars />
         </button>
         <button type="button" title="前月へ戻る" aria-label="前月へ戻る" @click="goPreviousMonth">
-          <IconCaretLeft />
+          <IconCaretLeft size="1.35rem" />
         </button>
         <button type="button" title="今日に戻る" aria-label="今日に戻る" @click.prevent="goToday">
-          <IconCalendar />
+          <IconCalendar size="1.35rem" />
         </button>
         <button type="button" title="次月へ進む" aria-label="次月へ進む" @click="goNextMonth">
-          <IconCaretRight />
+          <IconCaretRight size="1.35rem" />
         </button>
       </div>
-      <div class="month-title">
-        <h1>{{ relativeYearText }} {{ userStore.nowUsingDate.format('YYYY年 M月') }}</h1>
+      <h1>{{ relativeYearText }} {{ userStore.nowUsingDate.format('YYYY年 M月') }}</h1>
+      <div>
+        <button type="button" title="今すぐ同期" aria-label="今すぐ同期">
+          <IconArrowsRotate size="0.96rem" />
+        </button>
         <button type="button" title="ユーザー設定" aria-label="ユーザー設定" @click="router.push({ name: 'UserConfig' })">
-          <IconGear />
+          <IconGear size="1.25rem" />
         </button>
       </div>
     </header>
@@ -527,7 +531,7 @@ watch(
   .month-content {
     display: flex;
     flex: 1 0 auto;
-    min-height: calc(100% - 46px);
+    min-height: calc(100% - 54px);
     flex-direction: column;
     overflow: visible;
   }
@@ -569,34 +573,35 @@ watch(
   }
 
   .month-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
     padding: var(--space-sm) var(--space-md);
     border-bottom: 1px solid var(--border);
     background: var(--bg-0);
-    height: calc(46px - var(--space-sm) * 2 - 1px) /* ツールバーの高さ - 上下パディング - ボーダー幅 */;
+    height: calc(54px - var(--space-sm) * 2 - 1px) /* ツールバーの高さ - 上下パディング - ボーダー幅 */;
 
-    .month-title {
+    button {
+      background-color: var(--bg-0);
+
+      &:hover {
+        background: var(--bg-1);
+      }
+    }
+
+    div {
       display: flex;
       align-items: center;
-      gap: var(--space-md);
+      gap: var(--space-xs);
 
-      h1 {
-        font-size: var(--text-size-xl);
-        line-height: 1.4;
+      &:nth-child(3) {
+        justify-content: flex-end;
       }
+    }
 
-      button {
-        justify-content: center;
-        padding: var(--space-xs);
-        border-radius: var(--border-radius);
-
-        &:hover {
-          background: var(--bg-2);
-        }
-      }
+    h1 {
+      font-size: var(--text-size-xl);
+      line-height: 1.4;
+      text-align: center;
     }
   }
 

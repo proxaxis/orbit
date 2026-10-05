@@ -87,15 +87,14 @@ async function submit() {
         <h1 class="title">カレンダーを作成</h1>
       </template>
       <template #sub>
-        <button title="Don't save and close" @click="router.back">
+        <button title="保存せずに戻る" @click="router.back" class="icon-x-mark-wrapper">
           <IconXMark />
         </button>
       </template>
-
       予定をまとめるためのカレンダーを作成します
     </MenuBar>
 
-    <AskLoginMessage v-if="!authStore.token">
+    <AskLoginMessage v-if="!authStore.isAuthenticated || userStore.isOffline">
       <span v-if="!authStore.isAuthenticated">カレンダーを作成するにはログインが必要です</span>
       <span v-if="userStore.isOffline">オフラインではカレンダーを作成できません</span>
     </AskLoginMessage>
@@ -115,8 +114,8 @@ async function submit() {
         </label>
         <p v-if="formErrorMessage" class="error" role="alert">{{ formErrorMessage }}</p>
         <div class="actions">
-          <button type="button" @click="router.back">キャンセル</button>
-          <button data-app-button="primary" type="submit" :disabled="userStore.isLoading">カレンダーを作成</button>
+          <button data-app-button="secondary" type="button" @click="router.back">キャンセル</button>
+          <button data-app-button="primary" type="submit" :disabled="userStore.isLoading">作成</button>
         </div>
       </form>
     </section>
@@ -153,12 +152,10 @@ textarea {
   font-size: var(--text-size-sm);
 }
 
-.icon-x-mark {
-  padding: var(--space-xs);
-
+.icon-x-mark-wrapper {
+  background-color: var(--bg-1);
   &:hover {
     background-color: var(--bg-2);
-    border-radius: 50%;
   }
 }
 </style>

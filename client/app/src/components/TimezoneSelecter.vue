@@ -74,15 +74,13 @@ onMounted(() => {
 }
 
 .btn-current-location {
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--border-radius);
-  cursor: pointer;
-  font-size: var(--text-size-xs);
-  white-space: nowrap;
+  background-color: var(--bg-2);
   border: 1px solid var(--border);
+  font-size: var(--text-size-xs);
+  word-break: keep-all;
 
   &:hover {
-    background-color: var(--bg-2);
+    background-color: var(--bg-3);
   }
 }
 </style>

@@ -137,6 +137,9 @@ export const useUserStore = defineStore('user', () => {
   /** @type {ComputedRef<string>} @description タイムゾーン（例: Asia/Tokyo）*/
   const timeZone = computed(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
 
+  /** @type {ComputedRef<boolean>} @description アプリがインストールされているかどうか */
+  const isAppInstalled = computed(() => typeof window !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.controller);
+
   // #endregion
 
   // #region テーマ設定処理
@@ -516,5 +519,6 @@ export const useUserStore = defineStore('user', () => {
     closeUserDialog,
     applyTheme,
     checkUserEnvironment,
+    isAppInstalled,
   };
 });

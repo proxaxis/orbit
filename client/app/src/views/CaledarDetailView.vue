@@ -157,7 +157,7 @@ watch(
         <h1 class="title">カレンダー設定</h1>
       </template>
       <template #sub>
-        <button title="戻る" @click="router.push({ name: 'Home' })">
+        <button title="変更せずに戻る" @click="router.back" class="icon-x-mark-wrapper">
           <IconXMark />
         </button>
       </template>
@@ -212,7 +212,7 @@ watch(
           <ColorPicker v-model="form.colorId" />
         </label>
         <div class="actions">
-          <button type="button" @click="router.push({ name: 'Home' })">キャンセル</button>
+          <button data-app-button="secondary" type="button" @click="router.back">キャンセル</button>
           <button data-app-button="primary" type="submit" :disabled="userStore.isLoading">保存</button>
         </div>
         <details>
@@ -282,10 +282,6 @@ label {
   justify-content: flex-end;
   gap: var(--space-sm);
   margin-top: var(--space-sm);
-
-  button {
-    width: 5rem;
-  }
 }
 
 details div {
@@ -294,18 +290,13 @@ details div {
   justify-content: flex-end;
 
   button {
-  border-radius: var(--border-radius);
-    padding: var(--space-xs) var(--space-sm);
     background-color: var(--danger);
   }
 }
-
-.icon-x-mark {
-  padding: var(--space-xs);
-
-  &:hover {
-    background-color: var(--bg-2);
-    border-radius: 50%;
-  }
+.icon-x-mark-wrapper {
+    background-color: var(--bg-1);
+    &:hover {
+      background-color: var(--bg-2);
+    }
 }
 </style>

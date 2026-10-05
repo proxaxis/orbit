@@ -54,27 +54,26 @@ async function update(payload) {
   <section class="event-view">
     <MenuBar>
       <template #main>
-        <h1 class="title">Edit Event</h1>
+        <h1 class="title">イベントの編集</h1>
       </template>
       <template #sub>
         <div class="menu-bar-actions">
-          <button title="Don't save and close" @click="router.push({ name: 'Home' })">
-            <IconXMark size="1.2rem" />
+          <button title="保存せずに戻る" @click="router.push({ name: 'Home' })">
+            <IconXMark />
           </button>
         </div>
       </template>
     </MenuBar>
-    <EventForm submit-label="Update" @submit="update" @cancel="router.back()" />
+    <EventForm submit-label="更新する" @submit="update" @cancel="router.back()" />
   </section>
 </template>
 
 <style lang="scss" scoped>
-.icon-x-mark {
-  padding: var(--space-xs);
+button {
+  background-color: var(--bg-1);
 
   &:hover {
     background-color: var(--bg-2);
-    border-radius: 50%;
   }
 }
 </style>

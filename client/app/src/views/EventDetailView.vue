@@ -12,6 +12,8 @@ import IconXMark from '@/components/icons/IconXMark.vue';
 import { useUserStore } from '@/stores/user.js';
 import IconClock from '@/components/icons/IconClock.vue';
 import IconAlignLeft from '@/components/icons/IconAlignLeft.vue';
+import IconUserCheck from '@/components/icons/IconUserCheck.vue';
+import IconAnglesDown from '@/components/icons/IconAnglesDown.vue';
 
 const router = useRouter();
 const eventStore = useEventStore();
@@ -42,10 +44,53 @@ async function respondToInvitation(responseStatus) {
   }
 }
 
+/** @param {Dayjs} startDateTime @param {Dayjs} endDateTime @description イベントまであと何日後か計算 */
+function howLongBeforeEvent(startDateTime, endDateTime) {
+  if (!startDateTime || !endDateTime) return '';
+  const now = dayjs();
+  const s = startDateTime;
+  const e = endDateTime;
+  const monthsAgo = now.diff(s, 'month');   // 何か月前
+  const weeksAgo  = now.diff(s, 'week');    // 何週間前
+  const daysAgo   = now.diff(s, 'day');     // 何日前
+  const hoursAgo  = now.diff(s, 'hour');    // 何時間前
+  const minutesAgo = now.diff(s, 'minute'); // 何分前
+  const secondsAgo = now.diff(s, 'second'); // 何秒前
+
+  if (now.isBefore(s)) {
+    // イベントがまだ始まっていない場合
+    if (monthsAgo < 0) return `${-monthsAgo}か月後`;
+    if (weeksAgo < 0) return `${-weeksAgo}週間後`;
+    if (daysAgo < 0) return `${-daysAgo}日前`;
+    if (hoursAgo < 0) return `${-hoursAgo}時間後`;
+    if (minutesAgo < 0) return `${-minutesAgo}分後`;
+    if (secondsAgo < 0) return `${-secondsAgo}秒後`;
+  } else if (now.isAfter(e)) {
+    // イベントが終了している場合
+    if (monthsAgo > 0) return `${monthsAgo}か月前`;
+    if (weeksAgo > 0) return `${weeksAgo}週間前`;
+    if (daysAgo > 0) return `${daysAgo}日前`;
+    if (hoursAgo > 0) return `${hoursAgo}時間前`;
+    if (minutesAgo > 0) return `${minutesAgo}分前`;
+    if (secondsAgo > 0) return `${secondsAgo}秒前`;
+  } else {
+    // イベントが進行中の場合
+    return '進行中';
+  }
+}
+
 const dateText = computed(() => {
-  if (!event.value) return '';
-  if (event.value.isAllDay) return `${event.value.startDateTime.format('YYYY-MM-DD')} - ${dayjs(event.value.endDateTime).subtract(1, 'day').format('YYYY-MM-DD')}`;
-  return `${dayjs(event.value.startDateTime).format('YYYY-MM-DD HH:mm')} - ${dayjs(event.value.endDateTime).format('YYYY-MM-DD HH:mm')}`;
+  if (!event.value) return { startText: '', endText: '', duration: '' };
+  let startText = '';
+  let endText = '';
+  if (event.value.isAllDay) {
+    startText = event.value.startDateTime.format('YYYY年 M月 D日 (ddd)');
+    endText = dayjs(event.value.endDateTime).subtract(1, 'day').format('YYYY年 M月 D日 (ddd)');
+  } else {
+    startText = dayjs(event.value.startDateTime).format('YYYY年 M月 D日 (ddd) HH:mm');
+    endText = dayjs(event.value.endDateTime).format('YYYY年 M月 D日 (ddd) HH:mm');
+  }
+  return { startText, endText, duration: howLongBeforeEvent(event.value.startDateTime, event.value.endDateTime) };
 });
 
 function edit() {
@@ -91,7 +136,7 @@ onMounted(async () => {
       <template #sub>
         <div class="menu-bar-actions">
           <button title="Delete" :disabled="!event" @click="remove">
-            <IconTrash />
+            <IconTrash size="1.2rem" />
           </button>
           <button title="Edit" :disabled="!event" @click="edit">
             <IconPen size="1.1rem" />
@@ -115,8 +160,11 @@ onMounted(async () => {
           <dt>
             <IconClock />
           </dt>
-          <dd>
-            {{ dateText }}<span v-if="event?.raw.start?.timeZone"> ({{ event?.raw.start?.timeZone }})</span>
+          <dd class="date-text">
+            <span>{{ dateText.startText }}</span>
+            <IconAnglesDown size="0.7rem" />
+            <span>{{ dateText.endText }}</span>
+            <small>{{ dateText.duration }}（{{ event?.raw.start?.timeZone ?? 'タイムゾーン利用不可' }}）</small>
           </dd>
         </div>
         <div v-if="event?.location">
@@ -132,24 +180,38 @@ onMounted(async () => {
           <dd>{{ event.description }}</dd>
         </div>
       </dl>
-      <section v-if="myAttendee" class="attendance-section" aria-label="参加回答">
-        <h3>参加回答</h3>
+      <dl v-if="myAttendee">
+        <div>
+          <dt><IconUserCheck /></dt>
+          <dd>参加承諾:
+            <span data-response-status="accepted" v-if="myAttendee.responseStatus === 'accepted'">承諾済み</span>
+            <span data-response-status="declined" v-else-if="myAttendee.responseStatus === 'declined'">辞退済み</span>
+            <span data-response-status="needsAction" v-else>未回答</span>
+          </dd>
+        </div>
+      </dl>
+      <details v-if="myAttendee" aria-label="参加回答" class="attendance-section">
+        <summary>参加回答を変更または確定する</summary>
         <p>現在の回答: {{ myAttendee.responseStatus === 'accepted' ? '承諾' : myAttendee.responseStatus === 'declined' ? '辞退' : '未回答' }}</p>
         <div class="attendance-actions">
           <button type="button" class="accept-button" :disabled="isUpdatingAttendance" @click="respondToInvitation('accepted')">承諾</button>
           <button type="button" class="decline-button" :disabled="isUpdatingAttendance" @click="respondToInvitation('declined')">辞退</button>
         </div>
-      </section>
+      </details>
       <details v-if="event.raw.attendees?.length" class="attendees-section">
         <summary>参加者（{{ event.raw.attendees.length }}人）</summary>
         <ul>
           <li v-for="attendee in event.raw.attendees" :key="attendee.email || attendee.id">
             <span>{{ attendee.displayName || attendee.email || '不明な参加者' }}</span>
-            <small>{{ attendee.responseStatus || '未回答' }}</small>
+            <small>
+              <span data-response-status="accepted" v-if="attendee.responseStatus && attendee.responseStatus === 'accepted'">承諾済み</span>
+              <span data-response-status="declined" v-else-if="attendee.responseStatus && attendee.responseStatus === 'declined'">辞退済み</span>
+              <span data-response-status="needsAction" v-else>未回答</span>
+            </small>
           </li>
         </ul>
       </details>
-      <details>
+      <details class="more-info">
         <summary>More Information</summary>
         <ul>
           <li>
@@ -185,8 +247,18 @@ onMounted(async () => {
   gap: var(--space-sm);
 
   button {
-    display: flex;
-    align-items: center;
+    background-color: var(--bg-1);
+    &:has(.icon-trash),
+    &:has(.icon-pen),
+    &:has(.icon-x-mark) {
+      &:hover {
+        background-color: var(--bg-2);
+      }
+    }
+
+    .icon-trash {
+      fill: var(--danger);
+    }
   }
 }
 
@@ -194,12 +266,14 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  padding-bottom: var(--space-sm);
   border-bottom: 1px solid var(--border);
+  padding-bottom: var(--space-sm);
+  margin-bottom: var(--space-md);
 
   h2 {
     font-size: var(--text-size-lg);
     font-weight: bold;
+    padding: var(--space-xs) var(--space-sm);
   }
 
   .calendar-ribbon-wrapper {
@@ -216,23 +290,43 @@ dl {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  padding-top: var(--space-md);
+  padding-top: var(--space-sm);
 
   div {
     display: grid;
     grid-template-columns: var(--space-md) 1fr;
     gap: var(--space-sm);
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius);
+    padding: var(--space-xs) var(--space-sm);
 
     dt {
       display: flex;
+      justify-content: center;
       align-items: center;
+    }
+
+    dd {
+      word-break: break-all;
+
+      &.date-text {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
     }
   }
 }
-
-details {
-  margin-left: var(--space-xs);
+small, .attendance-section p {
+  color: var(--text-light);
+  font-size: var(--text-size-sm);
+}
+.more-info {
   margin-top: var(--space-sm);
+  padding: var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius);
+  background: var(--bg-1);
 }
 
 .inline-text {
@@ -246,7 +340,7 @@ details {
 
 .attendance-section,
 .attendees-section {
-  margin-top: var(--space-md);
+  margin-top: var(--space-sm);
   padding: var(--space-sm);
   border: 1px solid var(--border);
   border-radius: var(--border-radius);
@@ -255,12 +349,6 @@ details {
 
 .attendance-section h3 {
   font-size: var(--text-size-md);
-}
-
-.attendance-section p,
-.attendees-section small {
-  color: var(--text-light);
-  font-size: var(--text-size-sm);
 }
 
 .attendance-actions {
@@ -274,13 +362,19 @@ details {
   border: 1px solid var(--border);
   border-radius: var(--border-radius);
 }
-
-.accept-button:hover:not(:disabled) {
-  color: var(--primary);
+.accept-button {
+  background-color: var(--success);
+  color: var(--text);
+  &:hover:not(:disabled) {
+    opacity: 0.8;
+  }
 }
-
-.decline-button:hover:not(:disabled) {
-  color: var(--danger);
+.decline-button {
+  background-color: var(--danger);
+  color: var(--text);
+  &:hover:not(:disabled) {
+    opacity: 0.8;
+  }
 }
 
 .attendees-section ul {
@@ -296,18 +390,25 @@ details {
   gap: var(--space-sm);
 }
 
-.icon-trash,
-.icon-pen,
-.icon-x-mark {
-  padding: var(--space-xs);
-
-  &:hover {
-    background-color: var(--bg-2);
-    border-radius: 50%;
-  }
+span[data-response-status='accepted'] {
+  font-size: var(--text-size-sm);
+  background-color: var(--success);
+  border-radius: var(--border-radius);
+  padding: 0 var(--space-xs);
+  color: var(--text);
 }
-
-.icon-trash {
-  fill: var(--danger);
+span[data-response-status='declined'] {
+  font-size: var(--text-size-sm);
+  background-color: var(--danger);
+  border-radius: var(--border-radius);
+  padding: 0 var(--space-xs);
+  color: var(--text);
+}
+span[data-response-status='needsAction'] {
+  font-size: var(--text-size-sm);
+  background-color: var(--warning);
+  border-radius: var(--border-radius);
+  padding: 0 var(--space-xs);
+  color: var(--text);
 }
 </style>

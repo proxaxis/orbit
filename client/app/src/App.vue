@@ -4,7 +4,6 @@ import { useAuthStore } from '@/stores/auth.js';
 import { useCalendarStore } from '@/stores/calendar.js';
 import { useUserStore } from '@/stores/user.js';
 import UserDialog from '@/components/UserDialog.vue';
-import PwaInstallPrompt from '@/components/PwaInstallPrompt.vue';
 
 const authStore = useAuthStore();
 const calendarStore = useCalendarStore();
@@ -77,7 +76,6 @@ onUnmounted(() => {
 <template>
   <router-view />
   <UserDialog />
-  <PwaInstallPrompt />
 </template>
 
 <style lang="scss">
@@ -102,10 +100,12 @@ onUnmounted(() => {
   padding: 0;
   box-sizing: content-box;
   zoom: 1;
+  text-autospace: normal;
 }
 
 html {
   font-family: 'Noto Sans JP, Kosugi Maru, sans-serif';
+  scroll-behavior: smooth;
 }
 
 body {
@@ -119,32 +119,57 @@ li {
 }
 
 button {
-  &,
-  &:hover,
-  &:active {
-    border: none;
-    background: none;
-    cursor: pointer;
-    font-size: var(--text-size-sm);
-    display: flex;
-    align-items: center;
-    color: var(--text);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-sm);
+  font-size: var(--text-size-lg);
+  border-radius: var(--border-radius);
+  transition: background-color 0.2s ease-in-out;
+  color: var(--text);
+  border: none;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &[data-app-button='primary'] {
+    background-color: var(--primary);
+    min-width: 6rem;
+
+    &:hover {
+      background-color: var(--primary-light);
+    }
+  }
+
+  &[data-app-button='secondary'] {
+    color: var(--primary-light);
+    background-color: transparent;
+    min-width: 6rem;
+    border: 1px solid var(--primary-light);
+    &:hover {
+      color: var(--primary);
+      border: 1px solid var(--primary);
+    }
   }
 }
 
 input,
 select,
 textarea {
-  background-color: var(--bg-3);
+  background-color: var(--bg-2);
   color: var(--text);
   outline: 0;
   border-radius: var(--border-radius);
   border: 1px solid var(--border);
-  padding: var(--space-xs) var(--space-xxs);
-  font-size: var(--text-size-sm);
+  padding: var(--space-sm) var(--space-xs);
+  font-size: var(--text-size-md);
 
   &:focus {
-    border-color: var(--primary);
+    border-color: var(--accent);
     outline: none;
   }
 }
@@ -173,27 +198,6 @@ details {
     user-select: none;
     font-size: var(--text-size-md);
     text-decoration: underline;
-  }
-}
-
-button[data-app-button='primary'] {
-  background-color: var(--primary);
-  color: var(--text);
-  border-radius: var(--border-radius);
-  padding: var(--space-xs) var(--space-sm);
-  font-size: var(--text-size-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &:hover {
-    background-color: var(--primary);
-    opacity: 0.65;
-  }
-
-  &:disabled {
-    background-color: var(--border);
-    cursor: not-allowed;
   }
 }
 </style>

@@ -497,7 +497,7 @@ watch(() => formData.summary, updateTitleSuggestions);
       </ul>
     </div>
     <div>
-      <button type="button" @click="emit('cancel')">キャンセル</button>
+      <button data-app-button="secondary" type="button" @click="emit('cancel')">キャンセル</button>
       <button data-app-button="primary" type="submit" data-enter-focus @keydown.enter.prevent="submitForm">{{ props.submitLabel }}</button>
     </div>
   </form>
