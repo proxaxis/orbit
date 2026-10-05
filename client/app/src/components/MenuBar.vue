@@ -1,5 +1,16 @@
+<script setup>
+import { computed } from 'vue';
+
+const props = defineProps({
+  useMobilePadding: {
+    type: Boolean,
+    default: false,
+  },
+});
+</script>
+
 <template>
-  <header class="menu-bar">
+  <header class="menu-bar" :class="{ 'mobile-padding': props.useMobilePadding }">
     <div>
       <div class="main">
         <slot name="main">
@@ -31,10 +42,15 @@ header {
   padding-bottom: var(--space-sm);
   margin-bottom: var(--space-sm);
 
+  &.mobile-padding {
+    padding: 0 0 var(--space-xs) 0;
+    margin: 0;
+    border-bottom: none;
+  }
+
   & > div {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
 
     :deep(.title) {
       display: inline;
@@ -46,7 +62,14 @@ header {
     .sub {
       display: flex;
       align-items: center;
-      justify-content: center;
+    }
+
+    .main {
+      justify-content: flex-start;
+    }
+
+    .sub {
+      justify-content: flex-end;
     }
   }
 

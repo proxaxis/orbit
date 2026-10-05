@@ -1,7 +1,7 @@
 <script setup>
 import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { useUserStore } from '@/stores/user.js';
+import { USER_FONT_FAMILIES, USER_TEXT_SIZE_VALUES, useUserStore } from '@/stores/user.js';
 import { clearOfflineCache, deleteOffline, USER_SETTINGS_KEY } from '@/services/offline-storage.js';
 import MenuBar from '@/components/MenuBar.vue';
 import IconGear from '@/components/icons/IconGear.vue';
@@ -20,15 +20,28 @@ const draft = reactive({
   useMiniCalendar: userStore.useMiniCalendar,
   useWheelMonthNavigation: userStore.useWheelMonthNavigation,
   maxEventBarsPerCell: userStore.maxEventBarsPerCell,
+  calendarCellHeightMode: userStore.calendarCellHeightMode,
+  uiFontFamily: userStore.uiFontFamily,
+  calendarFontFamily: userStore.calendarFontFamily,
+  uiTextSize: userStore.uiTextSize,
+  calendarTextSize: userStore.calendarTextSize,
   labels: [...userStore.weekdayLabels],
   weekendDays: userStore.weekendDays.map((day) => ({ ...day })),
 });
 
-function weekend(dayIndex) {
+/** @returns {{index: number, color: string}|undefined} */
+function weekend(/** @type {number} */ dayIndex) {
   return draft.weekendDays.find((day) => day.index === dayIndex);
 }
 
-function toggleWeekend(dayIndex) {
+function updateWeekendColor(/** @type {number} */ dayIndex, /** @type {Event} */ event) {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  const current = weekend(dayIndex);
+  if (current) current.color = target.value;
+}
+
+function toggleWeekend(/** @type {number} */ dayIndex) {
   const current = weekend(dayIndex);
   if (current) draft.weekendDays = draft.weekendDays.filter((day) => day.index !== dayIndex);
   else draft.weekendDays.push({ index: dayIndex, color: dayIndex === 0 ? '#d32f2f' : '#0a0dd6' });
@@ -44,6 +57,13 @@ function save() {
   userStore.useMiniCalendar = draft.useMiniCalendar;
   userStore.useWheelMonthNavigation = draft.useWheelMonthNavigation;
   userStore.maxEventBarsPerCell = Math.min(10, Math.max(1, Number(draft.maxEventBarsPerCell)));
+  userStore.calendarCellHeightMode = draft.calendarCellHeightMode;
+  userStore.uiFontFamily = draft.uiFontFamily;
+  userStore.calendarFontFamily = draft.calendarFontFamily;
+  userStore.applyFonts();
+  userStore.uiTextSize = draft.uiTextSize;
+  userStore.calendarTextSize = draft.calendarTextSize;
+  userStore.applyTextSizes();
   userStore.weekendDays = draft.weekendDays.map((day) => ({ ...day }));
   userStore.setWeekdayLabels(draft.labels);
   userStore.saveSettings();
@@ -113,6 +133,37 @@ async function clearSettings() {
           >セルに表示する予定バーの最大本数
           <input v-model.number="draft.maxEventBarsPerCell" type="number" min="1" max="10" required />
         </label>
+        <label
+          >カレンダーセルの高さ
+          <select v-model="draft.calendarCellHeightMode">
+            <option value="FIXED">固定</option>
+            <option value="VARIABLE">可変</option>
+          </select>
+        </label>
+        <label
+          >カレンダー UI のフォント
+          <select v-model="draft.calendarFontFamily">
+            <option v-for="(family, key) in USER_FONT_FAMILIES" :key="key" :value="key">{{ key }}</option>
+          </select>
+        </label>
+        <label
+          >その他の UI のフォント
+          <select v-model="draft.uiFontFamily">
+            <option v-for="(family, key) in USER_FONT_FAMILIES" :key="key" :value="key">{{ key }}</option>
+          </select>
+        </label>
+        <label
+          >カレンダー UI の文字サイズ
+          <select v-model="draft.calendarTextSize">
+            <option v-for="(size, key) in USER_TEXT_SIZE_VALUES" :key="key" :value="key">{{ key }}</option>
+          </select>
+        </label>
+        <label
+          >その他の UI の文字サイズ
+          <select v-model="draft.uiTextSize">
+            <option v-for="(size, key) in USER_TEXT_SIZE_VALUES" :key="key" :value="key">{{ key }}</option>
+          </select>
+        </label>
       </section>
 
       <section class="config-section">
@@ -131,7 +182,7 @@ async function clearSettings() {
         <div class="weekend-list">
           <div v-for="(day, index) in dayNames" :key="day" class="day-row">
             <label class="switch-row"><input type="checkbox" :checked="!!weekend(index)" @change="toggleWeekend(index)" />{{ day }}</label>
-            <input v-if="weekend(index)" type="color" :value="weekend(index).color" :aria-label="`${day}の休日色`" @input="weekend(index).color = $event.target.value" />
+            <input v-if="weekend(index)" type="color" :value="weekend(index)?.color ?? ''" :aria-label="`${day}の休日色`" @input="updateWeekendColor(index, $event)" />
             <span v-else class="not-set">休日にしない</span>
           </div>
         </div>

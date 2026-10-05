@@ -210,6 +210,12 @@ export const useEventStore = defineStore('event', () => {
     return events.filter((/** @type {HandyCalendarEvent} */ event) => event.startDateTime.unix() < end.unix() && event.endDateTime.unix() > start.unix());
   }
 
+  /** @param {number} year @param {number} monthIndex @returns {Promise<HandyCalendarEvent[]>} 現在月の予定を再同期します。 */
+  async function syncEvents(year, monthIndex) {
+    _cache.value = new Map();
+    return listEvents(year, monthIndex);
+  }
+
   /**
    * 指定のイベント ID からイベントを取得
    * @param {string} gEventId イベント ID
@@ -354,6 +360,7 @@ export const useEventStore = defineStore('event', () => {
   return {
     listEvents,
     listEventsByDate,
+    syncEvents,
     getEventById,
     createEvent,
     updateEvent,

@@ -3,6 +3,22 @@ import { ref, computed } from 'vue';
 import dayjs from '@/services/dayjs';
 import { readOffline, writeOffline, USER_SETTINGS_KEY } from '@/services/offline-storage.js';
 
+export const USER_FONT_FAMILIES = Object.freeze({
+  SYSTEM: 'system-ui, sans-serif',
+  NOTO_SANS_JP: "'Noto Sans JP', sans-serif",
+  KOSUGI_MARU: "'Kosugi Maru', sans-serif",
+  M_PLUS_ROUNDED: "'M PLUS Rounded 1c', sans-serif",
+  SAWARABI_GOTHIC: "'Sawarabi Gothic', sans-serif",
+  NOTO_SERIF_JP: "'Noto Serif JP', serif",
+});
+
+export const USER_TEXT_SIZE_VALUES = Object.freeze({
+  XTRASMALL: Object.freeze({ xxs: '0.5rem', xs: '0.6rem', sm: '0.7rem', md: '0.8rem', lg: '0.9rem', xl: '1rem', xxl: '1.2rem' }),
+  SMALL: Object.freeze({ xxs: '0.5625rem', xs: '0.675rem', sm: '0.7875rem', md: '0.9rem', lg: '1.0125rem', xl: '1.125rem', xxl: '1.35rem' }),
+  MEDIUM: Object.freeze({ xxs: '0.625rem', xs: '0.75rem', sm: '0.875rem', md: '1rem', lg: '1.125rem', xl: '1.25rem', xxl: '1.5rem' }),
+  LARGE: Object.freeze({ xxs: '0.6875rem', xs: '0.825rem', sm: '0.9625rem', md: '1.1rem', lg: '1.2375rem', xl: '1.375rem', xxl: '1.65rem' }),
+});
+
 /**
  * @typedef {'LIGHT' | 'DARK' | 'SYSTEM'} UserAvailableTheme ユーザが選択可能なテーマ設定
  * @typedef {'LIGHT' | 'DARK'} ResolvedTheme 実際に画面へ適用される解決済みテーマ
@@ -239,6 +255,35 @@ export const useUserStore = defineStore('user', () => {
   /** @type {Ref<number>} @description 月表示のセルに表示するイベントバーの最大本数 */
   const maxEventBarsPerCell = ref(3);
 
+  /** @type {Ref<'FIXED'|'VARIABLE'>} @description 月表示のカレンダーセル高さ */
+  const calendarCellHeightMode = ref('FIXED');
+
+  /** @type {Ref<keyof typeof USER_FONT_FAMILIES>} @description 通常 UI のフォント */
+  const uiFontFamily = ref('NOTO_SANS_JP');
+
+  /** @type {Ref<keyof typeof USER_FONT_FAMILIES>} @description カレンダー UI のフォント */
+  const calendarFontFamily = ref('NOTO_SANS_JP');
+
+  /** @type {Ref<keyof typeof USER_TEXT_SIZE_VALUES>} @description 通常 UI の文字サイズ */
+  const uiTextSize = ref('MEDIUM');
+
+  /** @type {Ref<keyof typeof USER_TEXT_SIZE_VALUES>} @description カレンダー UI の文字サイズ */
+  const calendarTextSize = ref('MEDIUM');
+
+  /** 選択中のフォントを CSS 変数へ反映します。 */
+  function applyFonts() {
+    if (typeof document === 'undefined') return;
+    document.documentElement.style.setProperty('--ui-font-family', USER_FONT_FAMILIES[uiFontFamily.value]);
+    document.documentElement.style.setProperty('--calendar-font-family', USER_FONT_FAMILIES[calendarFontFamily.value]);
+  }
+
+  /** 選択中の通常 UI の文字サイズを CSS 変数へ反映します。 */
+  function applyTextSizes() {
+    if (typeof document === 'undefined') return;
+    const sizes = USER_TEXT_SIZE_VALUES[uiTextSize.value];
+    Object.entries(sizes).forEach(([name, value]) => document.documentElement.style.setProperty(`--text-size-${name}`, value));
+  }
+
   /** @type {Ref<string[]>} 最近使ったイベントタイトル */
   const recentEventTitles = ref([]);
 
@@ -265,6 +310,11 @@ export const useUserStore = defineStore('user', () => {
       useMiniCalendar: useMiniCalendar.value,
       useWheelMonthNavigation: useWheelMonthNavigation.value,
       maxEventBarsPerCell: maxEventBarsPerCell.value,
+      calendarCellHeightMode: calendarCellHeightMode.value,
+      uiFontFamily: uiFontFamily.value,
+      calendarFontFamily: calendarFontFamily.value,
+      uiTextSize: uiTextSize.value,
+      calendarTextSize: calendarTextSize.value,
       weekdayLabels: weekdayLabels.value,
       calendarOrder: calendarOrder.value,
       hiddenCalendarIds: hiddenCalendarIds.value,
@@ -285,6 +335,21 @@ export const useUserStore = defineStore('user', () => {
       if (typeof saved.useWheelMonthNavigation === 'boolean') useWheelMonthNavigation.value = saved.useWheelMonthNavigation;
       if (Number.isInteger(saved.maxEventBarsPerCell) && saved.maxEventBarsPerCell >= 1 && saved.maxEventBarsPerCell <= 10) {
         maxEventBarsPerCell.value = saved.maxEventBarsPerCell;
+      }
+      if (saved.calendarCellHeightMode === 'FIXED' || saved.calendarCellHeightMode === 'VARIABLE') {
+        calendarCellHeightMode.value = saved.calendarCellHeightMode;
+      }
+      if (typeof saved.uiFontFamily === 'string' && Object.hasOwn(USER_FONT_FAMILIES, saved.uiFontFamily)) {
+        uiFontFamily.value = saved.uiFontFamily;
+      }
+      if (typeof saved.calendarFontFamily === 'string' && Object.hasOwn(USER_FONT_FAMILIES, saved.calendarFontFamily)) {
+        calendarFontFamily.value = saved.calendarFontFamily;
+      }
+      if (typeof saved.uiTextSize === 'string' && Object.hasOwn(USER_TEXT_SIZE_VALUES, saved.uiTextSize)) {
+        uiTextSize.value = saved.uiTextSize;
+      }
+      if (typeof saved.calendarTextSize === 'string' && Object.hasOwn(USER_TEXT_SIZE_VALUES, saved.calendarTextSize)) {
+        calendarTextSize.value = saved.calendarTextSize;
       }
       if (Array.isArray(saved.weekdayLabels) && saved.weekdayLabels.length === 7 && saved.weekdayLabels.every((/** @type {unknown} */ label) => typeof label === 'string')) {
         weekdayLabels.value = saved.weekdayLabels;
@@ -432,6 +497,15 @@ export const useUserStore = defineStore('user', () => {
     nowSelectedEvent.value = { eid: event.eid, cid: event.cid };
   }
 
+  /** @param {string} text @description クリップボードにテキストをコピー */
+  function writeClipboard(text) {
+    if (typeof navigator === 'undefined' || !navigator.clipboard) {
+      setError(true, new Error('Clipboard API is not available in this environment.'));
+      return;
+    }
+    navigator.clipboard.writeText(text).catch((err) => setError(true, err));
+  }
+
   // #endregion
 
   // #region 画面サイズ判定処理
@@ -480,6 +554,11 @@ export const useUserStore = defineStore('user', () => {
     useMiniCalendar,
     useWheelMonthNavigation,
     maxEventBarsPerCell,
+    calendarCellHeightMode,
+    uiFontFamily,
+    calendarFontFamily,
+    uiTextSize,
+    calendarTextSize,
     recentEventTitles,
     rememberEventTitle,
     getRecentEventTitleSuggestions,
@@ -503,6 +582,8 @@ export const useUserStore = defineStore('user', () => {
     setError,
     setNowSelectedEvent,
     saveSettings,
+    applyFonts,
+    applyTextSizes,
     settingsReady,
     loadSettings,
     setFirstDayOfWeek,
@@ -520,5 +601,6 @@ export const useUserStore = defineStore('user', () => {
     applyTheme,
     checkUserEnvironment,
     isAppInstalled,
+    writeClipboard,
   };
 });

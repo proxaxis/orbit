@@ -51,6 +51,8 @@ onMounted(async () => {
 
   // ユーザ設定の適用
   userStore.applyTheme(userStore.userSelectedTheme);
+  userStore.applyFonts();
+  userStore.applyTextSizes();
   window.addEventListener('resize', handleWindowResize);
   mQueryList = window.matchMedia('(prefers-color-scheme: dark)');
   mQueryList.addEventListener('change', handleSystemThemeChange);
@@ -104,8 +106,9 @@ onUnmounted(() => {
 }
 
 html {
-  font-family: 'Noto Sans JP, Kosugi Maru, sans-serif';
+  font-family: var(--ui-font-family);
   scroll-behavior: smooth;
+  user-select: none;
 }
 
 body {
@@ -130,6 +133,9 @@ button {
   transition: background-color 0.2s ease-in-out;
   color: var(--text);
   border: none;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 
   &:disabled {
     opacity: 0.5;

@@ -132,8 +132,8 @@ function hideAllCalendars() {
             </template>
             <button @click="router.push({ name: 'CalendarCreator' })"><IconCalendarPlus />カレンダーを作成</button>
             <button @click="router.push({ name: 'CalendarAdder' })"><IconCloudArrowDown />他のカレンダーを追加</button>
-            <button @click="showAllCalendars"><IconEye />全てのカレンダーを表示</button>
-            <button @click="hideAllCalendars"><IconEyeSlash />全てのカレンダーを非表示</button>
+            <button @click="showAllCalendars"><IconEye />全てを表示</button>
+            <button @click="hideAllCalendars"><IconEyeSlash />全てを非表示</button>
           </DropdownMenu>
         </template>
       </MenuBar>

@@ -15,11 +15,16 @@ const isResizingSub = ref(false);
 const subResizeStartX = ref(null);
 /** @type {Ref<number>} 右ペインのリサイズ開始幅 */
 const subResizeStartWidth = ref(360);
+const MOBILE_SUB_MIN_HEIGHT = 40;
 /** @type {Ref<number>} モバイル右ペインの高さ */
-const mobileSubPaneHeight = ref(typeof window !== 'undefined' ? Math.min(300, Math.max(160, window.innerHeight * 0.34)) : 240);
+const mobileSubPaneHeight = ref(typeof window !== 'undefined' ? Math.min(300, Math.max(MOBILE_SUB_MIN_HEIGHT, window.innerHeight * 0.34)) : 240);
+const isCollapsingMobileSub = ref(false);
 const isResizingMobileSub = ref(false);
 const mobileSubResizeStartY = ref(0);
 const mobileSubResizeStartHeight = ref(0);
+const mobileSubResizeLastY = ref(0);
+/** @type {Ref<HTMLElement|null>} モバイル Sub のスクロール領域 */
+const mobileSubContent = ref(null);
 /** @type {Ref<{x: number, y: number}|null>} 左ペインのタッチ開始位置 */
 const navSwipeStart = ref(null);
 /** @type {Ref<'main'|'nav'|'sub'>} 現在表示しているペイン */
@@ -43,6 +48,24 @@ const selectPane = /** @type {(pane: 'main'|'nav'|'sub') => void} */ (
 );
 
 provide('selectPane', selectPane);
+
+/** モバイル Sub ペインを最小高さまで折りたたみます。 */
+function collapseMobileSubPane() {
+  if (layoutMode.value !== 'mobile') return;
+  isCollapsingMobileSub.value = true;
+  mobileSubPaneHeight.value = MOBILE_SUB_MIN_HEIGHT;
+  window.setTimeout(() => {
+    isCollapsingMobileSub.value = false;
+  }, 260);
+}
+
+provide('collapseMobileSubPane', collapseMobileSubPane);
+
+/** @param {TouchEvent} evt Sub 内のスクロール操作とペイン操作を分けます。 */
+function handleMobileSubContentTouchStart(evt) {
+  if (evt.target instanceof Element && evt.target.closest('.menu-bar')) return;
+  evt.stopPropagation();
+}
 
 /** 現在開いているペインを閉じる */
 function closePane() {
@@ -102,20 +125,30 @@ function stopToggleDrag() {
   draggingToggle.value = null;
 }
 
-/** @param {PointerEvent} evt 下部ペインのリサイズ開始イベント */
+/** @param {TouchEvent} evt 下部ペインのリサイズ開始イベント */
 function startMobileSubResize(evt) {
+  if (layoutMode.value !== 'mobile' || activePane.value === 'sub' || evt.touches.length !== 1) return;
+  const touch = evt.touches[0];
   isResizingMobileSub.value = true;
-  mobileSubResizeStartY.value = evt.clientY;
+  mobileSubResizeStartY.value = touch.clientY;
   mobileSubResizeStartHeight.value = mobileSubPaneHeight.value;
-  if (evt.currentTarget instanceof HTMLElement) evt.currentTarget.setPointerCapture(evt.pointerId);
+  mobileSubResizeLastY.value = touch.clientY;
 }
 
-/** @param {PointerEvent} evt 下部ペインのリサイズイベント */
+/** @param {TouchEvent} evt 下部ペインのリサイズイベント */
 function resizeMobileSub(evt) {
-  if (!isResizingMobileSub.value) return;
-  const maxHeight = Math.max(240, window.innerHeight * 0.75);
-  const nextHeight = mobileSubResizeStartHeight.value + mobileSubResizeStartY.value - evt.clientY;
-  mobileSubPaneHeight.value = Math.min(maxHeight, Math.max(160, nextHeight));
+  if (!isResizingMobileSub.value || evt.touches.length !== 1) return;
+  const touch = evt.touches[0];
+  if (evt.cancelable) evt.preventDefault();
+  const maxHeight = Math.max(240, window.innerHeight);
+  const nextHeight = mobileSubResizeStartHeight.value + mobileSubResizeStartY.value - touch.clientY;
+  if (nextHeight >= maxHeight && mobileSubContent.value instanceof HTMLElement) {
+    mobileSubPaneHeight.value = maxHeight;
+    mobileSubContent.value.scrollTop += mobileSubResizeLastY.value - touch.clientY;
+  } else {
+    mobileSubPaneHeight.value = Math.min(maxHeight, Math.max(MOBILE_SUB_MIN_HEIGHT, nextHeight));
+  }
+  mobileSubResizeLastY.value = touch.clientY;
 }
 
 /** 下部ペインのリサイズを終了 */
@@ -185,8 +218,6 @@ onMounted(() => {
   window.addEventListener('mouseup', stopResize);
   window.addEventListener('pointermove', moveToggle);
   window.addEventListener('pointerup', stopToggleDrag);
-  window.addEventListener('pointermove', resizeMobileSub);
-  window.addEventListener('pointerup', stopMobileSubResize);
 });
 
 watch(() => route.name, selectPaneForRoute, { immediate: true });
@@ -200,8 +231,6 @@ onUnmounted(() => {
   window.removeEventListener('mouseup', stopResize);
   window.removeEventListener('pointermove', moveToggle);
   window.removeEventListener('pointerup', stopToggleDrag);
-  window.removeEventListener('pointermove', resizeMobileSub);
-  window.removeEventListener('pointerup', stopMobileSubResize);
 });
 </script>
 
@@ -222,9 +251,8 @@ onUnmounted(() => {
 
       <div class="resize-handle" @mousedown.prevent="startResizeSub"></div>
 
-      <aside class="sub-pane" :style="{ width: `${subWidth}px` }">
-        <div v-if="layoutMode === 'mobile'" class="mobile-sub-resize-handle" role="separator" aria-label="下部ペインの高さを調整" @pointerdown="startMobileSubResize"></div>
-        <div class="aside-content">
+      <aside class="sub-pane" :class="{ 'is-collapsing': isCollapsingMobileSub }" :style="{ width: `${subWidth}px` }" @touchstart="startMobileSubResize" @touchmove="resizeMobileSub" @touchend="stopMobileSubResize" @touchcancel="stopMobileSubResize">
+        <div ref="mobileSubContent" class="aside-content" @touchstart="handleMobileSubContentTouchStart">
           <router-view name="sub" />
         </div>
       </aside>
@@ -461,19 +489,18 @@ main {
     box-shadow: 0 -6px 16px var(--shadow);
     transform: none;
     z-index: 5;
-  }
-
-  .layout-mobile .mobile-sub-resize-handle {
-    flex: 0 0 0.5rem;
-    width: 100%;
-    background: var(--border);
-    cursor: ns-resize;
     touch-action: none;
-    z-index: 2;
 
-    &:hover,
-    &:active {
-      background: var(--primary);
+    &.is-collapsing {
+      transition: flex-basis 0.24s ease-in;
+    }
+
+    .aside-content {
+      flex: 1 1 auto;
+      min-height: 0;
+      height: auto;
+      overflow-y: auto;
+      padding: var(--space-xs);
     }
   }
 
@@ -500,10 +527,12 @@ main {
     border: 0;
     box-shadow: none;
     z-index: 40;
-  }
+    touch-action: auto;
 
-  .layout-mobile.active-pane-sub .mobile-sub-resize-handle {
-    display: none;
+    .aside-content {
+      height: 100%;
+      overflow-y: auto;
+    }
   }
 }
 </style>

@@ -5,6 +5,8 @@ import dayjs, { toDayjs } from '@/services/dayjs.js';
 import { useEventStore } from '@/stores/event.js';
 import { useUserStore } from '@/stores/user.js';
 import { useCalendarStore } from '@/stores/calendar.js';
+import { useAuthStore } from '@/stores/auth.js';
+import { USER_TEXT_SIZE_VALUES } from '@/stores/user.js';
 import DropdownMenu from '@/components/DropdownMenu.vue';
 import IconCaretLeft from '@/components/icons/IconCaretLeft.vue';
 import IconCaretRight from '@/components/icons/IconCaretRight.vue';
@@ -18,6 +20,10 @@ const router = useRouter();
 const eventStore = useEventStore();
 const userStore = useUserStore();
 const calendarStore = useCalendarStore();
+const authStore = useAuthStore();
+const isSyncing = ref(false);
+
+const calendarTextSizeStyle = computed(() => Object.fromEntries(Object.entries(USER_TEXT_SIZE_VALUES[userStore.calendarTextSize]).map(([name, value]) => [`--text-size-${name}`, value])));
 
 /** @type {(pane: 'main'|'nav'|'sub') => void} 左ペイン開閉操作 */
 const selectPane = inject('selectPane', /** @type {(pane: 'main'|'nav'|'sub') => void} */ (() => {}));
@@ -137,7 +143,7 @@ const layoutMap = computed(() => {
     weeks.push(days.slice(i, i + 7));
   }
 
-  weeks.forEach((week) => {
+  weeks.forEach((week, weekIndex) => {
     const weekStart = week[0].date;
     const weekEnd = week[week.length - 1].date.endOf('day');
 
@@ -216,7 +222,7 @@ const layoutMap = computed(() => {
           daySlots[row] = {
             event: evt,
             isStart: i === startIndex,
-            isEnd: i === endIndex,
+            isEnd: i === endIndex || (weekIndex === weeks.length - 1 && i === week.length - 1),
             isLabelStart: i === startIndex || i === 0,
             spanDays: i === startIndex || i === 0 ? endIndex - i + 1 : 1,
           };
@@ -411,6 +417,23 @@ const handleCalendarWheel = (evt) => {
   else goNextMonth();
 };
 
+/** カレンダー一覧と表示中の予定を最新状態へ同期します。 */
+async function syncCalendarData() {
+  if (isSyncing.value || !authStore.isAuthenticated || userStore.isOffline) return;
+  isSyncing.value = true;
+  userStore.setLoading(true, 'Syncing calendars and events...');
+  try {
+    await eventStore.syncPendingOperations();
+    await calendarStore.loadCalendars();
+    events.value = await eventStore.syncEvents(userStore.nowUsingDate.year(), userStore.nowUsingDate.month());
+  } catch (error) {
+    userStore.setError(true, error);
+  } finally {
+    isSyncing.value = false;
+    userStore.setLoading(false);
+  }
+}
+
 /**
  * スタイルクラス計算
  * @param {Object} day - 日付情報
@@ -456,7 +479,7 @@ watch(
       </div>
       <h1>{{ relativeYearText }} {{ userStore.nowUsingDate.format('YYYY年 M月') }}</h1>
       <div>
-        <button type="button" title="今すぐ同期" aria-label="今すぐ同期">
+        <button type="button" title="今すぐ同期" aria-label="今すぐ同期" :disabled="isSyncing" :class="{ 'is-syncing': isSyncing }" @click="syncCalendarData">
           <IconArrowsRotate size="0.96rem" />
         </button>
         <button type="button" title="ユーザー設定" aria-label="ユーザー設定" @click="router.push({ name: 'UserConfig' })">
@@ -465,14 +488,14 @@ watch(
       </div>
     </header>
     <Transition :name="`month-slide-${monthTransition}`" mode="out-in">
-      <div :key="userStore.nowUsingDate.format('YYYY-MM')" class="month-content">
+      <div :key="userStore.nowUsingDate.format('YYYY-MM')" class="month-content" :style="calendarTextSizeStyle">
         <div class="month-header">
           <div v-for="(map, i) in userStore.daysMap" :key="i" :style="{ color: map.weekendColor ?? undefined }">
             {{ map.label }}
           </div>
         </div>
 
-        <div class="month-grid">
+        <div class="month-grid" :class="{ 'variable-cell-height': userStore.calendarCellHeightMode === 'VARIABLE' }">
           <div
             v-for="(day, idx) in calDaysArray"
             :key="day.key || idx"
@@ -496,9 +519,9 @@ watch(
                 <div
                   v-if="slot"
                   class="event-bar"
-                  :class="{ 'is-start': slot.isStart, 'is-end': slot.isEnd, 'is-continued': !slot.isStart, 'is-label-start': slot.isLabelStart }"
+                  :class="{ 'is-start': slot.isStart, 'is-end': slot.isEnd, 'is-continued': !slot.isStart, 'is-label-start': slot.isLabelStart, 'is-touch-background': userStore.isMobile || userStore.isTablet }"
                   :style="{ backgroundColor: getEventBarColor(slot.event), width: slot.isLabelStart ? `calc(${slot.spanDays * 100}% + ${(slot.spanDays - 1) * 4}px)` : undefined }"
-                  @click.stop="(e) => handleEventClick(e, slot.event, day.date)"
+                  @click="(e) => handleEventClick(e, slot.event, day.date)"
                   @mousedown.stop>
                   <span v-if="slot.isLabelStart">
                     {{ slot.event.icon ?? '📌' }}{{ slot.event.summary }}
@@ -507,7 +530,7 @@ watch(
                 </div>
               </div>
             </div>
-            <span v-if="getHiddenEventCount(day.date) > 0" class="hidden-event-count">+{{ getHiddenEventCount(day.date) }}</span>
+            <span v-if="getHiddenEventCount(day.date) > 0" class="hidden-event-count" :aria-label="`非表示の予定 ${getHiddenEventCount(day.date)}件`"> +{{ getHiddenEventCount(day.date) }} </span>
           </div>
         </div>
       </div>
@@ -520,7 +543,10 @@ watch(
 </template>
 
 <style lang="scss" scoped>
+$event-bar-radius: 4px;
+
 .month-horizontal-view {
+  --calendar-cell-min-height: calc(100px + 2px + 2px + 1px);
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -534,6 +560,7 @@ watch(
     min-height: calc(100% - 54px);
     flex-direction: column;
     overflow: visible;
+    font-family: var(--calendar-font-family);
   }
 
   .month-slide-prev-enter-active,
@@ -575,11 +602,11 @@ watch(
   .month-toolbar {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    padding: var(--space-sm) var(--space-md);
-    border-bottom: 1px solid var(--border);
+    padding: var(--space-xs) var(--space-md);
     background: var(--bg-0);
-    height: calc(54px - var(--space-sm) * 2 - 1px) /* ツールバーの高さ - 上下パディング - ボーダー幅 */;
-
+    @media (max-width: 768px) {
+      padding: var(--space-xxs) var(--space-xs);
+    }
     button {
       background-color: var(--bg-0);
 
@@ -592,7 +619,9 @@ watch(
       display: flex;
       align-items: center;
       gap: var(--space-xs);
-
+      @media (max-width: 768px) {
+        gap: 0;
+      }
       &:nth-child(3) {
         justify-content: flex-end;
       }
@@ -600,8 +629,12 @@ watch(
 
     h1 {
       font-size: var(--text-size-xl);
-      line-height: 1.4;
-      text-align: center;
+      @media (max-width: 768px) {
+        font-size: var(--text-size-lg);
+      }
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
   }
 
@@ -618,6 +651,10 @@ watch(
       &:hover {
         background: var(--bg-2);
       }
+
+      &.is-syncing .icon-arrows-rotate {
+        animation: calendar-sync-spin 0.8s linear infinite;
+      }
     }
   }
 
@@ -631,24 +668,24 @@ watch(
     position: sticky;
     top: 0;
     z-index: 10;
-
-    div {
-      padding: 8px 0;
-      border-right: 1px solid var(--bg-2);
-    }
   }
 
   .month-grid {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
-    grid-auto-rows: minmax(100px, 1fr);
+    grid-auto-rows: var(--calendar-cell-min-height);
     flex: 1 0 auto;
     min-height: 0;
+    overflow: hidden;
+
+    &.variable-cell-height {
+      grid-auto-rows: minmax(var(--calendar-cell-min-height), auto);
+    }
   }
 
   .day-cell {
-    min-height: 100px;
-    border-right: 1px solid var(--border);
+    min-height: var(--calendar-cell-min-height);
+    box-sizing: border-box;
     border-bottom: 1px solid var(--border);
     position: relative;
     padding: 2px;
@@ -664,11 +701,11 @@ watch(
     }
 
     &.is-today .day-num {
-      background: #94111180;
+      background: #2b941180;
       color: white;
       border-radius: 50%;
-      width: 24px;
-      height: 24px;
+      width: var(--space-lg);
+      height: var(--space-lg);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -680,21 +717,22 @@ watch(
 
     .day-num {
       position: absolute;
-      top: 4px;
-      left: 4px;
-      font-size: 0.8rem;
+      top: 0;
+      left: 2px;
+      font-size: var(--text-size-sm);
       font-weight: bold;
       z-index: 1;
     }
 
     .events-stack {
-      margin-top: 28px;
+      margin-top: 24px;
       display: flex;
       flex-direction: column;
       gap: 2px;
 
       .event-slot {
         height: 18px;
+        min-width: 0;
       }
 
       .event-bar {
@@ -702,17 +740,30 @@ watch(
         align-items: center;
         background: var(--primary);
         color: white;
-        border-radius: 4px;
-        font-size: 0.75rem;
+        border-radius: $event-bar-radius;
+        font-size: var(--text-size-xs);
         height: 100%;
+        box-sizing: border-box;
         cursor: pointer;
         overflow: hidden;
         white-space: nowrap;
         text-overflow: ellipsis;
 
+        &.is-touch-background {
+          pointer-events: none;
+          cursor: default;
+        }
+
+        > span {
+          height: 100%;
+          line-height: 16px;
+        }
+
         &.is-label-start {
           position: relative;
           z-index: 1;
+          border-top-right-radius: $event-bar-radius;
+          border-bottom-right-radius: $event-bar-radius;
         }
 
         &.is-continued {
@@ -724,16 +775,16 @@ watch(
         }
 
         &.is-start {
-          border-top-left-radius: 4px;
-          border-bottom-left-radius: 4px;
+          border-top-left-radius: $event-bar-radius;
+          border-bottom-left-radius: $event-bar-radius;
         }
 
         &.is-end {
-          border-top-right-radius: 4px;
-          border-bottom-right-radius: 4px;
+          border-top-right-radius: $event-bar-radius;
+          border-bottom-right-radius: $event-bar-radius;
         }
 
-        &:not(.is-end) {
+        &:not(.is-end):not(.is-label-start) {
           border-top-right-radius: 0;
           border-bottom-right-radius: 0;
           margin-right: -4px;
@@ -757,6 +808,13 @@ watch(
       font-size: var(--text-size-sm);
       font-weight: bold;
       line-height: 1.2;
+      opacity: 0.62;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    &.is-selected .hidden-event-count {
+      opacity: 1;
     }
 
     .cell-icons {
@@ -772,6 +830,12 @@ watch(
         right: auto;
       }
     }
+  }
+}
+
+@keyframes calendar-sync-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 </style>

@@ -14,6 +14,8 @@ import IconClock from '@/components/icons/IconClock.vue';
 import IconAlignLeft from '@/components/icons/IconAlignLeft.vue';
 import IconUserCheck from '@/components/icons/IconUserCheck.vue';
 import IconAnglesDown from '@/components/icons/IconAnglesDown.vue';
+import IconClone from '@/components/icons/IconClone.vue';
+import IconArrowUpRightFromSquare from '@/components/icons/IconArrowUpRightFromSquare.vue';
 
 const router = useRouter();
 const eventStore = useEventStore();
@@ -50,10 +52,10 @@ function howLongBeforeEvent(startDateTime, endDateTime) {
   const now = dayjs();
   const s = startDateTime;
   const e = endDateTime;
-  const monthsAgo = now.diff(s, 'month');   // 何か月前
-  const weeksAgo  = now.diff(s, 'week');    // 何週間前
-  const daysAgo   = now.diff(s, 'day');     // 何日前
-  const hoursAgo  = now.diff(s, 'hour');    // 何時間前
+  const monthsAgo = now.diff(s, 'month'); // 何か月前
+  const weeksAgo = now.diff(s, 'week'); // 何週間前
+  const daysAgo = now.diff(s, 'day'); // 何日前
+  const hoursAgo = now.diff(s, 'hour'); // 何時間前
   const minutesAgo = now.diff(s, 'minute'); // 何分前
   const secondsAgo = now.diff(s, 'second'); // 何秒前
 
@@ -151,12 +153,15 @@ onMounted(async () => {
     <article v-if="!!event">
       <div class="heading">
         <h2>{{ event.icon ?? '📌' }}{{ event?.summary }}</h2>
+        <button title="タイトルをコピー" @click="userStore.writeClipboard(event?.summary ?? '')">
+          <IconClone size="1rem" />
+        </button>
         <div class="calendar-ribbon-wrapper">
           <CalendarRibbon :gCalendarId="event?.calendarId" />
         </div>
       </div>
       <dl>
-        <div>
+        <section>
           <dt>
             <IconClock />
           </dt>
@@ -166,24 +171,36 @@ onMounted(async () => {
             <span>{{ dateText.endText }}</span>
             <small>{{ dateText.duration }}（{{ event?.raw.start?.timeZone ?? 'タイムゾーン利用不可' }}）</small>
           </dd>
-        </div>
-        <div v-if="event?.location">
+          <button title="日時をコピー" @click="userStore.writeClipboard(`${dateText.startText} ~ ${dateText.endText}`)">
+            <IconClone size="1rem" />
+          </button>
+        </section>
+        <section v-if="event?.location">
           <dt>
             <IconLocationDot />
           </dt>
-          <dd>{{ event?.location }}</dd>
-        </div>
-        <div v-if="event?.description">
+          <dd>
+            {{ event.location }}
+          </dd>
+          <button title="場所をコピー" @click="userStore.writeClipboard(event?.location ?? '')">
+            <IconClone size="1rem" />
+          </button>
+        </section>
+        <section v-if="event?.description">
           <dt>
             <IconAlignLeft />
           </dt>
           <dd>{{ event.description }}</dd>
-        </div>
+          <button title="説明をコピー" @click="userStore.writeClipboard(event?.description ?? '')">
+            <IconClone size="1rem" />
+          </button>
+        </section>
       </dl>
       <dl v-if="myAttendee">
         <div>
           <dt><IconUserCheck /></dt>
-          <dd>参加承諾:
+          <dd>
+            参加承諾:
             <span data-response-status="accepted" v-if="myAttendee.responseStatus === 'accepted'">承諾済み</span>
             <span data-response-status="declined" v-else-if="myAttendee.responseStatus === 'declined'">辞退済み</span>
             <span data-response-status="needsAction" v-else>未回答</span>
@@ -219,6 +236,9 @@ onMounted(async () => {
           </li>
           <li>
             Google Calendar URL: <span class="inline-text">{{ event.raw.htmlLink ?? 'Unavailable' }}</span>
+            <a v-if="event.raw.htmlLink" :href="event.raw.htmlLink" target="_blank" rel="noopener noreferrer">
+              <IconArrowUpRightFromSquare size="1rem" />
+            </a>
           </li>
           <li>
             Created: <span class="inline-text">{{ event.raw.created ?? 'Unavailable' }}</span>
@@ -269,44 +289,52 @@ onMounted(async () => {
   border-bottom: 1px solid var(--border);
   padding-bottom: var(--space-sm);
   margin-bottom: var(--space-md);
+  position: relative;
 
   h2 {
     font-size: var(--text-size-lg);
     font-weight: bold;
-    padding: var(--space-xs) var(--space-sm);
+    padding: var(--space-xs) calc(var(--space-sm) * 2 + 1rem) var(--space-sm) var(--space-xs); // 右は余白に加えてボタンの分だけ余白を空ける
   }
 
   .calendar-ribbon-wrapper {
     margin-left: var(--space-sm);
   }
-}
 
-dt {
-  color: var(--text-light);
-  font-size: 0.9rem;
+  button {
+    position: absolute;
+    right: 0;
+    top: 0;
+    background-color: var(--bg-1);
+    &:hover {
+      background-color: var(--bg-2);
+    }
+  }
 }
 
 dl {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  padding-top: var(--space-sm);
 
-  div {
-    display: grid;
-    grid-template-columns: var(--space-md) 1fr;
-    gap: var(--space-sm);
+  section {
     border: 1px solid var(--border);
     border-radius: var(--border-radius);
-    padding: var(--space-xs) var(--space-sm);
+    padding: var(--space-xs) calc(var(--space-sm) * 2 + 1rem) var(--space-xs) var(--space-sm); // 右はボタンの分と gap だけ余白を空ける
+    position: relative;
+    display: flex;
+    gap: var(--space-sm);
 
     dt {
       display: flex;
       justify-content: center;
       align-items: center;
+      color: var(--text-light);
+      font-size: 0.9rem;
     }
 
     dd {
+      flex-grow: 1;
       word-break: break-all;
 
       &.date-text {
@@ -315,9 +343,20 @@ dl {
         align-items: center;
       }
     }
+
+    button {
+      position: absolute;
+      right: 0;
+      top: 0;
+      background-color: var(--bg-1);
+      &:hover {
+        background-color: var(--bg-2);
+      }
+    }
   }
 }
-small, .attendance-section p {
+small,
+.attendance-section p {
   color: var(--text-light);
   font-size: var(--text-size-sm);
 }

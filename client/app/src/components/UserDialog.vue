@@ -20,50 +20,50 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 
 <template>
   <Teleport to="body">
-    <Transition name="user-dialog">
-      <div v-if="userStore.isUserDialogOpen" class="user-dialog-backdrop" role="presentation" @click.self="userStore.closeUserDialog">
-        <section class="user-dialog" role="dialog" aria-modal="true" :aria-label="userStore.userDialogTitle">
-          <header class="user-dialog-header">
+    <Transition name="app-user-dialog">
+      <div class="backdrop" role="presentation" v-if="userStore.isUserDialogOpen" @click.self="userStore.closeUserDialog">
+        <dialog open aria-modal="true" :aria-label="userStore.userDialogTitle">
+          <header>
             <h2>{{ userStore.userDialogTitle }}</h2>
-            <button type="button" class="close-button" aria-label="Close" @click="userStore.closeUserDialog">
-              <span aria-hidden="true">
-                <IconXMark />
-              </span>
+            <button type="button" aria-label="Close" aria-hidden="true" @click="userStore.closeUserDialog">
+              <IconXMark />
             </button>
           </header>
 
-          <p v-if="userStore.userDialogMessage" class="user-dialog-message">
+          <main v-if="userStore.userDialogMessage" class="dialog-message">
             {{ userStore.userDialogMessage }}
-          </p>
+          </main>
 
-          <div v-if="userStore.userDialogType === 'CONFIRM'" class="user-dialog-actions">
-            <button type="button" class="confirm-button" @click="userStore.resolveConfirm(true)">YES</button>
-            <button type="button" class="cancel-button" @click="userStore.resolveConfirm(false)">NO</button>
-          </div>
+          <footer v-if="userStore.userDialogType === 'CONFIRM'" class="dialog-actions">
+            <button data-app-button="secondary" type="button" class="cancel-button" @click="userStore.resolveConfirm(false)">NO</button>
+            <button data-app-button="primary" type="button" class="confirm-button" @click="userStore.resolveConfirm(true)">YES</button>
+          </footer>
 
-          <div v-else class="user-dialog-content">
+          <footer v-else class="dialog-content">
             <GoogleLogout />
             <GoogleLogin />
-          </div>
-        </section>
+          </footer>
+        </dialog>
       </div>
     </Transition>
   </Teleport>
 </template>
 
 <style lang="scss" scoped>
-.user-dialog-backdrop {
+.backdrop {
   position: fixed;
   inset: 0;
   z-index: 10000;
   display: grid;
   place-items: center;
-  padding: 1rem;
+  padding: var(--space-md);
   background-color: var(--overlay);
 }
 
-.user-dialog {
-  width: min(100%, 28rem);
+dialog {
+  position: relative;
+  margin: 0;
+  width: min(calc(100% - 2px), 32rem);
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--border-radius);
@@ -71,91 +71,58 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
   box-shadow: 0 0.75rem 2rem var(--shadow);
 }
 
-.user-dialog-header {
+header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 1rem 1.25rem;
+  padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--border);
 
   h2 {
-    font-size: 1.2rem;
+    font-size: var(--text-size-lg);
+  }
+
+  button {
+    background: var(--bg-1);
+
+    &:hover {
+      background-color: var(--bg-2);
+    }
   }
 }
 
-.close-button {
-  width: 2rem;
-  height: 2rem;
-  justify-content: center;
-  border-radius: 50%;
-  font-size: 1.6rem;
-
-  &:hover {
-    background-color: var(--bg-2);
-  }
+.dialog-message,
+.dialog-content {
+  padding: var(--space-lg) var(--space-md);
 }
 
-.user-dialog-message,
-.user-dialog-content {
-  padding: 1rem 1.25rem;
-}
-
-.user-dialog-message {
-  padding-bottom: 0;
-}
-
-.user-dialog-actions {
+.dialog-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1rem 1.25rem;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
 }
 
-.confirm-button,
-.cancel-button {
-  min-width: 4rem;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--border-radius);
-}
-
-.confirm-button {
-  border-color: var(--primary);
-  background-color: var(--primary);
-  color: var(--bg-1);
-}
-
-.cancel-button:hover {
-  background-color: var(--bg-2);
-}
-
-.user-dialog-content {
+.dialog-content {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-
-  :deep(.google-login-button) {
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--primary);
-    border-radius: var(--border-radius);
-  }
+  gap: var(--space-sm);
 }
 
-.user-dialog-enter-active,
-.user-dialog-leave-active {
+.app-user-dialog-enter-active,
+.app-user-dialog-leave-active {
   transition: opacity 0.15s ease;
 
-  .user-dialog {
+  .app-user-dialog {
     transition: transform 0.15s ease;
   }
 }
 
-.user-dialog-enter-from,
-.user-dialog-leave-to {
+.app-user-dialog-enter-from,
+.app-user-dialog-leave-to {
   opacity: 0;
 
-  .user-dialog {
+  .app-user-dialog {
     transform: translateY(-0.5rem);
   }
 }
