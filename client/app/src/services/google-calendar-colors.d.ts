@@ -53,5 +53,8 @@ export interface GoogleCalendarColorInfo {
 /** カレンダーリストの Color ID から色情報を取得します。 */
 export function getCalendarListColorInfoById(colorId: GoogleCalendarListColorId): GoogleCalendarColorInfo | undefined;
 
+/** カレンダーリストの色情報から Color ID を取得します。 */
+export function getCalendarListColorIdByColor(color: string): GoogleCalendarListColorId | undefined;
+
 /** イベントの Color ID から色情報を取得します。 */
 export function getCalendarEventColorInfoById(colorId: GoogleCalendarEventColorId): GoogleCalendarColorInfo | undefined;

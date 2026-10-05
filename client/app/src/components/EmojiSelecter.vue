@@ -2,6 +2,7 @@
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue';
 import emojiData from '@/assets/emoji-data.json';
 import { readOffline, writeOffline } from '@/services/offline-storage.js';
+import IconXMark from '@/components/icons/IconXMark.vue';
 
 const props = defineProps({
   modelValue: {
@@ -21,6 +22,7 @@ const historyKey = 'emoji-history';
 const storageKey = 'emoji-category-overrides';
 const maxHistory = 48;
 const historyList = ref([]);
+const pickedEmoji = ref(null);
 
 const loadOverrides = async () => {
   const saved = await readOffline(storageKey, {});
@@ -74,33 +76,23 @@ const addToHistory = (emoji) => {
 
 const matchesQuery = (item, query) => {
   if (!query) return true;
-  const haystack = [
-    item.nameJa,
-    item.nameEn,
-    categoryLabelMap.value[item.category] || '',
-  ].join(' ').toLowerCase();
+  const haystack = [item.nameJa, item.nameEn, categoryLabelMap.value[item.category] || ''].join(' ').toLowerCase();
   return query.split(/\s+/).every((token) => haystack.includes(token));
 };
 
 const filteredGroups = computed(() => {
   const query = search.value.trim().toLowerCase();
   const historyLabel = categoryLabelMap.value.history || '履歴';
-  const historyItems = historyList.value
-    .map((char) => normalizedItems.value.find((item) => item.char === char))
-    .filter((item) => item && matchesQuery(item, query));
+  const historyItems = historyList.value.map((char) => normalizedItems.value.find((item) => item.char === char)).filter((item) => item && matchesQuery(item, query));
 
   const baseGroups = categories
     .filter((category) => category.id !== 'history')
     .map((category) => ({
       ...category,
-      items: normalizedItems.value.filter(
-        (item) => item.category === category.id && matchesQuery(item, query),
-      ),
+      items: normalizedItems.value.filter((item) => item.category === category.id && matchesQuery(item, query)),
     }));
 
-  const grouped = historyItems.length
-    ? [{ id: 'history', label: historyLabel, items: historyItems }, ...baseGroups]
-    : baseGroups;
+  const grouped = historyItems.length ? [{ id: 'history', label: historyLabel, items: historyItems }, ...baseGroups] : baseGroups;
 
   return grouped.filter((group) => group.items.length > 0);
 });
@@ -116,9 +108,7 @@ const selectedItem = computed(() => {
 
 const previewCodepoints = computed(() => {
   if (!props.modelValue) return '';
-  return [...props.modelValue]
-    .map((char) => `U+${char.codePointAt(0).toString(16).toUpperCase()}`)
-    .join(' ');
+  return [...props.modelValue].map((char) => `U+${char.codePointAt(0).toString(16).toUpperCase()}`).join(' ');
 });
 
 const selectEmoji = (emoji) => {
@@ -143,6 +133,7 @@ const randomEmoji = () => {
   if (!list.length) return;
   const index = Math.floor(Math.random() * list.length);
   const picked = list[index].char;
+  pickedEmoji.value = picked;
   addToHistory(picked);
   emit('update:modelValue', picked);
 };
@@ -193,7 +184,7 @@ onBeforeUnmount(() => {
   <div class="emoji-selecter">
     <button type="button" class="open-btn" @click="openModal">
       <span v-if="modelValue" class="open-emoji">{{ modelValue }}</span>
-      <span class="open-label">絵文字を選択</span>
+      <span v-else class="open-label">📌</span>
     </button>
 
     <Teleport to="body">
@@ -202,19 +193,16 @@ onBeforeUnmount(() => {
           <header class="modal-header">
             <h3>絵文字を選択</h3>
             <button type="button" class="close-btn" @click="closeModal" aria-label="閉じる">
-              ×
+              <IconXMark />
             </button>
           </header>
           <div class="modal-body">
             <div class="control-row">
-              <input ref="searchInput" v-model="search" type="text" class="search-input" placeholder="絵文字を検索"
-                aria-label="絵文字の検索" />
-              <button type="button" class="random-btn" @click="randomEmoji">
-                ランダム
-              </button>
+              <input ref="searchInput" v-model="search" type="text" class="search-input" placeholder="絵文字を検索" aria-label="絵文字の検索" />
+              <button type="button" class="random-btn" @click="randomEmoji">ランダム</button>
             </div>
 
-            <div class="preview" v-if="modelValue">
+            <!-- <div class="preview" v-if="modelValue">
               <div class="preview-emoji">{{ modelValue }}</div>
               <div class="preview-meta">
                 <div class="preview-code">{{ previewCodepoints }}</div>
@@ -222,25 +210,23 @@ onBeforeUnmount(() => {
                   {{ selectedItem.nameJa }} / {{ selectedItem.nameEn }}
                 </div>
               </div>
-            </div>
+            </div> -->
 
             <div v-if="selectedItem" class="category-editor">
-              <label for="emoji-category">カテゴリ</label>
+              <label for="emoji-category">カテゴリを選択:</label>
               <select id="emoji-category" :value="selectedItem.category" @change="updateCategory">
                 <option v-for="category in editableCategories" :key="category.id" :value="category.id">
                   {{ category.label }}
                 </option>
               </select>
-              <button type="button" class="reset-btn" @click="resetCategory">デフォルト</button>
+              <button type="button" class="reset-btn" @click="resetCategory">デフォルトにする</button>
             </div>
 
             <div v-if="filteredGroups.length" class="groups">
               <section v-for="group in filteredGroups" :key="group.id" class="group">
                 <div class="group-label">{{ group.label }}</div>
                 <div class="emoji-grid">
-                  <button v-for="item in group.items" :key="item.name" type="button" class="emoji-btn"
-                    :class="{ active: item.char === modelValue }" @click="selectEmoji(item.char)"
-                    :aria-label="item.nameJa">
+                  <button v-for="item in group.items" :key="item.name" type="button" class="emoji-btn" :class="{ active: item.char === modelValue }" @click="selectEmoji(item.char)" :aria-label="item.nameJa">
                     {{ item.char }}
                   </button>
                 </div>
@@ -256,29 +242,20 @@ onBeforeUnmount(() => {
 </template>
 
 <style lang="scss" scoped>
-.emoji-selecter {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
 .open-btn {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: var(--space-sm);
+  padding: calc(var(--space-xs) - 1px) var(--space-md);
   border-radius: var(--border-radius);
   border: 1px solid var(--border);
   background: var(--bg-1);
   cursor: pointer;
 }
 
-.open-emoji {
-  font-size: 22px;
-}
-
+.open-emoji,
 .open-label {
-  font-size: 0.95rem;
+  font-size: var(--text-size-sm);
 }
 
 .emoji-modal-overlay {
@@ -288,7 +265,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: var(--space-md);
   z-index: 1200;
 }
 
@@ -296,7 +273,7 @@ onBeforeUnmount(() => {
   width: min(720px, 100%);
   max-height: min(80vh, 720px);
   background: var(--bg-0);
-  border-radius: 16px;
+  border-radius: var(--border-radius);
   border: 1px solid var(--border);
   box-shadow: 0 24px 60px var(--shadow);
   display: flex;
@@ -308,8 +285,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--border);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-1);
 }
 
 .modal-header h3 {
@@ -318,9 +295,7 @@ onBeforeUnmount(() => {
 }
 
 .close-btn {
-  border: 1px solid var(--border);
-  background: var(--bg-1);
-  border-radius: 999px;
+  border-radius: 50%;
   width: 32px;
   height: 32px;
   cursor: pointer;
@@ -331,109 +306,118 @@ onBeforeUnmount(() => {
 }
 
 .modal-body {
-  padding: 16px 18px 20px;
+  padding: var(--space-sm) var(--space-md) var(--space-lg);
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-sm);
 }
 
 .control-row {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
   align-items: center;
 }
 
 .search-input {
   flex: 1;
-  padding: 8px 12px;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-1);
   border-radius: var(--border-radius);
 }
 
 .random-btn {
-  padding: 8px 12px;
+  padding: calc(var(--space-xs) - 1px) var(--space-sm);
   border-radius: var(--border-radius);
+  border: 1px solid var(--border);
+  background: var(--bg-1);
   cursor: pointer;
   white-space: nowrap;
 }
 
-.preview {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  border-radius: var(--border-radius);
-  background: var(--bg-1);
-  border: 1px solid var(--border);
-}
+// .preview {
+//   display: flex;
+//   align-items: center;
+//   gap: var(--space-sm);
+//   padding: var(--space-xs) var(--space-sm);
+//   border-radius: var(--border-radius);
+//   background: var(--bg-1);
+//   border: 1px solid var(--border);
+// }
 
-.preview-emoji {
-  font-size: 28px;
-}
+// .preview-emoji {
+//   font-size: var(--text-size-xl);
+// }
 
-.preview-code {
-  font-size: 0.85rem;
-  color: var(--text-light);
-}
+// .preview-code {
+//   font-size: var(--text-size-sm);
+//   color: var(--text-light);
+// }
 
-.preview-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
+// .preview-meta {
+//   display: flex;
+//   flex-direction: column;
+//   gap: var(--space-xxs);
+// }
 
-.preview-name {
-  font-size: 0.85rem;
-  color: var(--text);
-}
+// .preview-name {
+//   font-size: var(--text-size-sm);
+//   color: var(--text);
+// }
 
 .category-editor {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.9rem;
+  gap: var(--space-sm);
+  font-size: var(--text-size-sm);
 }
 
 .category-editor select {
-  padding: 6px 8px;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-1);
   border-radius: var(--border-radius);
 }
 
 .reset-btn {
-  padding: 6px 10px;
+  padding: calc(var(--space-xs) - 1px) var(--space-sm);
   border-radius: var(--border-radius);
+  border: 1px solid var(--border);
   cursor: pointer;
+  background: var(--bg-1);
 }
 
 .groups {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-sm);
 }
 
 .group-label {
-  font-size: 0.85rem;
+  font-size: var(--text-size-sm);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-light);
-  margin-bottom: 6px;
+  margin-bottom: var(--space-xxs);
 }
 
 .emoji-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
-  gap: 6px;
 }
 
 .emoji-btn {
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--border-radius);
   cursor: pointer;
-  font-size: 20px;
+  font-size: var(--text-size-xxl);
   height: 36px;
   display: grid;
   place-items: center;
-  transition: transform 0.1s, border-color 0.1s;
+  transition:
+    transform 0.1s,
+    border-color 0.1s;
 
   &:hover {
     transform: translateY(-1px);
@@ -447,7 +431,7 @@ onBeforeUnmount(() => {
 }
 
 .empty-state {
-  font-size: 0.9rem;
+  font-size: var(--text-size-sm);
   color: var(--text-light);
 }
 </style>

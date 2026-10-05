@@ -29,7 +29,7 @@ const form = reactive({ scopeType: 'user', value: '', role: 'reader' });
 
 const theCalendarId = computed(() => {
   const requestedId = typeof route.query.cid === 'string' ? route.query.cid : '';
-  return calendarStore.listWritableCalendars.some((cal) => cal.id === requestedId) ? requestedId : calendarStore.listWritableCalendars[0]?.id ?? '';
+  return calendarStore.listWritableCalendars.some((cal) => cal.id === requestedId) ? requestedId : (calendarStore.listWritableCalendars[0]?.id ?? '');
 });
 const theCalendar = computed(() => calendarStore.listWritableCalendars.find((cal) => cal.id === theCalendarId.value));
 
@@ -118,12 +118,12 @@ async function updateRule(rule, role) {
 /** @param {GoogleCalendarAclRule} rule @param {Event} event 権限選択イベント */
 function onRuleRoleChange(rule, event) {
   const select = /** @type {HTMLSelectElement} */ (event.currentTarget ?? event.target);
-  updateRule(rule, /** @type {GoogleCalendarAclRule['role']} */(select.value));
+  updateRule(rule, /** @type {GoogleCalendarAclRule['role']} */ (select.value));
 }
 
 /** @param {GoogleCalendarAclRule} rule */
 async function removeRule(rule) {
-  if (!await userStore.confirm({ title: '共有設定を削除', message: `${scopeLabel(rule.scope)} の共有設定を削除しますか？` })) return;
+  if (!(await userStore.confirm({ title: '共有設定を削除', message: `${scopeLabel(rule.scope)} の共有設定を削除しますか？` }))) return;
   savingRuleId.value = rule.id;
   try {
     await gCalAPI.deleteAcl(authStore.token, theCalendarId.value, rule.id);
@@ -152,16 +152,12 @@ watch([theCalendarId, () => authStore.token], loadRules, { immediate: true });
       カレンダーを共有するユーザーを管理
     </MenuBar>
 
-    <AskLoginMessage v-if="!authStore.isAuthenticated">
-      共有設定を行うには Google アカウントでログインする必要があります
-    </AskLoginMessage>
+    <AskLoginMessage v-if="!authStore.isAuthenticated"> 共有設定を行うには Google アカウントでログインする必要があります </AskLoginMessage>
 
     <section v-if="authStore.isAuthenticated">
       <label class="calendar-select">
-        <select :value="theCalendarId" :disabled="!calendarStore.listWritableCalendars.length"
-          @change="onSelectCalendar($event)">
-          <option v-for="cal in calendarStore.listWritableCalendars" :key="cal.id" :value="cal.id">{{ cal.summary }}
-          </option>
+        <select :value="theCalendarId" :disabled="!calendarStore.listWritableCalendars.length" @change="onSelectCalendar($event)">
+          <option v-for="cal in calendarStore.listWritableCalendars" :key="cal.id" :value="cal.id">{{ cal.summary }}</option>
         </select>
         <small>設定対象のカレンダー:</small>
         <div class="calendar-ribbon-wrapper" v-if="theCalendar">
@@ -174,7 +170,6 @@ watch([theCalendarId, () => authStore.token], loadRules, { immediate: true });
       <template v-else>
         <div class="sharing">
           <form @submit.prevent="addRule">
-
             <div class="heading">
               <IconUserPlus />
               <h2>共有相手を追加</h2>
@@ -194,21 +189,18 @@ watch([theCalendarId, () => authStore.token], loadRules, { immediate: true });
                 <label>
                   権限
                   <select v-model="form.role">
-                    <option v-for="option in roleOptions" :key="option.value" :value="option.value">{{ option.label }}
-                    </option>
+                    <option v-for="option in roleOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
                   </select>
                 </label>
               </div>
               <div>
-                <label v-if="form.scopeType !== 'default'">メールアドレス / ドメイン
-                  <input v-model="form.value" type="text"
-                    :placeholder="form.scopeType === 'domain' ? 'example.com' : 'name@example.com'" />
+                <label v-if="form.scopeType !== 'default'"
+                  >メールアドレス / ドメイン
+                  <input v-model="form.value" type="text" :placeholder="form.scopeType === 'domain' ? 'example.com' : 'name@example.com'" />
                 </label>
               </div>
               <div>
-                <button data-app-button="primary" type="submit" :disabled="isLoading">
-                  <IconUserPlus />追加
-                </button>
+                <button data-app-button="primary" type="submit" :disabled="isLoading"><IconUserPlus />追加</button>
               </div>
             </div>
             <p v-if="formError" class="error">{{ formError }}</p>
@@ -216,9 +208,9 @@ watch([theCalendarId, () => authStore.token], loadRules, { immediate: true });
         </div>
 
         <div class="rules">
-
           <div class="heading">
-            <h2>共有中のユーザー</h2><span>{{ aclRules.length }}件</span>
+            <h2>共有中のユーザー</h2>
+            <span>{{ aclRules.length }}件</span>
           </div>
 
           <ul>
@@ -228,15 +220,13 @@ watch([theCalendarId, () => authStore.token], loadRules, { immediate: true });
                 <small>{{ rule.scope?.type }}</small>
               </div>
               <span v-if="rule.role === 'owner'" class="owner-label">所有者</span>
-              <select v-else :value="rule.role" :disabled="savingRuleId === rule.id"
-                @change="onRuleRoleChange(rule, $event)">
+              <select v-else :value="rule.role" :disabled="savingRuleId === rule.id" @change="onRuleRoleChange(rule, $event)">
                 <option v-for="option in roleOptions" :key="option.value" :value="option.value">
                   {{ option.label }}
                 </option>
               </select>
               <span v-if="rule.role === 'owner'" class="role-description">{{ roleLabel(rule.role) }}</span>
-              <button class="delete-button" type="button" title="共有設定を削除"
-                :disabled="savingRuleId === rule.id || rule.role === 'owner'" @click="removeRule(rule)">
+              <button class="delete-button" type="button" title="共有設定を削除" :disabled="savingRuleId === rule.id || rule.role === 'owner'" @click="removeRule(rule)">
                 <IconTrash />
               </button>
             </li>

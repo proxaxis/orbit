@@ -40,13 +40,12 @@ function finish() {
   <section class="people-editor">
     <MenuBar>
       <template #main>
-        <h1 class="title">
-          <IconUserPlus />People に登録
-        </h1>
+        <h1 class="title"><IconUserPlus />People に登録</h1>
       </template>
-      <template #sub><button type="button" title="閉じる" @click="finish">
-          <IconXMark />
-        </button></template>
+      <template #sub
+        ><button type="button" title="閉じる" @click="finish">
+          <IconXMark /></button
+      ></template>
     </MenuBar>
     <form v-if="people.length" @submit.prevent="savePeople">
       <fieldset v-for="person in people" :key="person.email">
@@ -58,8 +57,9 @@ function finish() {
       </fieldset>
       <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
       <p v-if="savedMessage" class="saved">{{ savedMessage }}</p>
-      <div class="actions"><button type="button" @click="finish">スキップ</button><button data-app-button="primary"
-          type="submit" :disabled="isSaving">{{ isSaving ? '登録中...' : '登録' }}</button></div>
+      <div class="actions">
+        <button type="button" @click="finish">スキップ</button><button data-app-button="primary" type="submit" :disabled="isSaving">{{ isSaving ? '登録中...' : '登録' }}</button>
+      </div>
     </form>
     <p v-else class="empty">登録するユーザーはいません。</p>
   </section>

@@ -21,7 +21,7 @@ const errorOnCalendarId = ref(null);
 
 const vmForm = reactive({
   calendarId: '',
-  color: getRandomCalendarListColorId().background,
+  colorId: getRandomCalendarListColorId().colorId,
 });
 
 /** @returns {boolean} @description 入力されたカレンダー ID の形式を検証 */
@@ -52,8 +52,7 @@ async function submit() {
     userStore.setLoading(true, 'Adding calendar...');
     const body = {
       id: vmForm.calendarId.trim(),
-      backgroundColor: vmForm.color,
-      foregroundColor: '#000000',
+      colorId: vmForm.colorId,
       colorRgbFormat: true,
       selected: true,
     };
@@ -72,9 +71,7 @@ async function submit() {
   <div class="calendar-adder">
     <MenuBar>
       <template #main>
-        <h1 class="title">
-          <IconCalendar />他のカレンダーを追加
-        </h1>
+        <h1 class="title"><IconCalendar />他のカレンダーを追加</h1>
       </template>
       <template #sub>
         <button type="button" title="閉じる" @click="router.back">
@@ -93,13 +90,13 @@ async function submit() {
     <form v-else @submit.prevent="submit">
       <label>
         カレンダー ID
-        <input v-model="vmForm.calendarId" autofocus required autocomplete="off"
-          placeholder="example@group.calendar.google.com" @input="validateCalendarId" />
+        <input v-model="vmForm.calendarId" autofocus required autocomplete="off" placeholder="example@group.calendar.google.com" @input="validateCalendarId" />
         <small>Google カレンダーの "カレンダーの設定と共有" に表示される ID を入力してください</small>
         <p v-if="errorOnCalendarId" class="error" role="alert">{{ errorOnCalendarId }}</p>
       </label>
-      <label>表示色
-        <ColorPicker v-model="vmForm.color" />
+      <label
+        >表示色
+        <ColorPicker v-model="vmForm.colorId" />
       </label>
       <div class="actions">
         <button type="button" @click="router.back">キャンセル</button>

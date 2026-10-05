@@ -236,6 +236,24 @@ export const useUserStore = defineStore('user', () => {
   /** @type {Ref<number>} @description 月表示のセルに表示するイベントバーの最大本数 */
   const maxEventBarsPerCell = ref(3);
 
+  /** @type {Ref<string[]>} 最近使ったイベントタイトル */
+  const recentEventTitles = ref([]);
+
+  /** @param {string} title 保存するイベントタイトル */
+  function rememberEventTitle(title) {
+    const normalizedTitle = title.trim();
+    if (!normalizedTitle) return;
+    recentEventTitles.value = [normalizedTitle, ...recentEventTitles.value.filter((item) => item !== normalizedTitle)].slice(0, 30);
+    writeOffline('recent-event-titles', recentEventTitles.value);
+  }
+
+  /** @param {string} query @returns {string[]} 入力に一致するタイトル候補 */
+  function getRecentEventTitleSuggestions(query) {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return recentEventTitles.value.slice(0, 8);
+    return recentEventTitles.value.filter((title) => title.toLowerCase().includes(normalizedQuery)).slice(0, 8);
+  }
+
   async function saveSettings() {
     await writeOffline(USER_SETTINGS_KEY, {
       theme: userSelectedTheme.value,
@@ -336,6 +354,9 @@ export const useUserStore = defineStore('user', () => {
   }
 
   const settingsReady = loadSettings();
+  readOffline('recent-event-titles', []).then((titles) => {
+    if (Array.isArray(titles)) recentEventTitles.value = titles.filter((title) => typeof title === 'string').slice(0, 30);
+  });
 
   /** @type {Ref<import('dayjs').Dayjs>} @description 現在表示している日付 */
   const nowUsingDate = ref(dayjs());
@@ -456,6 +477,9 @@ export const useUserStore = defineStore('user', () => {
     useMiniCalendar,
     useWheelMonthNavigation,
     maxEventBarsPerCell,
+    recentEventTitles,
+    rememberEventTitle,
+    getRecentEventTitleSuggestions,
     winInnerWidth,
     device,
     isMobile,

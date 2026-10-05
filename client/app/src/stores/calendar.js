@@ -45,6 +45,13 @@ export const useCalendarStore = defineStore('calendar', () => {
     writeOffline('calendars', Array.from(_gCalendarsList.value));
   }
 
+  /** @param {string} calendarId カレンダー一覧から除去する ID */
+  function removeCalendar(calendarId) {
+    if (!calendarId) return;
+    _gCalendarsList.value = new Set(list.value.filter((calendar) => calendar.id !== calendarId));
+    writeOffline('calendars', Array.from(_gCalendarsList.value));
+  }
+
   /** @param {string} calendarId @returns {{ colorId?: string; backgroundColor?: string; foregroundColor?: string }} */
   function getCalendarColor(calendarId) {
     const calendar = list.value.find((cal) => cal.id === calendarId);
@@ -81,6 +88,7 @@ export const useCalendarStore = defineStore('calendar', () => {
     listVisibleCalendars,
     addCalendar,
     updateCalendar,
+    removeCalendar,
     getCalendarColor,
     loadCalendars,
   };

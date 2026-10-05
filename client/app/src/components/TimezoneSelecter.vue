@@ -19,13 +19,7 @@ const loadTimezones = () => {
     timezones.value = Intl.supportedValuesOf('timeZone');
   } else {
     // 古いブラウザ向けのフォールバック（主要なもののみ）
-    timezones.value = [
-      'UTC',
-      'Asia/Tokyo',
-      'America/New_York',
-      'Europe/London',
-      'Australia/Sydney',
-    ];
+    timezones.value = ['UTC', 'Asia/Tokyo', 'America/New_York', 'Europe/London', 'Australia/Sydney'];
   }
 };
 
@@ -58,20 +52,18 @@ onMounted(() => {
       </option>
     </select>
 
-    <button title="現在の場所のタイムゾーンを設定" type="button" class="btn-current-location" @click="setLocalTimezone">
-      現在地
-    </button>
+    <button title="現在の場所のタイムゾーンを設定" type="button" class="btn-current-location" @click="setLocalTimezone">現在地</button>
   </div>
 </template>
 
 <style lang="scss" scoped>
 .timezone-selecter {
   display: flex;
-  gap: 0.3rem;
+  gap: var(--space-sm);
 }
 
 .timezone-input {
-  width: calc(100% - 1.2rem);
+  width: calc(100% - var(--space-md) - 2px);
   border-radius: var(--border-radius);
   cursor: pointer;
 
@@ -82,11 +74,12 @@ onMounted(() => {
 }
 
 .btn-current-location {
-  padding: 0.25rem 0.6rem;
+  padding: var(--space-xs) var(--space-sm);
   border-radius: var(--border-radius);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--text-size-xs);
   white-space: nowrap;
+  border: 1px solid var(--border);
 
   &:hover {
     background-color: var(--bg-2);

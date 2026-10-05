@@ -21,8 +21,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 <template>
   <Teleport to="body">
     <Transition name="user-dialog">
-      <div v-if="userStore.isUserDialogOpen" class="user-dialog-backdrop" role="presentation"
-        @click.self="userStore.closeUserDialog">
+      <div v-if="userStore.isUserDialogOpen" class="user-dialog-backdrop" role="presentation" @click.self="userStore.closeUserDialog">
         <section class="user-dialog" role="dialog" aria-modal="true" :aria-label="userStore.userDialogTitle">
           <header class="user-dialog-header">
             <h2>{{ userStore.userDialogTitle }}</h2>

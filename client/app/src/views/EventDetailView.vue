@@ -27,7 +27,7 @@ const myAttendee = computed(() => event.value?.raw?.attendees?.find((attendee) =
 /** @param {'accepted'|'declined'} responseStatus 本人の参加ステータスを更新します。 */
 async function respondToInvitation(responseStatus) {
   if (!event.value || !myAttendee.value || isUpdatingAttendance.value) return;
-  const attendees = (event.value.raw.attendees ?? []).map((attendee) => attendee.self ? { ...attendee, responseStatus } : attendee);
+  const attendees = (event.value.raw.attendees ?? []).map((attendee) => (attendee.self ? { ...attendee, responseStatus } : attendee));
 
   isUpdatingAttendance.value = true;
   userStore.setLoading(true, responseStatus === 'accepted' ? '承諾しています...' : '辞退しています...');
@@ -54,7 +54,7 @@ function edit() {
 
 async function remove() {
   if (!event.value) throw new Error('You do not have an event selected. You must select an event to remove it.');
-  if (!await userStore.confirm({ title: 'Remove Event', message: 'Are you sure you want to remove this event?' })) return;
+  if (!(await userStore.confirm({ title: 'Remove Event', message: 'Are you sure you want to remove this event?' }))) return;
   userStore.setLoading(true, 'Removing the event...');
   try {
     const res = await eventStore.removeEvent(event.value.id, event.value.calendarId);
@@ -115,7 +115,9 @@ onMounted(async () => {
           <dt>
             <IconClock />
           </dt>
-          <dd>{{ dateText }}<span v-if="event?.raw.start?.timeZone"> ({{ event?.raw.start?.timeZone }})</span></dd>
+          <dd>
+            {{ dateText }}<span v-if="event?.raw.start?.timeZone"> ({{ event?.raw.start?.timeZone }})</span>
+          </dd>
         </div>
         <div v-if="event?.location">
           <dt>
@@ -132,13 +134,10 @@ onMounted(async () => {
       </dl>
       <section v-if="myAttendee" class="attendance-section" aria-label="参加回答">
         <h3>参加回答</h3>
-        <p>現在の回答: {{ myAttendee.responseStatus === 'accepted' ? '承諾' : myAttendee.responseStatus === 'declined' ? '辞退' :
-          '未回答' }}</p>
+        <p>現在の回答: {{ myAttendee.responseStatus === 'accepted' ? '承諾' : myAttendee.responseStatus === 'declined' ? '辞退' : '未回答' }}</p>
         <div class="attendance-actions">
-          <button type="button" class="accept-button" :disabled="isUpdatingAttendance"
-            @click="respondToInvitation('accepted')">承諾</button>
-          <button type="button" class="decline-button" :disabled="isUpdatingAttendance"
-            @click="respondToInvitation('declined')">辞退</button>
+          <button type="button" class="accept-button" :disabled="isUpdatingAttendance" @click="respondToInvitation('accepted')">承諾</button>
+          <button type="button" class="decline-button" :disabled="isUpdatingAttendance" @click="respondToInvitation('declined')">辞退</button>
         </div>
       </section>
       <details v-if="event.raw.attendees?.length" class="attendees-section">
@@ -153,12 +152,23 @@ onMounted(async () => {
       <details>
         <summary>More Information</summary>
         <ul>
-          <li>Status: <span class="inline-text">{{ event.raw.status ?? 'Unavailable' }}</span></li>
-          <li>Google Calendar URL: <span class="inline-text">{{ event.raw.htmlLink ?? 'Unavailable' }}</span></li>
-          <li>Created: <span class="inline-text">{{ event.raw.created ?? 'Unavailable' }}</span></li>
-          <li>Updated: <span class="inline-text">{{ event.raw.updated ?? 'Unavailable' }}</span></li>
-          <li>Creator ID: <span class="inline-text">{{ event.raw.creator?.email ?? 'Unavailable' }}</span></li>
-          <li>Event Type: <span class="inline-text">{{ event.raw.birthdayProperties?.type ?? 'Unavailable' }}</span>
+          <li>
+            Status: <span class="inline-text">{{ event.raw.status ?? 'Unavailable' }}</span>
+          </li>
+          <li>
+            Google Calendar URL: <span class="inline-text">{{ event.raw.htmlLink ?? 'Unavailable' }}</span>
+          </li>
+          <li>
+            Created: <span class="inline-text">{{ event.raw.created ?? 'Unavailable' }}</span>
+          </li>
+          <li>
+            Updated: <span class="inline-text">{{ event.raw.updated ?? 'Unavailable' }}</span>
+          </li>
+          <li>
+            Creator ID: <span class="inline-text">{{ event.raw.creator?.email ?? 'Unavailable' }}</span>
+          </li>
+          <li>
+            Event Type: <span class="inline-text">{{ event.raw.birthdayProperties?.type ?? 'Unavailable' }}</span>
           </li>
         </ul>
       </details>
@@ -199,7 +209,7 @@ onMounted(async () => {
 
 dt {
   color: var(--text-light);
-  font-size: .9rem;
+  font-size: 0.9rem;
 }
 
 dl {

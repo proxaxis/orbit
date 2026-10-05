@@ -37,6 +37,7 @@ async function update(payload) {
     if (!userStore.nowSelectedEvent) throw new Error('You do not have an event selected. You must select an event to update it.');
     userStore.setLoading(true, 'Updating the event...');
     await eventStore.updateEvent(userStore.nowSelectedEvent.eid, userStore.nowSelectedEvent.cid, body);
+    userStore.rememberEventTitle(body.summary);
     if (peopleToCreate.length) {
       peopleStore.setPendingRegistrationEmails(peopleToCreate);
       router.replace({ name: 'PeopleEditor' });
@@ -46,7 +47,7 @@ async function update(payload) {
   } finally {
     userStore.setLoading(false);
   }
-};
+}
 </script>
 
 <template>

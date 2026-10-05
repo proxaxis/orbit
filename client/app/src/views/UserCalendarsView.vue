@@ -20,9 +20,7 @@ const userStore = useUserStore();
 const authStore = useAuthStore();
 
 /** Google Calendar がプライベートカレンダーの ACL に返すシステム主体 */
-const SYSTEM_CALENDAR_PRINCIPALS = new Set([
-  'badd9bc48b578d2e8be8a95d2afabc3e4024e4876ab49d7cb0bd8e244f591ec9@group.calendar.google.com',
-]);
+const SYSTEM_CALENDAR_PRINCIPALS = new Set(['badd9bc48b578d2e8be8a95d2afabc3e4024e4876ab49d7cb0bd8e244f591ec9@group.calendar.google.com']);
 
 /** @param {unknown} value ACL 主体の値 @returns {string} 比較用に正規化した値 */
 function normalizePrincipal(value) {
@@ -39,30 +37,25 @@ const sharingStates = ref({});
 async function loadSharingStates() {
   if (!authStore.token || !calendarStore.list.length) return;
   const primaryCalendar = calendarStore.list.find((calendar) => calendar.primary);
-  const knownOwnerPrincipals = new Set([
-    normalizePrincipal(primaryCalendar?.id),
-    normalizePrincipal(primaryCalendar ? /** @type {{ dataOwner?: string }} */ (/** @type {unknown} */ (primaryCalendar)).dataOwner : undefined),
-  ].filter(Boolean));
-  const entries = await Promise.all(calendarStore.list.map(async (calendar) => {
-    if (calendar.accessRole !== 'owner' && !calendar.primary) return [calendar.id, 'unknown'];
-    try {
-      const response = await gCalAPI.listAcl(authStore.token, calendar.id, { maxResults: 250 });
-      const rules = response?.items ?? [];
-      const systemPrincipals = new Set([
-        normalizePrincipal(calendar.id),
-        normalizePrincipal(/** @type {{ dataOwner?: string }} */(/** @type {unknown} */ (calendar)).dataOwner),
-        ...SYSTEM_CALENDAR_PRINCIPALS,
-      ]);
-      const dataOwner = normalizePrincipal(/** @type {{ dataOwner?: string }} */(/** @type {unknown} */ (calendar)).dataOwner);
-      const belongsToAnotherOwner = Boolean(dataOwner && knownOwnerPrincipals.size && !knownOwnerPrincipals.has(dataOwner));
-      const relevantRules = rules.filter((rule) => !systemPrincipals.has(normalizePrincipal(rule.scope.value)));
-      const ownerCount = relevantRules.filter((rule) => rule.role === 'owner').length;
-      const hasSharingRule = belongsToAnotherOwner || ownerCount > 1 || relevantRules.some((rule) => rule.role !== 'owner' && ['user', 'group', 'domain'].includes(rule.scope.type));
-      return [calendar.id, hasSharingRule ? 'shared' : 'private'];
-    } catch (error) {
-      return [calendar.id, 'unknown'];
-    }
-  }));
+  const knownOwnerPrincipals = new Set([normalizePrincipal(primaryCalendar?.id), normalizePrincipal(primaryCalendar ? /** @type {{ dataOwner?: string }} */ (/** @type {unknown} */ (primaryCalendar)).dataOwner : undefined)].filter(Boolean));
+  const entries = await Promise.all(
+    calendarStore.list.map(async (calendar) => {
+      if (calendar.accessRole !== 'owner' && !calendar.primary) return [calendar.id, 'unknown'];
+      try {
+        const response = await gCalAPI.listAcl(authStore.token, calendar.id, { maxResults: 250 });
+        const rules = response?.items ?? [];
+        const systemPrincipals = new Set([normalizePrincipal(calendar.id), normalizePrincipal(/** @type {{ dataOwner?: string }} */ (/** @type {unknown} */ (calendar)).dataOwner), ...SYSTEM_CALENDAR_PRINCIPALS]);
+        const dataOwner = normalizePrincipal(/** @type {{ dataOwner?: string }} */ (/** @type {unknown} */ (calendar)).dataOwner);
+        const belongsToAnotherOwner = Boolean(dataOwner && knownOwnerPrincipals.size && !knownOwnerPrincipals.has(dataOwner));
+        const relevantRules = rules.filter((rule) => !systemPrincipals.has(normalizePrincipal(rule.scope.value)));
+        const ownerCount = relevantRules.filter((rule) => rule.role === 'owner').length;
+        const hasSharingRule = belongsToAnotherOwner || ownerCount > 1 || relevantRules.some((rule) => rule.role !== 'owner' && ['user', 'group', 'domain'].includes(rule.scope.type));
+        return [calendar.id, hasSharingRule ? 'shared' : 'private'];
+      } catch (error) {
+        return [calendar.id, 'unknown'];
+      }
+    }),
+  );
   sharingStates.value = Object.fromEntries(entries);
 }
 
@@ -145,13 +138,20 @@ function hideAllCalendars() {
     </AskLoginMessage>
 
     <ul v-if="authStore.isAuthenticated">
-      <li v-for="(c) in calendarStore.list" :key="c.id" :title="c.description" draggable="true"
+      <li
+        v-for="c in calendarStore.list"
+        :key="c.id"
+        :title="c.description"
+        draggable="true"
         :class="{ 'is-dragging': draggedCalendarId === c.id, 'is-drag-over': dragOverCalendarId === c.id }"
-        @dragstart="startDragging(c.id)" @dragover.prevent="setDragOver(c.id)" @drop.prevent="dropCalendar(c.id)"
-        @dragend="draggedCalendarId = null; dragOverCalendarId = null">
-        <input type="checkbox" :id="`iptbx-${c.id}`" :checked="!userStore.hiddenCalendarIds.includes(c.id)"
-          :style="{ accentColor: c.backgroundColor, borderColor: c.backgroundColor }"
-          @change="userStore.setCalendarVisibility(c.id, /** @type {HTMLInputElement} */($event.target).checked)" />
+        @dragstart="startDragging(c.id)"
+        @dragover.prevent="setDragOver(c.id)"
+        @drop.prevent="dropCalendar(c.id)"
+        @dragend="
+          draggedCalendarId = null;
+          dragOverCalendarId = null;
+        ">
+        <input type="checkbox" :id="`iptbx-${c.id}`" :checked="!userStore.hiddenCalendarIds.includes(c.id)" :style="{ accentColor: c.backgroundColor, borderColor: c.backgroundColor }" @change="userStore.setCalendarVisibility(c.id, /** @type {HTMLInputElement} */ ($event.target).checked)" />
         <div class="list-item">
           <label :for="`iptbx-${c.id}`" :title="c.description">
             <CalendarRibbon :gCalendarId="c.id" />

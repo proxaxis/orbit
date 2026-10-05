@@ -5,7 +5,7 @@ import vue from '@vitejs/plugin-vue';
 import vueDevTools from 'vite-plugin-vue-devtools';
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [vue(), vueDevTools()],
   resolve: {
     alias: {
@@ -13,6 +13,7 @@ export default defineConfig({
     },
   },
   server: {
-    allowedHosts: ['orbit.proxaxis.me'],
+    allowedHosts: ['orbit.proxaxis.me', '.trycloudflare.com'],
+    ...(mode === 'development' ? { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } } : {}),
   },
-});
+}));

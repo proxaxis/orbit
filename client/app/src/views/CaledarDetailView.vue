@@ -11,6 +11,7 @@ import TimezoneSelecter from '@/components/TimezoneSelecter.vue';
 import CalendarRibbon from '@/components/CalendarRibbon.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
 import AskLoginMessage from '@/components/AskLoginMessage.vue';
+import { getCalendarListColorIdByColor, getRandomCalendarListColorId } from '@/services/google-calendar-colors.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -26,17 +27,21 @@ const form = reactive({
   description: '',
   location: '',
   timeZone: '',
-  color: '#54a0ff',
+  colorId: getRandomCalendarListColorId().colorId,
 });
 
 /** @type {ComputedRef<string|null>} 対象のカレンダー ID */
-const theCalendarId = computed(() => typeof route.query.cid === 'string' ? route.query.cid : null);
+const theCalendarId = computed(() => (typeof route.query.cid === 'string' ? route.query.cid : null));
 /** @type {ComputedRef<GoogleCalendarListEntry|null>} */
 const storedCalendarEntry = computed(() => calendarStore.list.find((calendar) => calendar.id === theCalendarId.value) ?? null);
 /** @type {ComputedRef<boolean>} カレンダーのオーナーかどうか */
 const isOwner = computed(() => storedCalendarEntry.value?.accessRole === 'owner' || storedCalendarEntry.value?.primary === true);
 /** @type {ComputedRef<boolean>} カレンダーを編集できる権限を持っているかどうか */
 const canEditCalendar = computed(() => isOwner.value || storedCalendarEntry.value?.accessRole === 'writer');
+/** @type {ComputedRef<boolean>} カレンダー自体を削除できるかどうか */
+const canDeleteCalendar = computed(() => isOwner.value && storedCalendarEntry.value?.primary !== true);
+/** @type {ComputedRef<boolean>} カレンダーリストから削除できるかどうか */
+const canRemoveFromCalendarList = computed(() => storedCalendarEntry.value?.primary !== true);
 
 /** @returns {string|null} フォームに入力されたカレンダー名の有効性をチェックする */
 function checkInputSummary() {
@@ -54,15 +59,10 @@ async function save() {
   userStore.setLoading(true, 'Saving the calendar settings...');
   try {
     // カレンダーリストエントリの更新
-    const newListEntry = await gCalAPI.patchCalendarListEntry(
-      authStore.token,
-      theCalendarId.value,
-      {
-        backgroundColor: form.color,
-        foregroundColor: '#000000',
-        ...(!isOwner.value ? { summaryOverride: form.summary.trim() } : {}),
-      },
-    );
+    const newListEntry = await gCalAPI.patchCalendarListEntry(authStore.token, theCalendarId.value, {
+      colorId: form.colorId,
+      ...(!isOwner.value ? { summaryOverride: form.summary.trim() } : {}),
+    });
 
     // カレンダーの更新
     let newCalendar = source.value.calendar;
@@ -83,8 +83,9 @@ async function save() {
       id: theCalendarId.value,
       summary: isOwner.value ? form.summary.trim() : (newListEntry?.summaryOverride ?? form.summary.trim()),
       ...(isOwner.value ? { summaryOverride: undefined } : { summaryOverride: form.summary.trim() }),
-      backgroundColor: form.color,
-      foregroundColor: '#000000',
+      colorId: newListEntry?.colorId ?? form.colorId,
+      backgroundColor: newListEntry?.backgroundColor,
+      foregroundColor: newListEntry?.foregroundColor,
     });
   } catch (err) {
     userStore.setError(true, err);
@@ -94,28 +95,59 @@ async function save() {
   }
 }
 
-watch([theCalendarId, () => authStore.isAuthenticated], async () => {
-  source.value = { listEntry: null, calendar: null };
-  if (!theCalendarId.value || typeof theCalendarId.value !== 'string' || !authStore.isAuthenticated) return;
+/** カレンダー自体、または自分のカレンダーリストから対象を削除します。 */
+async function removeCalendar() {
+  if (!theCalendarId.value || !authStore.isAuthenticated || (!canDeleteCalendar.value && !canRemoveFromCalendarList.value)) return;
 
-  userStore.setLoading(true, 'Loading the calendar...');
+  const deleteCalendarItself = canDeleteCalendar.value;
+  const message = deleteCalendarItself ? 'このカレンダー自体を削除します。予定や共有設定も利用できなくなります。実行しますか？' : 'このカレンダーを自分のカレンダーリストから削除しますか？';
+  const confirmed = await userStore.confirm({
+    title: deleteCalendarItself ? 'カレンダーを削除' : 'カレンダーリストから削除',
+    message,
+  });
+  if (!confirmed) return;
+
+  isSaving.value = true;
+  userStore.setLoading(true, deleteCalendarItself ? 'Deleting the calendar...' : 'Removing the calendar from your list...');
   try {
-    source.value.listEntry = await gCalAPI.getCalendarListEntry(authStore.token, theCalendarId.value);
-    source.value.calendar = await gCalAPI.getCalendar(authStore.token, theCalendarId.value);
-    if (!source.value.listEntry) source.value.listEntry = storedCalendarEntry.value;
-    Object.assign(form, {
-      summary: source.value?.listEntry?.summaryOverride ?? source.value?.calendar?.summary ?? source.value?.listEntry?.summary ?? '',
-      description: source.value?.calendar?.description ?? source.value?.listEntry?.description ?? '',
-      location: source.value?.calendar?.location ?? source.value?.listEntry?.location ?? '',
-      timeZone: source.value?.calendar?.timeZone ?? source.value?.listEntry?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
-      color: source.value?.listEntry?.backgroundColor ?? '#ffffff',
-    });
+    if (deleteCalendarItself) await gCalAPI.deleteCalendar(authStore.token, theCalendarId.value);
+    else await gCalAPI.deleteCalendarListEntry(authStore.token, theCalendarId.value);
+    calendarStore.removeCalendar(theCalendarId.value);
+    await router.push({ name: 'Home' });
   } catch (err) {
     userStore.setError(true, err);
   } finally {
+    isSaving.value = false;
     userStore.setLoading(false);
   }
-}, { immediate: true });
+}
+
+watch(
+  [theCalendarId, () => authStore.isAuthenticated],
+  async () => {
+    source.value = { listEntry: null, calendar: null };
+    if (!theCalendarId.value || typeof theCalendarId.value !== 'string' || !authStore.isAuthenticated) return;
+
+    userStore.setLoading(true, 'Loading the calendar...');
+    try {
+      source.value.listEntry = await gCalAPI.getCalendarListEntry(authStore.token, theCalendarId.value);
+      source.value.calendar = await gCalAPI.getCalendar(authStore.token, theCalendarId.value);
+      if (!source.value.listEntry) source.value.listEntry = storedCalendarEntry.value;
+      Object.assign(form, {
+        summary: source.value?.listEntry?.summaryOverride ?? source.value?.calendar?.summary ?? source.value?.listEntry?.summary ?? '',
+        description: source.value?.calendar?.description ?? source.value?.listEntry?.description ?? '',
+        location: source.value?.calendar?.location ?? source.value?.listEntry?.location ?? '',
+        timeZone: source.value?.calendar?.timeZone ?? source.value?.listEntry?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+        colorId: source.value?.listEntry?.colorId ?? getCalendarListColorIdByColor(source.value?.listEntry?.backgroundColor ?? '') ?? '1',
+      });
+    } catch (err) {
+      userStore.setError(true, err);
+    } finally {
+      userStore.setLoading(false);
+    }
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -133,9 +165,7 @@ watch([theCalendarId, () => authStore.isAuthenticated], async () => {
       カレンダーの表示に関する設定
     </MenuBar>
 
-    <AskLoginMessage v-if="!authStore.isAuthenticated">
-      カレンダーの表示設定を変更するには Google アカウントでログインする必要があります
-    </AskLoginMessage>
+    <AskLoginMessage v-if="!authStore.isAuthenticated"> カレンダーの表示設定を変更するには Google アカウントでログインする必要があります </AskLoginMessage>
 
     <section v-if="authStore.isAuthenticated">
       <div v-if="source.listEntry || source.calendar" class="section-heading">
@@ -146,7 +176,8 @@ watch([theCalendarId, () => authStore.isAuthenticated], async () => {
 
       <form @submit.prevent="save">
         <div class="form-heading">
-          <h2>基本情報</h2><span v-if="!canEditCalendar">読み取り専用</span>
+          <h2>基本情報</h2>
+          <span v-if="!canEditCalendar">読み取り専用</span>
         </div>
 
         <label>
@@ -172,17 +203,25 @@ watch([theCalendarId, () => authStore.isAuthenticated], async () => {
         </label>
 
         <div class="form-heading">
-          <h2>表示設定</h2><span>この端末のカレンダーのみに適用</span>
+          <h2>表示設定</h2>
+          <span>この端末のカレンダーのみに適用</span>
         </div>
 
         <label>
           色
-          <ColorPicker v-model="form.color" />
+          <ColorPicker v-model="form.colorId" />
         </label>
         <div class="actions">
           <button type="button" @click="router.push({ name: 'Home' })">キャンセル</button>
           <button data-app-button="primary" type="submit" :disabled="userStore.isLoading">保存</button>
         </div>
+        <details>
+          <summary>その他のアクション</summary>
+          <div>
+            <button v-if="canDeleteCalendar" type="button" class="danger-button" :disabled="userStore.isLoading" @click="removeCalendar">カレンダーを削除</button>
+            <button v-else-if="canRemoveFromCalendarList" type="button" class="danger-button" :disabled="userStore.isLoading" @click="removeCalendar">リストから削除</button>
+          </div>
+        </details>
       </form>
     </section>
   </div>
@@ -199,7 +238,6 @@ watch([theCalendarId, () => authStore.isAuthenticated], async () => {
     color: var(--text-light);
   }
 }
-
 
 form {
   display: flex;
@@ -247,6 +285,18 @@ label {
 
   button {
     width: 5rem;
+  }
+}
+
+details div {
+  margin-top: var(--space-sm);
+  display: flex;
+  justify-content: flex-end;
+
+  button {
+  border-radius: var(--border-radius);
+    padding: var(--space-xs) var(--space-sm);
+    background-color: var(--danger);
   }
 }
 

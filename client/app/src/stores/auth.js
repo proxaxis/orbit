@@ -26,7 +26,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const res = await fetch(`${BFF_BASE_URL}/api/token`, { credentials: 'include' });
 
-      if (res.ok) {
+      if (res.ok && res.headers.get('Content-Type')?.startsWith('application/json')) {
         /** @type {{ gAccessToken: string }} */
         const data = await res.json();
 

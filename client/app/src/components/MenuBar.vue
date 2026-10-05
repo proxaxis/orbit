@@ -31,7 +31,7 @@ header {
   padding-bottom: var(--space-sm);
   margin-bottom: var(--space-sm);
 
-  &>div {
+  & > div {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -50,7 +50,7 @@ header {
     }
   }
 
-  &>p {
+  & > p {
     font-size: var(--text-size-sm);
     color: var(--text-light);
   }

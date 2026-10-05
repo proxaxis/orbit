@@ -35,7 +35,6 @@ const calendarDays = computed(() => {
   const firstDayOfMonth = toDayjs(year, month, 1);
   const lastDayOfMonth = toDayjs(year, month + 1, 0);
 
-
   const startDayOffset = (firstDayOfMonth.day() - userStore.firstDayOfWeek + 7) % 7;
   const startDate = toDayjs(year, month, 1 - startDayOffset);
 
@@ -109,18 +108,22 @@ watch(
     <table>
       <thead>
         <tr>
-          <th v-for="d in userStore.daysMap" :key="d.index" :data-weekend="d.isWeekend"
-            :style="{ color: d.weekendColor ?? undefined }">
+          <th v-for="d in userStore.daysMap" :key="d.index" :data-weekend="d.isWeekend" :style="{ color: d.weekendColor ?? undefined }">
             {{ d.label }}
           </th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="rowIdx in Math.ceil(calendarDays.length / 7)" :key="rowIdx">
-          <td v-for="cell in calendarDays.slice((rowIdx - 1) * 7, rowIdx * 7)" :key="cell.dateString"
-            :data-current-month="cell.isCurrentMonth" :data-today="cell.isToday" :data-weekend="cell.isWeekend"
+          <td
+            v-for="cell in calendarDays.slice((rowIdx - 1) * 7, rowIdx * 7)"
+            :key="cell.dateString"
+            :data-current-month="cell.isCurrentMonth"
+            :data-today="cell.isToday"
+            :data-weekend="cell.isWeekend"
             :style="{ color: userStore.getWeekendColor(cell.date.day(), !cell.isCurrentMonth) ?? undefined }"
-            :data-selected="userStore.nowSelectedDate === cell.dateString ? true : null" @click="handleCellClick(cell)">
+            :data-selected="userStore.nowSelectedDate === cell.dateString ? true : null"
+            @click="handleCellClick(cell)">
             <span class="day-number">{{ cell.dayNumber }}</span>
             <!-- 予定が存在する場合のみドットを表示 -->
             <i v-if="cell.hasEvent" class="dot"></i>

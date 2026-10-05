@@ -1,8 +1,7 @@
 <script setup>
 import { ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import dayjs from 'dayjs';
-import { toDayjs } from '@/services/dayjs.js';
+import dayjs, { toDayjs } from '@/services/dayjs.js';
 import { useCalendarStore } from '@/stores/calendar.js';
 import { useEventStore } from '@/stores/event.js';
 import { useUserStore } from '@/stores/user.js';
@@ -98,12 +97,16 @@ const onSelectContextMenu = (rfIndex, action, ...args) => {
   rfsDrompdownMenu.value?.[rfIndex]?.close();
 };
 
-watch(() => [calendarStore.listVisibleCalendars, userStore.nowSelectedDate], async () => {
-  if (!userStore.nowSelectedDate) return;
-  // カレンダーリストがロードされたり、選択日が変わったりしたらイベントを取得または再取得
-  const date = toDayjs(userStore.nowSelectedDate);
-  events.value = await eventStore.listEventsByDate(date.year(), date.month(), date.date());
-}, { immediate: true });
+watch(
+  () => [calendarStore.listVisibleCalendars, userStore.nowSelectedDate],
+  async () => {
+    if (!userStore.nowSelectedDate) return;
+    // カレンダーリストがロードされたり、選択日が変わったりしたらイベントを取得または再取得
+    const date = toDayjs(userStore.nowSelectedDate);
+    events.value = await eventStore.listEventsByDate(date.year(), date.month(), date.date());
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -121,7 +124,8 @@ watch(() => [calendarStore.listVisibleCalendars, userStore.nowSelectedDate], asy
           <IconArrowsRotate size="0.7rem" v-if="!!evt.raw.recurrence" />
         </div>
         <div class="info">
-          <div>{{ evt.icon ?? '📌' }}{{ evt.summary }}
+          <div>
+            {{ evt.icon ?? '📌' }}{{ evt.summary }}
             <IconUserGroup v-if="hasOtherAttendees(evt)" size="0.8rem" />
           </div>
           <div>{{ getDateText(evt) }}</div>
@@ -137,18 +141,10 @@ watch(() => [calendarStore.listVisibleCalendars, userStore.nowSelectedDate], asy
               <IconEllipsisVertical />
             </button>
           </template>
-          <button @click="onSelectContextMenu(i, 'ShowDetail', evt.id, evt.calendarId)">
-            <IconCircleInfo />詳細
-          </button>
-          <button @click="onSelectContextMenu(i, 'EditEvent', evt.id, evt.calendarId)">
-            <IconPen />編集
-          </button>
-          <button @click="onSelectContextMenu(i, 'DeleteEvent', evt.id, evt.calendarId)">
-            <IconTrash />削除
-          </button>
-          <button @click="onSelectContextMenu(i, 'CloneEvent', evt.id, evt.calendarId)">
-            <IconCopy />複製
-          </button>
+          <button @click="onSelectContextMenu(i, 'ShowDetail', evt.id, evt.calendarId)"><IconCircleInfo />詳細</button>
+          <button @click="onSelectContextMenu(i, 'EditEvent', evt.id, evt.calendarId)"><IconPen />編集</button>
+          <button @click="onSelectContextMenu(i, 'DeleteEvent', evt.id, evt.calendarId)"><IconTrash />削除</button>
+          <button @click="onSelectContextMenu(i, 'CloneEvent', evt.id, evt.calendarId)"><IconCopy />複製</button>
         </DropdownMenu>
       </li>
       <li v-if="events.length === 0" class="no-event">予定はありません</li>

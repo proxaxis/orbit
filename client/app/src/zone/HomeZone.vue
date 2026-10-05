@@ -20,12 +20,14 @@ const mobileSubPaneHeight = ref(typeof window !== 'undefined' ? Math.min(300, Ma
 const isResizingMobileSub = ref(false);
 const mobileSubResizeStartY = ref(0);
 const mobileSubResizeStartHeight = ref(0);
+/** @type {Ref<{x: number, y: number}|null>} 左ペインのタッチ開始位置 */
+const navSwipeStart = ref(null);
 /** @type {Ref<'main'|'nav'|'sub'>} 現在表示しているペイン */
 const activePane = ref('main');
 /** @type {{left: number, right: number}} 展開バーの縦位置（百分率） */
 const togglePositions = reactive({ left: 35, right: 35 });
 /** @type {Ref<'left'|'right'|null>} ドラッグ中の展開バー */
-const draggingToggle = ref(/** @type {'left'|'right'|null} */(null));
+const draggingToggle = ref(/** @type {'left'|'right'|null} */ (null));
 const toggleDragStartY = ref(0);
 const toggleDragStartPosition = ref(35);
 const layoutMode = computed(() => {
@@ -34,17 +36,50 @@ const layoutMode = computed(() => {
   return 'desktop';
 });
 
-const subPaneRoutes = new Set(['EventCreator', 'EventDetail', 'EventEditor', 'SharingConfig', 'CalendarCreator', 'CalendarDetail', 'UserConfig']);
-
-const selectPane = /** @type {(pane: 'main'|'nav'|'sub') => void} */ ((pane) => {
-  activePane.value = pane;
-});
+const selectPane = /** @type {(pane: 'main'|'nav'|'sub') => void} */ (
+  (pane) => {
+    activePane.value = pane;
+  }
+);
 
 provide('selectPane', selectPane);
 
 /** 現在開いているペインを閉じる */
 function closePane() {
   activePane.value = 'main';
+}
+
+/** @param {TouchEvent} evt 左ペインのタッチ開始 */
+function startNavSwipe(evt) {
+  if (layoutMode.value === 'desktop' || activePane.value !== 'nav' || evt.touches.length !== 1) return;
+  const touch = evt.touches[0];
+  navSwipeStart.value = { x: touch.clientX, y: touch.clientY };
+}
+
+/** @param {TouchEvent} evt 左ペインのタッチ移動 */
+function moveNavSwipe(evt) {
+  const start = navSwipeStart.value;
+  if (!start || evt.touches.length !== 1) return;
+  const touch = evt.touches[0];
+  const deltaX = touch.clientX - start.x;
+  const deltaY = touch.clientY - start.y;
+  if (deltaX < -12 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25) evt.preventDefault();
+}
+
+/** @param {TouchEvent} evt 左方向のスワイプで左ペインを閉じる */
+function finishNavSwipe(evt) {
+  const start = navSwipeStart.value;
+  navSwipeStart.value = null;
+  if (!start || activePane.value !== 'nav' || evt.changedTouches.length !== 1) return;
+  const touch = evt.changedTouches[0];
+  const deltaX = touch.clientX - start.x;
+  const deltaY = touch.clientY - start.y;
+  if (deltaX <= -60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25) closePane();
+}
+
+/** タッチキャンセル時に左ペインのスワイプ状態を解除 */
+function cancelNavSwipe() {
+  navSwipeStart.value = null;
 }
 
 /** @param {'left'|'right'} side @param {PointerEvent} evt */
@@ -90,7 +125,8 @@ function stopMobileSubResize() {
 
 /** @param {unknown} routeName 現在のルート名 */
 function selectPaneForRoute(routeName) {
-  if (layoutMode.value === 'mobile') activePane.value = subPaneRoutes.has(String(routeName)) ? 'sub' : 'main';
+  // Home の右ペインは DateEventsView、それ以外のルートはサブビューを全画面表示する。
+  if (layoutMode.value === 'mobile') activePane.value = routeName === 'Home' ? 'main' : 'sub';
   else if (layoutMode.value === 'tablet') activePane.value = 'main';
 }
 
@@ -171,7 +207,7 @@ onUnmounted(() => {
 
 <template>
   <div :class="['home-zone', `layout-${layoutMode}`, `active-pane-${activePane}`]">
-    <aside class="nav-pane" :style="{ width: `${navWidth}px` }">
+    <aside class="nav-pane" :style="{ width: `${navWidth}px` }" @touchstart="startNavSwipe" @touchmove="moveNavSwipe" @touchend="finishNavSwipe" @touchcancel="cancelNavSwipe">
       <div class="aside-content">
         <router-view name="nav" />
       </div>
@@ -187,15 +223,13 @@ onUnmounted(() => {
       <div class="resize-handle" @mousedown.prevent="startResizeSub"></div>
 
       <aside class="sub-pane" :style="{ width: `${subWidth}px` }">
-        <div v-if="layoutMode === 'mobile'" class="mobile-sub-resize-handle" role="separator" aria-label="下部ペインの高さを調整"
-          @pointerdown="startMobileSubResize"></div>
+        <div v-if="layoutMode === 'mobile'" class="mobile-sub-resize-handle" role="separator" aria-label="下部ペインの高さを調整" @pointerdown="startMobileSubResize"></div>
         <div class="aside-content">
           <router-view name="sub" />
         </div>
       </aside>
 
-      <button v-if="layoutMode !== 'desktop' && activePane === 'nav'" class="pane-backdrop" type="button"
-        aria-label="ペインを閉じる" @click="closePane"></button>
+      <button v-if="layoutMode !== 'desktop' && activePane === 'nav'" class="pane-backdrop" type="button" aria-label="ペインを閉じる" @click="closePane"></button>
     </div>
   </div>
 </template>
@@ -273,6 +307,7 @@ main {
     box-shadow: 8px 0 20px var(--shadow);
     transform: translateX(-105%);
     transition: transform 0.2s ease;
+    touch-action: pan-y;
   }
 
   .workspace-pane {

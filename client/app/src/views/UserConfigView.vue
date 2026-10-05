@@ -99,7 +99,8 @@ async function clearSettings() {
     <form class="config-form" @submit.prevent="save">
       <section class="config-section">
         <h2>表示</h2>
-        <label>テーマ
+        <label
+          >テーマ
           <select v-model="draft.theme" @change="applyTheme">
             <option value="SYSTEM">システム設定に合わせる</option>
             <option value="LIGHT">ライト</option>
@@ -108,14 +109,16 @@ async function clearSettings() {
         </label>
         <label class="switch-row"><input v-model="draft.useMiniCalendar" type="checkbox" />小型カレンダーを表示する</label>
         <label class="switch-row"><input v-model="draft.useWheelMonthNavigation" type="checkbox" />スクロールで月を移動する</label>
-        <label>セルに表示する予定バーの最大本数
+        <label
+          >セルに表示する予定バーの最大本数
           <input v-model.number="draft.maxEventBarsPerCell" type="number" min="1" max="10" required />
         </label>
       </section>
 
       <section class="config-section">
         <h2>カレンダー</h2>
-        <label>週の開始曜日
+        <label
+          >週の開始曜日
           <select v-model.number="draft.firstDayOfWeek">
             <option v-for="(day, index) in dayNames" :key="day" :value="index">{{ day }}</option>
           </select>
@@ -127,11 +130,8 @@ async function clearSettings() {
         <p class="hint">休日に指定した曜日は、カレンダー上で設定した色で表示されます。</p>
         <div class="weekend-list">
           <div v-for="(day, index) in dayNames" :key="day" class="day-row">
-            <label class="switch-row"><input type="checkbox" :checked="!!weekend(index)"
-                @change="toggleWeekend(index)" />{{
-                  day }}</label>
-            <input v-if="weekend(index)" type="color" :value="weekend(index).color" :aria-label="`${day}の休日色`"
-              @input="weekend(index).color = $event.target.value" />
+            <label class="switch-row"><input type="checkbox" :checked="!!weekend(index)" @change="toggleWeekend(index)" />{{ day }}</label>
+            <input v-if="weekend(index)" type="color" :value="weekend(index).color" :aria-label="`${day}の休日色`" @input="weekend(index).color = $event.target.value" />
             <span v-else class="not-set">休日にしない</span>
           </div>
         </div>
@@ -141,7 +141,8 @@ async function clearSettings() {
         <h2>曜日ラベル</h2>
         <p class="hint">カレンダー上部に表示する曜日名を変更できます。</p>
         <div class="labels-grid">
-          <label v-for="(day, index) in dayNames" :key="day">{{ day }}
+          <label v-for="(day, index) in dayNames" :key="day"
+            >{{ day }}
             <input v-model="draft.labels[index]" maxlength="8" required />
           </label>
         </div>
@@ -150,21 +151,15 @@ async function clearSettings() {
       <section class="config-section">
         <h2>データ管理</h2>
         <p class="hint">設定のデータを削除します。</p>
-        <button type="button" class="clear-cache-button" @click="clearSettings">
-          <IconTrash />設定を削除
-        </button>
+        <button type="button" class="clear-cache-button" @click="clearSettings"><IconTrash />設定を削除</button>
         <p class="hint">設定以外の全てのオフラインデータを削除します。</p>
-        <button type="button" class="clear-cache-button" @click="clearCache">
-          <IconTrash />キャッシュを削除
-        </button>
+        <button type="button" class="clear-cache-button" @click="clearCache"><IconTrash />キャッシュを削除</button>
       </section>
 
       <p v-if="savedMessage" class="saved">{{ savedMessage }}</p>
       <div class="actions">
         <button type="button" @click="router.push({ name: 'Home' })">キャンセル</button>
-        <button data-app-button="primary" type="submit">
-          <IconFloppyDisk />保存
-        </button>
+        <button data-app-button="primary" type="submit"><IconFloppyDisk />保存</button>
       </div>
     </form>
   </section>

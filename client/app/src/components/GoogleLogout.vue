@@ -25,14 +25,7 @@ async function handleLogout() {
 </script>
 <template>
   <div class="google-login">
-    <button
-      v-if="authStore.isAuthenticated"
-      @click="handleLogout"
-      class="google-login-button"
-    >
-      Logout
-    </button>
+    <button v-if="authStore.isAuthenticated" @click="handleLogout" class="google-login-button">Logout</button>
   </div>
 </template>
-<style lang="scss" scoped>
-</style>
+<style lang="scss" scoped></style>

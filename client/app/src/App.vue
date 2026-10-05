@@ -24,20 +24,26 @@ function handleSystemThemeChange(evt) {
   if (userStore.userSelectedTheme === 'SYSTEM') userStore.applyTheme('SYSTEM');
 }
 
-watch(() => userStore.hasError, (to) => {
-  if (to) {
-    console.error(userStore.error);
-  }
-});
+watch(
+  () => userStore.hasError,
+  (to) => {
+    if (to) {
+      console.error(userStore.error);
+    }
+  },
+);
 
-watch(() => authStore.isAuthenticated, (isAuthenticated) => {
-  if (!isAuthenticated) {
-    userStore.openUserDialog({
-      title: 'Login Required',
-      message: 'Login with your Google account to synchronize your calendar.',
-    });
-  }
-});
+watch(
+  () => authStore.isAuthenticated,
+  (isAuthenticated) => {
+    if (!isAuthenticated) {
+      userStore.openUserDialog({
+        title: 'Login Required',
+        message: 'Login with your Google account to synchronize your calendar.',
+      });
+    }
+  },
+);
 
 onMounted(async () => {
   if (!userStore.checkUserEnvironment()) return;
@@ -113,7 +119,6 @@ li {
 }
 
 button {
-
   &,
   &:hover,
   &:active {
@@ -171,7 +176,7 @@ details {
   }
 }
 
-button[data-app-button="primary"] {
+button[data-app-button='primary'] {
   background-color: var(--primary);
   color: var(--text);
   border-radius: var(--border-radius);

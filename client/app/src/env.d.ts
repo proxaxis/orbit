@@ -11,6 +11,8 @@ declare global {
   type ShallowRef<T> = _ShallowRef<T>;
   type Watch = _Watch;
   type Dayjs = import('dayjs').Dayjs;
+  type GoogleCalendarEventColorId = import('./services/google-calendar-colors.d.ts').GoogleCalendarEventColorId;
+  type GoogleCalendarListColorId = import('./services/google-calendar-colors.d.ts').GoogleCalendarListColorId;
 
   /**
    * ==========================================================================
@@ -126,12 +128,7 @@ declare global {
   }
 
   /** イベントの種類 */
-  type GoogleCalendarEventType =
-    | 'default'
-    | 'outOfOffice'
-    | 'focusTime'
-    | 'workingLocation'
-    | 'birthday';
+  type GoogleCalendarEventType = 'default' | 'outOfOffice' | 'focusTime' | 'workingLocation' | 'birthday';
 
   /** 不在（Out of Office）設定プロパティ */
   interface GoogleCalendarOutOfOfficeProperties {
@@ -255,7 +252,7 @@ declare global {
     /** 会議接続データ詳細 */
     conferenceData?: GoogleCalendarConferenceData;
     /** カラーパレット ID ('1'〜'11') */
-    colorId?: string;
+    colorId?: GoogleCalendarEventColorId;
     /** 作成者 */
     creator?: GoogleCalendarOrganizer;
     /** 主催者 */
@@ -313,13 +310,7 @@ declare global {
    */
 
   /** ユーザーのアクセス権限ロール */
-  type GoogleCalendarAccessRole =
-    | 'none'
-    | 'freeBusyReader'
-    | 'reader'
-    | 'writerWithoutPrivateAccess'
-    | 'writer'
-    | 'owner';
+  type GoogleCalendarAccessRole = 'none' | 'freeBusyReader' | 'reader' | 'writerWithoutPrivateAccess' | 'writer' | 'owner';
 
   /** カレンダーエントリ（左ペインに表示されるカレンダー一覧の要素） */
   interface GoogleCalendarListEntry {
@@ -331,7 +322,7 @@ declare global {
     readonly description?: string;
     readonly location?: string;
     readonly timeZone?: IanaTimeZone;
-    colorId?: string;
+    colorId?: GoogleCalendarListColorId;
     backgroundColor?: string;
     foregroundColor?: string;
     hidden?: boolean;
@@ -528,10 +519,7 @@ declare global {
    */
 
   /** Google People API 認証スコープ */
-  type GooglePeopleScope =
-    | 'https://www.googleapis.com/auth/contacts'
-    | 'https://www.googleapis.com/auth/contacts.readonly'
-    | 'https://www.googleapis.com/auth/contacts.other.readonly';
+  type GooglePeopleScope = 'https://www.googleapis.com/auth/contacts' | 'https://www.googleapis.com/auth/contacts.readonly' | 'https://www.googleapis.com/auth/contacts.other.readonly';
 
   /** 読み取りメタデータ情報 */
   interface GooglePeopleFieldSource {

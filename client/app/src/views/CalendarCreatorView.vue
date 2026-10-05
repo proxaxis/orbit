@@ -26,7 +26,7 @@ const vmForm = reactive({
   description: '',
   location: '',
   timeZone: userStore.timeZone,
-  color: getRandomCalendarListColorId().backgroundColor,
+  colorId: getRandomCalendarListColorId().colorId,
 });
 
 function checkFormInput() {
@@ -53,7 +53,7 @@ async function submit() {
     const resource = /** @type {GoogleCalendarResource} */ (await gCalAPI.insertCalendar(authStore.token, body));
     if (!resource?.id) throw new Error('Failed to create calendar. No calendar ID returned.');
     /** @type {GoogleCalendarListEntry} */
-    const returnEntry = await gCalAPI.patchCalendarListEntry(authStore.token, resource.id, { backgroundColor: vmForm.color, foregroundColor: '#000000' });
+    const returnEntry = await gCalAPI.patchCalendarListEntry(authStore.token, resource.id, { colorId: vmForm.colorId });
     /** @type {GoogleCalendarListEntry} */
     const entry = {
       kind: 'calendar#calendarListEntry',
@@ -63,8 +63,9 @@ async function submit() {
       description: returnEntry.description,
       location: returnEntry.location,
       timeZone: returnEntry.timeZone,
-      backgroundColor: vmForm.color,
-      foregroundColor: '#000000',
+      colorId: vmForm.colorId,
+      backgroundColor: returnEntry.backgroundColor,
+      foregroundColor: returnEntry.foregroundColor,
       accessRole: 'owner',
       defaultReminders: [],
       autoAcceptInvitations: false,
@@ -101,22 +102,16 @@ async function submit() {
 
     <section v-else>
       <form @submit.prevent="submit">
-        <label>
-          カレンダー名称 <input v-model="vmForm.summary" autofocus required maxlength="100" placeholder="例: プロジェクト予定" />
-        </label>
-        <label>
-          説明 <textarea v-model="vmForm.description" rows="4" maxlength="500" placeholder="このカレンダーの用途や補足"></textarea>
-        </label>
-        <label>
-          場所 <input v-model="vmForm.location" maxlength="255" placeholder="例: 東京オフィス" />
-        </label>
+        <label> カレンダー名称 <input v-model="vmForm.summary" autofocus required maxlength="100" placeholder="例: プロジェクト予定" /> </label>
+        <label> 説明 <textarea v-model="vmForm.description" rows="4" maxlength="500" placeholder="このカレンダーの用途や補足"></textarea></label>
+        <label> 場所 <input v-model="vmForm.location" maxlength="255" placeholder="例: 東京オフィス" /> </label>
         <label>
           タイムゾーン
           <TimezoneSelecter v-model="vmForm.timeZone" />
         </label>
         <label>
           カレンダーの色
-          <ColorPicker v-model="vmForm.color" />
+          <ColorPicker v-model="vmForm.colorId" />
         </label>
         <p v-if="formErrorMessage" class="error" role="alert">{{ formErrorMessage }}</p>
         <div class="actions">

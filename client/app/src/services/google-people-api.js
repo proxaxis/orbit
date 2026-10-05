@@ -16,11 +16,7 @@ export const API_BASE_URL = import.meta.env.VITE_GOOGLE_PEOPLE_API_BASE_URL;
  * @param {string} [resourceName='people/me'] リソース名 (通常 'people/me')
  * @returns {Promise<GooglePeopleConnectionsListResponse>} 連絡先一覧レスポンス
  */
-export function listConnections(
-  token,
-  query = { personFields: 'names,emailAddresses,phoneNumbers,photos' },
-  resourceName = 'people/me'
-) {
+export function listConnections(token, query = { personFields: 'names,emailAddresses,phoneNumbers,photos' }, resourceName = 'people/me') {
   return fetchPeopleAPI(token, 'GET', `/$resourceName/connections`, {
     params: { resourceName },
     query,
@@ -34,11 +30,7 @@ export function listConnections(
  * @param {{ personFields: string }} [query={ personFields: 'names,emailAddresses,phoneNumbers,photos,birthdays,organizations,addresses' }] クエリパラメータ
  * @returns {Promise<GooglePeoplePerson>} 連絡先データ
  */
-export function getPerson(
-  token,
-  resourceName,
-  query = { personFields: 'names,emailAddresses,phoneNumbers,photos,birthdays,organizations,addresses' }
-) {
+export function getPerson(token, resourceName, query = { personFields: 'names,emailAddresses,phoneNumbers,photos,birthdays,organizations,addresses' }) {
   return fetchPeopleAPI(token, 'GET', `/$resourceName`, {
     params: { resourceName },
     query,
@@ -52,11 +44,7 @@ export function getPerson(
  * @param {{ personFields: string }} [query={ personFields: 'names,emailAddresses,phoneNumbers,photos' }] クエリパラメータ
  * @returns {Promise<{ responses: Array<{ httpStatusCode: number, person?: GooglePeoplePerson, requestedResourceName?: string, status?: any }> }>} 一括取得レスポンス
  */
-export function batchGetPeople(
-  token,
-  resourceNames,
-  query = { personFields: 'names,emailAddresses,phoneNumbers,photos' }
-) {
+export function batchGetPeople(token, resourceNames, query = { personFields: 'names,emailAddresses,phoneNumbers,photos' }) {
   return fetchPeopleAPI(token, 'GET', `/people:batchGet`, {
     query: {
       resourceNames,
@@ -72,11 +60,7 @@ export function batchGetPeople(
  * @param {{ personFields?: string }} [query={ personFields: 'names,emailAddresses,phoneNumbers,photos' }] レスポンスに含めるフィールド
  * @returns {Promise<GooglePeoplePerson>} 作成された連絡先データ
  */
-export function createContact(
-  token,
-  body,
-  query = { personFields: 'names,emailAddresses,phoneNumbers,photos' }
-) {
+export function createContact(token, body, query = { personFields: 'names,emailAddresses,phoneNumbers,photos' }) {
   return fetchPeopleAPI(token, 'POST', `/people:createContact`, {
     body,
     query,
@@ -118,11 +102,7 @@ export function deleteContact(token, resourceName) {
  * @param {{ readMask: string, pageSize?: number }} [options={ readMask: 'names,emailAddresses,phoneNumbers,photos' }] 検索オプション
  * @returns {Promise<{ results: Array<{ person: GooglePeoplePerson }> }>} 検索結果
  */
-export function searchContacts(
-  token,
-  queryText,
-  options = { readMask: 'names,emailAddresses,phoneNumbers,photos' }
-) {
+export function searchContacts(token, queryText, options = { readMask: 'names,emailAddresses,phoneNumbers,photos' }) {
   return fetchPeopleAPI(token, 'GET', `/people:searchContacts`, {
     query: {
       query: queryText,
@@ -143,10 +123,7 @@ export function searchContacts(
  * @param {GooglePeopleOtherContactsListQueryParams} [query={ readMask: 'names,emailAddresses,phoneNumbers,photos' }] クエリパラメータ
  * @returns {Promise<GooglePeopleOtherContactsListResponse>} その他の連絡先一覧レスポンス
  */
-export function listOtherContacts(
-  token,
-  query = { readMask: 'names,emailAddresses,phoneNumbers,photos' }
-) {
+export function listOtherContacts(token, query = { readMask: 'names,emailAddresses,phoneNumbers,photos' }) {
   return fetchPeopleAPI(token, 'GET', `/otherContacts`, { query });
 }
 
@@ -157,11 +134,7 @@ export function listOtherContacts(
  * @param {{ readMask: string, pageSize?: number }} [options={ readMask: 'names,emailAddresses,phoneNumbers,photos' }] 検索オプション
  * @returns {Promise<{ results: Array<{ person: GooglePeoplePerson }> }>} 検索結果
  */
-export function searchOtherContacts(
-  token,
-  queryText,
-  options = { readMask: 'names,emailAddresses,phoneNumbers,photos' }
-) {
+export function searchOtherContacts(token, queryText, options = { readMask: 'names,emailAddresses,phoneNumbers,photos' }) {
   return fetchPeopleAPI(token, 'GET', `/otherContacts:search`, {
     query: {
       query: queryText,

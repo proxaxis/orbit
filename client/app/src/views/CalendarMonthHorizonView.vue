@@ -1,7 +1,7 @@
 <script setup>
 import { computed, inject, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { toDayjs } from '@/services/dayjs.js';
+import dayjs, { toDayjs } from '@/services/dayjs.js';
 import { useEventStore } from '@/stores/event.js';
 import { useUserStore } from '@/stores/user.js';
 import { useCalendarStore } from '@/stores/calendar.js';
@@ -19,8 +19,10 @@ const userStore = useUserStore();
 const calendarStore = useCalendarStore();
 
 /** @type {(pane: 'main'|'nav'|'sub') => void} 左ペイン開閉操作 */
-const selectPane = inject('selectPane', /** @type {(pane: 'main'|'nav'|'sub') => void} */(() => { }));
+const selectPane = inject('selectPane', /** @type {(pane: 'main'|'nav'|'sub') => void} */ (() => {}));
 const lastWheelNavigationAt = ref(0);
+/** @type {Ref<'prev'|'next'|'today'>} 月切り替えアニメーションの方向 */
+const monthTransition = ref('next');
 
 /** @type {Ref<{x: number, y: number}|null>} 月移動スワイプの開始位置 */
 const swipeStart = ref(null);
@@ -41,7 +43,18 @@ const events = ref([]);
 function getEventBarColor(evt) {
   if (!!evt.calendarBackgroundColor && evt.calendarBackgroundColor.startsWith('#')) return evt.calendarBackgroundColor;
   return '#2196f3'; // デフォルトの青色
-};
+}
+
+const relativeYearText = computed(() => {
+  const now = dayjs();
+  const year = userStore.nowUsingDate.year();
+  if (year === now.year()) return '';
+  if (year === now.year() - 1) return '去年';
+  if (year === now.year() + 1) return '来年';
+  if (year < now.year() - 1) return `(${now.year()}-) ${now.year() - year}年前`;
+  if (year > now.year() + 1) return `(${now.year()}+) ${year - now.year()}年後`;
+  return '';
+});
 
 /** @type {ComputedRef<{date: Dayjs, key: string, isToday: boolean, isOtherMonth: boolean, isSelected: boolean}[]>} @description カレンダーメインの日付配列 */
 const calDaysArray = computed(() => {
@@ -98,6 +111,19 @@ const getMonthDayEvents = (date) => {
   const dateKey = date.format('YYYY-MM-DD');
   return layoutMap.value.get(dateKey) || [];
 };
+
+/** @param {Dayjs} date @returns {number} 表示上限により省略されたイベント数 */
+function getHiddenEventCount(date) {
+  const dayStart = date.startOf('day');
+  const dayEnd = date.endOf('day');
+  const allEvents = events.value.filter((evt) => evt.startDateTime.isBefore(dayEnd) && evt.endDateTime.isAfter(dayStart));
+  const displayedEventIds = new Set(
+    getMonthDayEvents(date)
+      .filter(Boolean)
+      .map((slot) => slot.event.id),
+  );
+  return Math.max(0, allEvents.filter((evt) => !displayedEventIds.has(evt.id)).length);
+}
 
 /** @type {ComputedRef<Map<string, {event: HandyCalendarEvent, isStart: boolean, isEnd: boolean, isLabelStart: boolean, spanDays: number}[]>>} @description イベントの配置情報を保持するマップ */
 const layoutMap = computed(() => {
@@ -204,9 +230,14 @@ const layoutMap = computed(() => {
  * イベントクリック時の処理
  * @param {Event} clickEvent - クリックイベント
  * @param {HandyCalendarEvent} evt - イベント情報
+ * @param {Dayjs} date - クリックされたイベントバーの日付
  */
-const handleEventClick = (clickEvent, evt) => {
+const handleEventClick = (clickEvent, evt, date) => {
   clickEvent.stopPropagation();
+  if (userStore.isMobile || userStore.isTablet) {
+    selectDateCell(date);
+    return;
+  }
   userStore.setNowSelectedEvent({ eid: evt.id, cid: evt.calendarId });
   router.push({ name: 'EventDetail' });
 };
@@ -227,10 +258,11 @@ function hasOtherAttendees(evt) {
 
 /** @param {TouchEvent} evt @param {Dayjs} date 長押し対象の日付 */
 function startCellLongPress(evt, date) {
-  if (!userStore.isMobile || evt.touches.length !== 1) return;
+  if (!(userStore.isMobile || userStore.isTablet) || evt.touches.length !== 1) return;
   const touch = evt.touches[0];
   cancelCellLongPress();
   longPressTimer.value = window.setTimeout(() => {
+    longPressTimer.value = null;
     suppressNextCellClick.value = true;
     selectDateCell(date);
     const menuEvent = new MouseEvent('contextmenu', {
@@ -240,6 +272,19 @@ function startCellLongPress(evt, date) {
     });
     rfDropdownForContextMenu.value?.open(menuEvent);
   }, 500);
+}
+
+/** @param {MouseEvent} evt @param {Dayjs} date セルのコンテキストメニュー */
+function handleCellContextMenu(evt, date) {
+  evt.preventDefault();
+  if (userStore.isMobile || userStore.isTablet) return;
+  openContextMenu(evt, date);
+}
+
+/** @param {TouchEvent} evt セルのタッチ終了 */
+function finishCellTouch(evt) {
+  cancelCellLongPress();
+  finishMonthSwipe(evt);
 }
 
 /** 長押しタイマーを解除 */
@@ -252,28 +297,66 @@ function cancelCellLongPress() {
 
 /** @param {TouchEvent} evt 日付セル上の移動イベント */
 function handleCellTouchMove(evt) {
-  if (evt.touches.length !== 1) cancelCellLongPress();
+  if (evt.touches.length !== 1) {
+    cancelCellLongPress();
+    return;
+  }
+  handleMonthSwipeMove(evt);
 }
 
 /** @param {TouchEvent} evt 月表示のタッチ開始イベント */
 function startMonthSwipe(evt) {
-  if (!userStore.isMobile || evt.touches.length !== 1) return;
+  if ((!userStore.isMobile && !userStore.isTablet) || evt.touches.length !== 1) return;
   const touch = evt.touches[0];
   swipeStart.value = { x: touch.clientX, y: touch.clientY };
+}
+
+/** @param {TouchEvent} evt 横スワイプ中のタッチ移動イベント */
+function handleMonthSwipeMove(evt) {
+  const start = swipeStart.value;
+  if (!start || (!userStore.isMobile && !userStore.isTablet) || evt.touches.length !== 1) return;
+  const touch = evt.touches[0];
+  const deltaX = touch.clientX - start.x;
+  const deltaY = touch.clientY - start.y;
+  if (Math.abs(deltaY) > 12 && Math.abs(deltaY) > Math.abs(deltaX) * 1.25) {
+    cancelCellLongPress();
+    return;
+  }
+  if (Math.abs(deltaX) > 12 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25) {
+    cancelCellLongPress();
+  }
 }
 
 /** @param {TouchEvent} evt 月表示のタッチ終了イベント */
 function finishMonthSwipe(evt) {
   const start = swipeStart.value;
   swipeStart.value = null;
-  if (!start || !userStore.isMobile || evt.changedTouches.length !== 1) return;
+  if (!start || (!userStore.isMobile && !userStore.isTablet) || evt.changedTouches.length !== 1) return;
 
   const touch = evt.changedTouches[0];
   const deltaX = touch.clientX - start.x;
   const deltaY = touch.clientY - start.y;
   if (Math.abs(deltaX) < 60 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.25) return;
-  if (deltaX > 0) userStore.goPrevMonth();
-  else userStore.goNextMonth();
+  if (deltaX > 0) goPreviousMonth();
+  else goNextMonth();
+}
+
+/** 前月へ移動します。 */
+function goPreviousMonth() {
+  monthTransition.value = 'prev';
+  userStore.goPrevMonth();
+}
+
+/** 次月へ移動します。 */
+function goNextMonth() {
+  monthTransition.value = 'next';
+  userStore.goNextMonth();
+}
+
+/** 今日へ移動します。 */
+function goToday() {
+  monthTransition.value = 'today';
+  userStore.goToday();
 }
 
 /** @param {Dayjs} date 日付セルで選択された日付 */
@@ -323,8 +406,8 @@ const handleCalendarWheel = (evt) => {
 
   evt.preventDefault();
   lastWheelNavigationAt.value = now;
-  if (evt.deltaY < 0) userStore.goPrevMonth();
-  else userStore.goNextMonth();
+  if (evt.deltaY < 0) goPreviousMonth();
+  else goNextMonth();
 };
 
 /**
@@ -344,69 +427,87 @@ const getMonthCellClass = (day) => {
 };
 
 // カレンダーリストがロードされたり、月が変わったりしたらイベントを取得または再取得
-watch(() => [calendarStore.listVisibleCalendars, userStore.nowUsingDate], async () => {
-  events.value = await eventStore.listEvents(userStore.nowUsingDate.year(), userStore.nowUsingDate.month());
-}, { immediate: true });
+watch(
+  () => [calendarStore.listVisibleCalendars, userStore.nowUsingDate],
+  async () => {
+    events.value = await eventStore.listEvents(userStore.nowUsingDate.year(), userStore.nowUsingDate.month());
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
-  <div class="month-horizontal-view" @wheel="handleCalendarWheel" @touchstart="startMonthSwipe"
-    @touchend="finishMonthSwipe" @touchcancel="cancelCellLongPress">
+  <div class="month-horizontal-view" @wheel="handleCalendarWheel" @touchstart="startMonthSwipe" @touchmove="handleMonthSwipeMove" @touchend="finishMonthSwipe" @touchcancel="finishMonthSwipe">
     <header class="month-toolbar">
       <div class="month-actions">
-        <button v-if="userStore.isMobile || userStore.isTablet" type="button" title="カレンダーを開閉" aria-label="カレンダーを開閉"
-          @click="selectPane('nav')">
+        <button v-if="userStore.isMobile || userStore.isTablet" type="button" title="カレンダーを開閉" aria-label="カレンダーを開閉" @click="selectPane('nav')">
           <IconBars />
         </button>
-        <button type="button" title="前月へ戻る" aria-label="前月へ戻る" @click="userStore.goPrevMonth()">
+        <button type="button" title="前月へ戻る" aria-label="前月へ戻る" @click="goPreviousMonth">
           <IconCaretLeft />
         </button>
-        <button type="button" title="今日に戻る" aria-label="今日に戻る" @click.prevent="userStore.goToday()">
+        <button type="button" title="今日に戻る" aria-label="今日に戻る" @click.prevent="goToday">
           <IconCalendar />
         </button>
-        <button type="button" title="次月へ進む" aria-label="次月へ進む" @click="userStore.goNextMonth()">
+        <button type="button" title="次月へ進む" aria-label="次月へ進む" @click="goNextMonth">
           <IconCaretRight />
         </button>
       </div>
       <div class="month-title">
-        <h1>{{ userStore.nowUsingDate.format('YYYY年 M月') }}</h1>
+        <h1>{{ relativeYearText }} {{ userStore.nowUsingDate.format('YYYY年 M月') }}</h1>
         <button type="button" title="ユーザー設定" aria-label="ユーザー設定" @click="router.push({ name: 'UserConfig' })">
           <IconGear />
         </button>
       </div>
     </header>
-    <div class="month-header">
-      <div v-for="(map, i) in userStore.daysMap" :key="i" :style="{ color: map.weekendColor ?? undefined }">
-        {{ map.label }}
-      </div>
-    </div>
-
-    <div class="month-grid">
-      <div v-for="(day, idx) in calDaysArray" :key="day.key || idx" :class="getMonthCellClass(day)"
-        :style="{ color: userStore.getWeekendColor(day.date.day(), day.isOtherMonth) ?? undefined }"
-        @click="handleCellClick(day.date)" @contextmenu.prevent="openContextMenu($event, day.date)"
-        @touchstart.stop="startCellLongPress($event, day.date)" @touchmove.stop="handleCellTouchMove"
-        @touchend.stop="cancelCellLongPress" @touchcancel.stop="cancelCellLongPress">
-        <div class="day-num"
-          :style="{ color: userStore.getWeekendColor(day.date.day(), day.isOtherMonth) ?? undefined }">
-          {{ day.date.date() }}
+    <Transition :name="`month-slide-${monthTransition}`" mode="out-in">
+      <div :key="userStore.nowUsingDate.format('YYYY-MM')" class="month-content">
+        <div class="month-header">
+          <div v-for="(map, i) in userStore.daysMap" :key="i" :style="{ color: map.weekendColor ?? undefined }">
+            {{ map.label }}
+          </div>
         </div>
 
-        <div class="events-stack">
-          <div v-for="(slot, i) in getMonthDayEvents(day.date)" :key="i" class="event-slot">
-            <div v-if="slot" class="event-bar"
-              :class="{ 'is-start': slot.isStart, 'is-end': slot.isEnd, 'is-continued': !slot.isStart, 'is-label-start': slot.isLabelStart }"
-              :style="{ backgroundColor: getEventBarColor(slot.event), width: slot.isLabelStart ? `calc(${slot.spanDays * 100}% + ${(slot.spanDays - 1) * 4}px)` : undefined }"
-              @click.stop="(e) => handleEventClick(e, slot.event)" @mousedown.stop>
-              <span v-if="slot.isLabelStart">
-                {{ slot.event.icon ?? '📌' }}{{ slot.event.summary }}
-                <IconUserGroup v-if="hasOtherAttendees(slot.event)" size="0.75rem" />
-              </span>
+        <div class="month-grid">
+          <div
+            v-for="(day, idx) in calDaysArray"
+            :key="day.key || idx"
+            :class="getMonthCellClass(day)"
+            :style="{ color: userStore.getWeekendColor(day.date.day(), day.isOtherMonth) ?? undefined }"
+            @click="handleCellClick(day.date)"
+            @contextmenu="handleCellContextMenu($event, day.date)"
+            @touchstart="
+              startCellLongPress($event, day.date);
+              startMonthSwipe($event);
+            "
+            @touchmove="handleCellTouchMove"
+            @touchend="finishCellTouch"
+            @touchcancel="finishCellTouch">
+            <div class="day-num" :style="{ color: userStore.getWeekendColor(day.date.day(), day.isOtherMonth) ?? undefined }">
+              {{ day.date.date() }}
             </div>
+
+            <div class="events-stack">
+              <div v-for="(slot, i) in getMonthDayEvents(day.date)" :key="i" class="event-slot">
+                <div
+                  v-if="slot"
+                  class="event-bar"
+                  :class="{ 'is-start': slot.isStart, 'is-end': slot.isEnd, 'is-continued': !slot.isStart, 'is-label-start': slot.isLabelStart }"
+                  :style="{ backgroundColor: getEventBarColor(slot.event), width: slot.isLabelStart ? `calc(${slot.spanDays * 100}% + ${(slot.spanDays - 1) * 4}px)` : undefined }"
+                  @click.stop="(e) => handleEventClick(e, slot.event, day.date)"
+                  @mousedown.stop>
+                  <span v-if="slot.isLabelStart">
+                    {{ slot.event.icon ?? '📌' }}{{ slot.event.summary }}
+                    <IconUserGroup v-if="hasOtherAttendees(slot.event)" size="0.75rem" />
+                  </span>
+                </div>
+              </div>
+            </div>
+            <span v-if="getHiddenEventCount(day.date) > 0" class="hidden-event-count">+{{ getHiddenEventCount(day.date) }}</span>
           </div>
         </div>
       </div>
-    </div>
+    </Transition>
 
     <DropdownMenu ref="rfDropdownForContextMenu">
       <button type="button" @click="onSelectContextMenu('CreateEvent')">予定を作成</button>
@@ -421,6 +522,51 @@ watch(() => [calendarStore.listVisibleCalendars, userStore.nowUsingDate], async 
   flex-direction: column;
   overflow: auto;
   height: 100%;
+  touch-action: pan-y;
+
+  .month-content {
+    display: flex;
+    flex: 1 0 auto;
+    min-height: calc(100% - 46px);
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .month-slide-prev-enter-active,
+  .month-slide-prev-leave-active,
+  .month-slide-next-enter-active,
+  .month-slide-next-leave-active {
+    transition:
+      transform 0.22s ease,
+      opacity 0.22s ease;
+  }
+
+  .month-slide-prev-enter-from {
+    transform: translateX(-8%);
+    opacity: 0;
+  }
+  .month-slide-prev-leave-to {
+    transform: translateX(8%);
+    opacity: 0;
+  }
+  .month-slide-next-enter-from {
+    transform: translateX(8%);
+    opacity: 0;
+  }
+  .month-slide-next-leave-to {
+    transform: translateX(-8%);
+    opacity: 0;
+  }
+
+  .month-slide-today-enter-active,
+  .month-slide-today-leave-active {
+    transition: opacity 0.18s ease;
+  }
+
+  .month-slide-today-enter-from,
+  .month-slide-today-leave-to {
+    opacity: 0;
+  }
 
   .month-toolbar {
     display: flex;
@@ -430,10 +576,7 @@ watch(() => [calendarStore.listVisibleCalendars, userStore.nowUsingDate], async 
     padding: var(--space-sm) var(--space-md);
     border-bottom: 1px solid var(--border);
     background: var(--bg-0);
-
-    @media (max-width: 768px) {
-      padding: var(--space-sm) var(--space-md);
-    }
+    height: calc(46px - var(--space-sm) * 2 - 1px) /* ツールバーの高さ - 上下パディング - ボーダー幅 */;
 
     .month-title {
       display: flex;
@@ -494,7 +637,8 @@ watch(() => [calendarStore.listVisibleCalendars, userStore.nowUsingDate], async 
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
     grid-auto-rows: minmax(100px, 1fr);
-    flex: 1;
+    flex: 1 0 auto;
+    min-height: 0;
   }
 
   .day-cell {
@@ -595,6 +739,19 @@ watch(() => [calendarStore.listVisibleCalendars, userStore.nowUsingDate], async 
           z-index: 5;
         }
       }
+    }
+
+    .hidden-event-count {
+      position: absolute;
+      right: 4px;
+      bottom: 2px;
+      padding: 0 var(--space-xs);
+      border-radius: var(--border-radius);
+      background: var(--bg-2);
+      color: var(--danger);
+      font-size: var(--text-size-sm);
+      font-weight: bold;
+      line-height: 1.2;
     }
 
     .cell-icons {

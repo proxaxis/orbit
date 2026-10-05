@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue';
+import { computed } from 'vue';
 import { useCalendarStore } from '@/stores/calendar.js';
 
 const calendarStore = useCalendarStore();
@@ -13,19 +13,27 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  selectable: {
+    type: Boolean,
+    default: false,
+  },
+  selected: {
+    type: Boolean,
+    default: false,
+  },
 });
 
-const calendar = ref({ summary: '', backgroundColor: '' });
+const emit = defineEmits(['select']);
 
-onMounted(async () => {
-  const cal = calendarStore.list.find(c => c.id === props.gCalendarId);
-  calendar.value.summary = cal?.summary ?? '';
-  calendar.value.backgroundColor = cal?.backgroundColor ?? '';
-});
+const calendar = computed(() => calendarStore.list.find((cal) => cal.id === props.gCalendarId) ?? { summary: '', backgroundColor: '' });
 </script>
 
 <template>
-  <div class="calendar-ribbon">
+  <button v-if="props.selectable" type="button" class="calendar-ribbon selectable" :class="{ selected: props.selected }" @click="emit('select', props.gCalendarId)">
+    <span class="color" :style="{ backgroundColor: calendar.backgroundColor }"></span>
+    <span class="name" v-if="props.useLabel">{{ calendar.summary }}</span>
+  </button>
+  <div v-else class="calendar-ribbon">
     <span class="color" :style="{ backgroundColor: calendar.backgroundColor }"></span>
     <span class="name" v-if="props.useLabel">{{ calendar.summary }}</span>
   </div>
@@ -36,9 +44,27 @@ onMounted(async () => {
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-sm);
   user-select: none;
   overflow: hidden;
+}
+
+.calendar-ribbon.selectable {
+  width: calc(100% - var(--space-sm) * 2);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid transparent;
+  border-radius: var(--border-radius);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+
+  &:hover {
+    background: var(--bg-2);
+  }
+  &.selected {
+    border-color: var(--primary);
+    background: var(--bg-2);
+  }
 }
 
 .color {
