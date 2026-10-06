@@ -68,7 +68,7 @@ dialog {
   border: 1px solid var(--border);
   border-radius: var(--border-radius);
   background-color: var(--bg-1);
-  box-shadow: 0 0.75rem 2rem var(--shadow);
+  box-shadow: 0 0.35rem 0.9rem var(--shadow);
 }
 
 header {

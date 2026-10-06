@@ -1,9 +1,10 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useCalendarStore } from '@/stores/calendar.js';
 import { useUserStore } from '@/stores/user.js';
 import { useAuthStore } from '@/stores/auth.js';
+import { usePeopleStore } from '@/stores/people.js';
 import * as gCalAPI from '@/services/google-calendar-api.js';
 import MiniCalendar from '@/components/MiniCalendar.vue';
 import MenuBar from '@/components/MenuBar.vue';
@@ -20,11 +21,41 @@ import IconCircleInfo from '@/components/icons/IconCircleInfo.vue';
 import IconCalendarPlus from '@/components/icons/IconCalendarPlus.vue';
 import IconCloudArrowDown from '@/components/icons/IconCloudArrowDown.vue';
 import IconEye from '@/components/icons/IconEye.vue';
+import IconCrown from '@/components/icons/IconCrown.vue';
+import IconTrash from '@/components/icons/IconTrash.vue';
 
 const router = useRouter();
 const calendarStore = useCalendarStore();
 const userStore = useUserStore();
 const authStore = useAuthStore();
+const peopleStore = usePeopleStore();
+const sessionCalendarQuery = ref('');
+const isSearchingSessionCalendar = ref(false);
+const sessionCalendarError = ref('');
+const regularCalendars = computed(() => calendarStore.list.filter((calendar) => !isSessionCalendar(calendar)));
+const isCalendarSectionOpen = ref(true);
+const isSessionSectionOpen = ref(true);
+
+async function searchSessionCalendar() {
+  sessionCalendarError.value = '';
+  try {
+    const query = sessionCalendarQuery.value.trim();
+    if (!query) return;
+    isSearchingSessionCalendar.value = true;
+    await calendarStore.searchSessionCalendar(query);
+    sessionCalendarQuery.value = '';
+    peopleStore.clearSuggestions();
+  } catch (error) {
+    sessionCalendarError.value = error instanceof Error ? error.message : 'カレンダーを検索できませんでした。';
+  } finally {
+    isSearchingSessionCalendar.value = false;
+  }
+}
+
+async function searchPeopleForSessionCalendar() {
+  if (sessionCalendarQuery.value.trim().length < 2) return;
+  await peopleStore.search(sessionCalendarQuery.value);
+}
 
 /** Google Calendar がプライベートカレンダーの ACL に返すシステム主体 */
 const SYSTEM_CALENDAR_PRINCIPALS = new Set(['badd9bc48b578d2e8be8a95d2afabc3e4024e4876ab49d7cb0bd8e244f591ec9@group.calendar.google.com']);
@@ -69,6 +100,11 @@ async function loadSharingStates() {
 /** @param {GoogleCalendarListEntry} calendar @returns {boolean} プライベート表示にすべきか */
 function isPrivateCalendar(calendar) {
   return sharingStates.value[calendar.id] === 'private';
+}
+
+/** @param {GoogleCalendarListEntry} calendar @returns {boolean} セッションカレンダーか */
+function isSessionCalendar(calendar) {
+  return /** @type {{ session?: boolean }} */ (/** @type {unknown} */ (calendar)).session === true;
 }
 
 watch([() => calendarStore.list, () => authStore.token], loadSharingStates, { immediate: true });
@@ -119,25 +155,6 @@ function hideAllCalendars() {
     <div>
       <MiniCalendar v-if="userStore.useMiniCalendar" />
 
-      <MenuBar>
-        <template #main>
-          <span class="title">カレンダー</span>
-        </template>
-        <template #sub>
-          <DropdownMenu>
-            <template #button>
-              <button class="icon-ellipsis-vertical-wrapper" title="カレンダーの操作">
-                <IconEllipsisVertical />
-              </button>
-            </template>
-            <button @click="router.push({ name: 'CalendarCreator' })"><IconCalendarPlus />カレンダーを作成</button>
-            <button @click="router.push({ name: 'CalendarAdder' })"><IconCloudArrowDown />他のカレンダーを追加</button>
-            <button @click="showAllCalendars"><IconEye />全てを表示</button>
-            <button @click="hideAllCalendars"><IconEyeSlash />全てを非表示</button>
-          </DropdownMenu>
-        </template>
-      </MenuBar>
-
       <AskLoginMessage v-if="!authStore.isAuthenticated">
         カレンダーを表示するには Google アカウントでログインする必要があります
         <div class="google-login-wrapper">
@@ -145,40 +162,134 @@ function hideAllCalendars() {
         </div>
       </AskLoginMessage>
 
-      <ul v-if="authStore.isAuthenticated">
-        <li
-          v-for="c in calendarStore.list"
-          :key="c.id"
-          :title="c.description"
-          draggable="true"
-          :class="{ 'is-dragging': draggedCalendarId === c.id, 'is-drag-over': dragOverCalendarId === c.id }"
-          @dragstart="startDragging(c.id)"
-          @dragover.prevent="setDragOver(c.id)"
-          @drop.prevent="dropCalendar(c.id)"
-          @dragend="
-            draggedCalendarId = null;
-            dragOverCalendarId = null;
-          ">
-          <input type="checkbox" :id="`iptbx-${c.id}`" :checked="!userStore.hiddenCalendarIds.includes(c.id)" :style="{ accentColor: c.backgroundColor, borderColor: c.backgroundColor }" @change="userStore.setCalendarVisibility(c.id, /** @type {HTMLInputElement} */ ($event.target).checked)" />
-          <div class="list-item">
-            <label :for="`iptbx-${c.id}`" :title="c.description">
-              <CalendarRibbon :gCalendarId="c.id" />
-              <IconUserLock v-if="isPrivateCalendar(c)" class="privacy-icon" size="0.85rem" title="非公開カレンダー" />
-            </label>
+      <section class="calendar-section" :class="{ 'is-open': isCalendarSectionOpen }">
+        <MenuBar>
+          <template #main>
+            <button type="button" class="accordion-title" :aria-expanded="isCalendarSectionOpen" @click="isCalendarSectionOpen = !isCalendarSectionOpen">
+              <span class="title">カレンダー</span>
+              <!-- <span class="accordion-indicator" aria-hidden="true">{{ isCalendarSectionOpen ? '−' : '+' }}</span> -->
+            </button>
+          </template>
+          <template #sub>
             <DropdownMenu>
               <template #button>
-                <IconEllipsisVertical />
+                <button class="icon-ellipsis-vertical-wrapper" title="カレンダーの操作">
+                  <IconEllipsisVertical />
+                </button>
               </template>
-              <button @click="userStore.setCalendarVisibility(c.id, false)"><IconEyeSlash />非表示</button>
-              <button @click="router.push({ name: 'CalendarDetail', query: { cid: c.id } })"><IconCircleInfo />カレンダーの詳細</button>
-              <button @click="router.push({ name: 'SharingConfig', query: { cid: c.id } })"><IconUserGroup />共有設定</button>
+              <button @click="router.push({ name: 'CalendarCreator' })"><IconCalendarPlus />カレンダーを作成</button>
+              <button @click="router.push({ name: 'CalendarAdder' })"><IconCloudArrowDown />他のカレンダーを追加</button>
+              <button @click="showAllCalendars"><IconEye />全てを表示</button>
+              <button @click="hideAllCalendars"><IconEyeSlash />全てを非表示</button>
             </DropdownMenu>
+          </template>
+        </MenuBar>
+
+        <Transition name="accordion">
+          <div v-show="isCalendarSectionOpen" class="accordion-body">
+            <ul v-if="authStore.isAuthenticated">
+              <li
+                v-for="c in regularCalendars"
+                :key="c.id"
+                :title="c.description"
+                draggable="true"
+                :class="{ 'is-dragging': draggedCalendarId === c.id, 'is-drag-over': dragOverCalendarId === c.id }"
+                @dragstart="startDragging(c.id)"
+                @dragover.prevent="setDragOver(c.id)"
+                @drop.prevent="dropCalendar(c.id)"
+                @dragend="
+                  draggedCalendarId = null;
+                  dragOverCalendarId = null;
+                ">
+                <input type="checkbox" :id="`iptbx-${c.id}`" :checked="!userStore.hiddenCalendarIds.includes(c.id)" :style="{ accentColor: c.backgroundColor, borderColor: c.backgroundColor }" @change="userStore.setCalendarVisibility(c.id, /** @type {HTMLInputElement} */ ($event.target).checked)" />
+                <div class="list-item">
+                  <label :for="`iptbx-${c.id}`" :title="c.description">
+                    <CalendarRibbon :cid="c.id" />
+                    <small v-if="isSessionCalendar(c)" class="session-badge">SESSION</small>
+                    <IconCrown v-if="userStore.defaultCalendarId === c.id" size="0.85rem" title="デフォルトカレンダー" />
+                    <IconUserLock v-if="isPrivateCalendar(c)" class="privacy-icon" size="0.85rem" title="非公開カレンダー" />
+                  </label>
+                  <DropdownMenu>
+                    <template #button>
+                      <IconEllipsisVertical />
+                    </template>
+                    <button @click="userStore.setCalendarVisibility(c.id, false)"><IconEyeSlash />非表示</button>
+                    <button @click="router.push({ name: 'CalendarDetail', query: { cid: c.id } })"><IconCircleInfo />カレンダーの詳細</button>
+                    <button @click="router.push({ name: 'SharingConfig', query: { cid: c.id } })"><IconUserGroup />共有設定</button>
+                    <button @click="userStore.setDefaultCalendar(c.id)"><IconCrown />デフォルトにする</button>
+                  </DropdownMenu>
+                </div>
+              </li>
+            </ul>
           </div>
-        </li>
-      </ul>
-    </div>
-    <div v-if="!userStore.isAppInstalled">
-      <AppInstallButton />
+        </Transition>
+      </section>
+
+      <section class="session-section" :class="{ 'is-open': isSessionSectionOpen }">
+        <MenuBar>
+          <template #main>
+            <button type="button" class="accordion-title" :aria-expanded="isSessionSectionOpen" @click="isSessionSectionOpen = !isSessionSectionOpen">
+              <span class="title">セッションリスト</span>
+              <!-- <span class="accordion-indicator" aria-hidden="true">{{ isSessionSectionOpen ? '−' : '+' }}</span> -->
+            </button>
+          </template>
+          <template #sub>
+            <DropdownMenu>
+              <template #button>
+                <button class="icon-ellipsis-vertical-wrapper" title="カレンダーの操作">
+                  <IconEllipsisVertical />
+                </button>
+              </template>
+              <button><IconEye />全てを表示</button>
+              <button><IconEyeSlash />全てを非表示</button>
+              <button :disabled="!calendarStore.sessionCalendars.length" @click="calendarStore.clearSessionCalendars"><IconTrash />全て削除</button>
+            </DropdownMenu>
+          </template>
+        </MenuBar>
+
+        <Transition name="accordion">
+          <div v-show="isSessionSectionOpen" class="accordion-body">
+            <div class="session-calendar-search">
+              <div class="session-search-row">
+                <input v-model="sessionCalendarQuery" placeholder="カレンダーを検索..." @input="searchPeopleForSessionCalendar" @keydown.enter.prevent="searchSessionCalendar" />
+                <button type="button" :disabled="isSearchingSessionCalendar" @click="searchSessionCalendar">追加</button>
+              </div>
+              <ul v-if="peopleStore.suggestions.length" class="people-results">
+                <li v-for="person in peopleStore.suggestions" :key="person.resourceName">
+                  <button
+                    type="button"
+                    @click="
+                      sessionCalendarQuery = person.emailAddresses?.[0]?.value ?? '';
+                      peopleStore.clearSuggestions();
+                      searchSessionCalendar();
+                    ">
+                    {{ person.names?.[0]?.displayName || person.emailAddresses?.[0]?.value }}
+                  </button>
+                </li>
+              </ul>
+              <p v-if="sessionCalendarError" class="error">{{ sessionCalendarError }}</p>
+            </div>
+
+            <ul v-if="authStore.isAuthenticated" class="session-calendar-list">
+              <li v-for="c in calendarStore.sessionCalendars" :key="c.id" :title="c.description">
+                <div class="list-item">
+                  <label :title="c.description">
+                    <CalendarRibbon :cid="c.id" />
+                    <small class="session-badge">SESSION</small>
+                  </label>
+                  <DropdownMenu>
+                    <template #button>
+                      <IconEllipsisVertical />
+                    </template>
+                    <button @click="userStore.setCalendarVisibility(c.id, false)"><IconEyeSlash />非表示</button>
+                    <button @click="calendarStore.removeSessionCalendar(c.id)">セッションから削除</button>
+                  </DropdownMenu>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </Transition>
+      </section>
     </div>
   </div>
 </template>
@@ -194,6 +305,8 @@ function hideAllCalendars() {
 
   > div:nth-child(1) {
     flex-grow: 1;
+    min-height: 0;
+    overflow-y: auto;
   }
 
   > div:nth-child(2) {
@@ -202,11 +315,61 @@ function hideAllCalendars() {
   }
 }
 
+.accordion-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  text-align: left;
+
+  .title {
+    flex: 1;
+  }
+}
+
+.accordion-indicator {
+  width: 1.5rem;
+  text-align: center;
+  color: var(--text-light);
+  font-size: var(--text-size-lg);
+}
+
+.accordion-enter-active,
+.accordion-leave-active {
+  overflow: hidden;
+  transition:
+    max-height 0.22s ease,
+    opacity 0.18s ease,
+    transform 0.22s ease;
+}
+
+.accordion-enter-from,
+.accordion-leave-to {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-0.35rem);
+}
+
+.accordion-enter-to,
+.accordion-leave-from {
+  max-height: 80rem;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.accordion-body {
+  overflow: visible;
+}
+
 ul {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
+  min-height: 0;
   overflow-y: auto;
+  margin-bottom: var(--space-sm);
 
   li {
     display: flex;
@@ -263,8 +426,55 @@ ul {
   margin-top: var(--space-sm);
 }
 
+.session-calendar-search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: var(--space-sm) 0;
+  font-size: var(--text-size-xs);
+}
+
+.session-search-row {
+  display: flex;
+  gap: var(--space-xs);
+
+  button {
+    background-color: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius);
+
+    &:hover {
+      background-color: var(--bg-3);
+    }
+  }
+
+  input {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.people-results {
+  max-height: 10rem;
+  overflow-y: auto;
+
+  button {
+    width: 100%;
+    justify-content: flex-start;
+    padding: var(--space-xs);
+  }
+}
+
+.session-badge {
+  color: var(--primary);
+  font-size: var(--text-size-xxs);
+}
+
+.error {
+  color: var(--danger);
+}
+
 .privacy-icon {
   flex: 0 0 auto;
-  fill: var(--text-light);
 }
 </style>

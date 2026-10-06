@@ -51,6 +51,7 @@ onMounted(async () => {
 
   // ユーザ設定の適用
   userStore.applyTheme(userStore.userSelectedTheme);
+  userStore.applyThemeColor();
   userStore.applyFonts();
   userStore.applyTextSizes();
   window.addEventListener('resize', handleWindowResize);
@@ -90,7 +91,7 @@ onUnmounted(() => {
   @include var.spread-sizes();
   --nav-min-width: calc(260px - 2rem);
   --sub-min-width: calc(260px - 2rem);
-  --border-radius: 6px;
+  --border-radius: 8px;
 }
 
 [data-theme='dark'] {

@@ -6,7 +6,7 @@ import { useUserStore } from '@/stores/user.js';
 import { useEventStore } from '@/stores/event.js';
 import IconCaretLeft from '@/components/icons/IconCaretLeft.vue';
 import IconCaretRight from '@/components/icons/IconCaretRight.vue';
-import IconCalendar from '@/components/icons/IconCalendar.vue';
+import IconArrowRotateLeft from '@/components/icons/IconArrowRotateLeft.vue';
 
 const calendarStore = useCalendarStore();
 const userStore = useUserStore();
@@ -92,11 +92,11 @@ watch(
     <header>
       <h3>{{ `${userStore.nowUsingDate.year()}年 ${userStore.nowUsingDate.month() + 1}月` }}</h3>
       <nav>
+        <button type="button" @click="userStore.goToday">
+          <IconArrowRotateLeft />
+        </button>
         <button type="button" @click="userStore.goPrevMonth">
           <IconCaretLeft />
-        </button>
-        <button type="button" @click="userStore.goToday">
-          <IconCalendar />
         </button>
         <button type="button" @click="userStore.goNextMonth">
           <IconCaretRight />

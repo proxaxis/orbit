@@ -56,6 +56,7 @@ header {
       display: inline;
       font-weight: bold;
       font-size: var(--text-size-lg);
+      word-break: keep-all;
     }
 
     .main,

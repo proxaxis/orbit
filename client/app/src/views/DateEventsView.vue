@@ -1,5 +1,5 @@
 <script setup>
-import { inject, ref, watch, onMounted, onUnmounted } from 'vue';
+import { inject, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import dayjs, { toDayjs } from '@/services/dayjs.js';
 import { useCalendarStore } from '@/stores/calendar.js';
@@ -24,9 +24,6 @@ const calendarStore = useCalendarStore();
 const userStore = useUserStore();
 const eventStore = useEventStore();
 const collapseMobileSubPane = inject('collapseMobileSubPane', /** @type {() => void} */ (() => {}));
-const footerNowTime = ref(dayjs());
-
-let timer = null;
 
 /** @type {Ref<({ open: (event: MouseEvent) => void, close: () => void }|null)[]>} コンテキストメニュー表示用のドロップダウンへの直接の参照 */
 const rfsDrompdownMenu = ref([]);
@@ -225,19 +222,6 @@ watch(
   },
   { immediate: true },
 );
-
-onMounted(() => {
-  // 1秒ごとに現在時刻を更新
-  timer = setInterval(() => {
-    footerNowTime.value = dayjs();
-  }, 1000);
-});
-
-onUnmounted(() => {
-  if (timer) {
-    clearInterval(timer);
-  }
-});
 </script>
 
 <template>
@@ -258,7 +242,7 @@ onUnmounted(() => {
     <ul>
       <li v-for="(evt, i) in events" :key="evt.id" @click.stop="handleEventClick($event, evt)" @contextmenu="handleCardContextMenu($event, i)" @touchstart="startCardLongPress($event, i)" @touchmove="handleCardTouchMove" @touchend="finishCardTouch" @touchcancel="cancelCardLongPress">
         <div class="face">
-          <CalendarRibbon :gCalendarId="evt.calendarId" :useLabel="false" />
+          <CalendarRibbon :cid="evt.calendarId" :useLabel="false" />
           <IconArrowsRotate size="0.7rem" v-if="!!evt.raw.recurrence" />
         </div>
         <div class="info">
@@ -292,13 +276,6 @@ onUnmounted(() => {
       </li>
       <li v-if="events.length === 0" class="no-event">予定はありません</li>
     </ul>
-
-    <footer>
-      <button @click="footerNowTime = dayjs()">
-        <small>今の日時</small>
-        <p>{{ footerNowTime.format('YYYY年 MM月 D日 (ddd) HH:mm:ss A') }}</p>
-      </button>
-    </footer>
   </div>
 </template>
 
@@ -395,34 +372,6 @@ li {
   background-color: var(--bg-1);
   &:hover {
     background-color: var(--bg-2);
-  }
-}
-
-footer {
-  padding-top: var(--space-sm);
-  border-top: 1px solid var(--border);
-
-  button {
-    width: calc(100% - var(--space-sm) * 2); // 左右の余白を調整
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    background-color: var(--bg-2);
-    border-radius: var(--border-radius);
-    box-shadow: 0 1px 3px var(--shadow);
-
-    &:hover {
-      background-color: var(--bg-3);
-    }
-
-    small {
-      color: var(--text-light);
-    }
-
-    p {
-      font-size: var(--text-size-lg);
-    }
   }
 }
 </style>

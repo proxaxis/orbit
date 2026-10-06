@@ -19,6 +19,8 @@ export const USER_TEXT_SIZE_VALUES = Object.freeze({
   LARGE: Object.freeze({ xxs: '0.6875rem', xs: '0.825rem', sm: '0.9625rem', md: '1.1rem', lg: '1.2375rem', xl: '1.375rem', xxl: '1.65rem' }),
 });
 
+export const DEFAULT_THEME_COLOR = '#ff3434';
+
 /**
  * @typedef {'LIGHT' | 'DARK' | 'SYSTEM'} UserAvailableTheme ユーザが選択可能なテーマ設定
  * @typedef {'LIGHT' | 'DARK'} ResolvedTheme 実際に画面へ適用される解決済みテーマ
@@ -154,7 +156,7 @@ export const useUserStore = defineStore('user', () => {
   const timeZone = computed(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
 
   /** @type {ComputedRef<boolean>} @description アプリがインストールされているかどうか */
-  const isAppInstalled = computed(() => typeof window !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.controller);
+  const isAppInstalled = computed(() => (typeof window !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) || (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches));
 
   // #endregion
 
@@ -162,6 +164,9 @@ export const useUserStore = defineStore('user', () => {
 
   /** @type {Ref<UserAvailableTheme>} @description ユーザ設定のテーマ */
   const userSelectedTheme = ref('SYSTEM');
+
+  /** @type {Ref<string>} @description ユーザーが選択したテーマカラー */
+  const themeColor = ref(DEFAULT_THEME_COLOR);
 
   /** @type {Ref<boolean>} @description システムのテーマ設定がダークモードかどうか */
   const isSystemPrefersDark = ref(typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)').matches : false);
@@ -190,6 +195,15 @@ export const useUserStore = defineStore('user', () => {
     document.documentElement.setAttribute('data-theme', theme.value.toLowerCase());
   }
 
+  /** テーマカラーを CSS 変数へ反映します。 */
+  function applyThemeColor() {
+    if (typeof document === 'undefined') return;
+    const color = /^#[0-9a-fA-F]{6}$/.test(themeColor.value) ? themeColor.value : DEFAULT_THEME_COLOR;
+    document.documentElement.style.setProperty('--primary', color);
+    document.documentElement.style.setProperty('--primary-light', `color-mix(in srgb, ${color} 55%, transparent)`);
+    document.documentElement.style.setProperty('--selected', `color-mix(in srgb, ${color} 35%, transparent)`);
+  }
+
   // #endregion
 
   // #region カレンダー設定処理
@@ -205,6 +219,9 @@ export const useUserStore = defineStore('user', () => {
 
   /** @type {Ref<string[]>} @description 非表示にするカレンダー ID */
   const hiddenCalendarIds = ref([]);
+
+  /** @type {Ref<string>} @description 予定作成時に使用するデフォルトカレンダー ID */
+  const defaultCalendarId = ref('');
 
   /** @type {Ref<number>} @description 左ペインの幅 */
   const navPaneWidth = ref(260);
@@ -253,10 +270,10 @@ export const useUserStore = defineStore('user', () => {
   const useWheelMonthNavigation = ref(true);
 
   /** @type {Ref<number>} @description 月表示のセルに表示するイベントバーの最大本数 */
-  const maxEventBarsPerCell = ref(3);
+  const maxEventBarsPerCell = ref(6);
 
   /** @type {Ref<'FIXED'|'VARIABLE'>} @description 月表示のカレンダーセル高さ */
-  const calendarCellHeightMode = ref('FIXED');
+  const calendarCellHeightMode = ref('VARIABLE');
 
   /** @type {Ref<keyof typeof USER_FONT_FAMILIES>} @description 通常 UI のフォント */
   const uiFontFamily = ref('NOTO_SANS_JP');
@@ -305,6 +322,7 @@ export const useUserStore = defineStore('user', () => {
   async function saveSettings() {
     await writeOffline(USER_SETTINGS_KEY, {
       theme: userSelectedTheme.value,
+      themeColor: themeColor.value,
       firstDayOfWeek: firstDayOfWeek.value,
       weekendDays: weekendDays.value,
       useMiniCalendar: useMiniCalendar.value,
@@ -318,6 +336,7 @@ export const useUserStore = defineStore('user', () => {
       weekdayLabels: weekdayLabels.value,
       calendarOrder: calendarOrder.value,
       hiddenCalendarIds: hiddenCalendarIds.value,
+      defaultCalendarId: defaultCalendarId.value,
       navPaneWidth: navPaneWidth.value,
       subPaneWidth: subPaneWidth.value,
     });
@@ -327,6 +346,7 @@ export const useUserStore = defineStore('user', () => {
     try {
       const saved = await readOffline(USER_SETTINGS_KEY, {});
       if (['LIGHT', 'DARK', 'SYSTEM'].includes(saved.theme)) userSelectedTheme.value = saved.theme;
+      if (typeof saved.themeColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(saved.themeColor)) themeColor.value = saved.themeColor;
       if (Number.isInteger(saved.firstDayOfWeek) && saved.firstDayOfWeek >= 0 && saved.firstDayOfWeek <= 6) firstDayOfWeek.value = saved.firstDayOfWeek;
       if (Array.isArray(saved.weekendDays)) {
         weekendDays.value = saved.weekendDays.filter((/** @type {{ index?: number, color?: unknown }} */ day) => typeof day.index === 'number' && Number.isInteger(day.index) && day.index >= 0 && day.index <= 6 && typeof day.color === 'string');
@@ -356,6 +376,7 @@ export const useUserStore = defineStore('user', () => {
       }
       if (Array.isArray(saved.calendarOrder)) calendarOrder.value = saved.calendarOrder.filter((/** @type {unknown} */ id) => typeof id === 'string');
       if (Array.isArray(saved.hiddenCalendarIds)) hiddenCalendarIds.value = [...new Set(saved.hiddenCalendarIds.filter((/** @type {unknown} */ id) => typeof id === 'string'))];
+      if (typeof saved.defaultCalendarId === 'string') defaultCalendarId.value = saved.defaultCalendarId;
       if (Number.isInteger(saved.navPaneWidth) && saved.navPaneWidth >= 260 && saved.navPaneWidth <= 600) navPaneWidth.value = saved.navPaneWidth;
       if (Number.isInteger(saved.subPaneWidth) && saved.subPaneWidth >= 260 && saved.subPaneWidth <= 600) subPaneWidth.value = saved.subPaneWidth;
     } catch (error) {
@@ -404,6 +425,13 @@ export const useUserStore = defineStore('user', () => {
   function setCalendarVisibility(calendarId, isVisible) {
     if (typeof calendarId !== 'string') return;
     hiddenCalendarIds.value = isVisible ? hiddenCalendarIds.value.filter((id) => id !== calendarId) : [...new Set([...hiddenCalendarIds.value, calendarId])];
+    saveSettings();
+  }
+
+  /** @param {string} calendarId */
+  function setDefaultCalendar(calendarId) {
+    if (typeof calendarId !== 'string') return;
+    defaultCalendarId.value = calendarId;
     saveSettings();
   }
 
@@ -511,7 +539,7 @@ export const useUserStore = defineStore('user', () => {
   // #region 画面サイズ判定処理
 
   /** @type {Ref<number>} @description 現在のウィンドウ幅 */
-  const winInnerWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  const winInnerWidth = ref(typeof window !== undefined ? window.innerWidth : 1024);
 
   /** @type {ComputedRef<DeviceType>} @description 現在のデバイス種別 */
   const device = computed(() => {
@@ -541,12 +569,14 @@ export const useUserStore = defineStore('user', () => {
     userDialogMessage,
     userDialogType,
     userSelectedTheme,
+    themeColor,
     isSystemPrefersDark,
     theme,
     firstDayOfWeek,
     weekdayLabels,
     calendarOrder,
     hiddenCalendarIds,
+    defaultCalendarId,
     navPaneWidth,
     subPaneWidth,
     weekendDays,
@@ -592,6 +622,7 @@ export const useUserStore = defineStore('user', () => {
     setWeekdayLabels,
     setCalendarOrder,
     setCalendarVisibility,
+    setDefaultCalendar,
     setNavPaneWidth,
     setSubPaneWidth,
     openUserDialog,
@@ -599,6 +630,7 @@ export const useUserStore = defineStore('user', () => {
     resolveConfirm,
     closeUserDialog,
     applyTheme,
+    applyThemeColor,
     checkUserEnvironment,
     isAppInstalled,
     writeClipboard,

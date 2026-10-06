@@ -150,7 +150,7 @@ defineExpose({
   background-color: var(--bg-1);
   border-radius: var(--border-radius);
   min-width: 160px;
-  box-shadow: 0 4px 12px var(--shadow);
+  box-shadow: 0 2px 6px var(--shadow);
   z-index: 9999;
   overflow: hidden;
   padding: var(--space-xs) 0;

@@ -10,18 +10,16 @@ import { USER_TEXT_SIZE_VALUES } from '@/stores/user.js';
 import DropdownMenu from '@/components/DropdownMenu.vue';
 import IconCaretLeft from '@/components/icons/IconCaretLeft.vue';
 import IconCaretRight from '@/components/icons/IconCaretRight.vue';
-import IconCalendar from '@/components/icons/IconCalendar.vue';
 import IconBars from '@/components/icons/IconBars.vue';
 import IconGear from '@/components/icons/IconGear.vue';
 import IconUserGroup from '@/components/icons/IconUserGroup.vue';
-import IconArrowsRotate from '@/components/icons/IconArrowsRotate.vue';
+import IconArrowRotateLeft from '@/components/icons/IconArrowRotateLeft.vue';
 
 const router = useRouter();
 const eventStore = useEventStore();
 const userStore = useUserStore();
 const calendarStore = useCalendarStore();
 const authStore = useAuthStore();
-const isSyncing = ref(false);
 
 const calendarTextSizeStyle = computed(() => Object.fromEntries(Object.entries(USER_TEXT_SIZE_VALUES[userStore.calendarTextSize]).map(([name, value]) => [`--text-size-${name}`, value])));
 
@@ -233,6 +231,19 @@ const layoutMap = computed(() => {
   return map;
 });
 
+/** @returns {Record<string, string>} 可変セル高時の週ごとの行高 */
+const monthGridStyle = computed(() => {
+  const rows = [];
+  const isVariable = userStore.calendarCellHeightMode === 'VARIABLE';
+  for (let index = 0; index < calDaysArray.value.length; index += 7) {
+    const week = calDaysArray.value.slice(index, index + 7);
+    const eventRowCount = isVariable ? Math.max(...week.map((day) => getMonthDayEvents(day.date).length), 0) : userStore.maxEventBarsPerCell;
+    const contentHeight = 24 + eventRowCount * 18 + Math.max(0, eventRowCount - 1) * 2 + 4;
+    rows.push(`max(var(--calendar-cell-min-height), ${contentHeight}px)`);
+  }
+  return { gridTemplateRows: rows.join(' ') };
+});
+
 /**
  * イベントクリック時の処理
  * @param {Event} clickEvent - クリックイベント
@@ -417,23 +428,6 @@ const handleCalendarWheel = (evt) => {
   else goNextMonth();
 };
 
-/** カレンダー一覧と表示中の予定を最新状態へ同期します。 */
-async function syncCalendarData() {
-  if (isSyncing.value || !authStore.isAuthenticated || userStore.isOffline) return;
-  isSyncing.value = true;
-  userStore.setLoading(true, 'Syncing calendars and events...');
-  try {
-    await eventStore.syncPendingOperations();
-    await calendarStore.loadCalendars();
-    events.value = await eventStore.syncEvents(userStore.nowUsingDate.year(), userStore.nowUsingDate.month());
-  } catch (error) {
-    userStore.setError(true, error);
-  } finally {
-    isSyncing.value = false;
-    userStore.setLoading(false);
-  }
-}
-
 /**
  * スタイルクラス計算
  * @param {Object} day - 日付情報
@@ -468,19 +462,16 @@ watch(
           <IconBars />
         </button>
         <button type="button" title="前月へ戻る" aria-label="前月へ戻る" @click="goPreviousMonth">
-          <IconCaretLeft size="1.35rem" />
-        </button>
-        <button type="button" title="今日に戻る" aria-label="今日に戻る" @click.prevent="goToday">
-          <IconCalendar size="1.35rem" />
+          <IconCaretLeft size="1.25rem" />
         </button>
         <button type="button" title="次月へ進む" aria-label="次月へ進む" @click="goNextMonth">
-          <IconCaretRight size="1.35rem" />
+          <IconCaretRight size="1.25rem" />
         </button>
       </div>
       <h1>{{ relativeYearText }} {{ userStore.nowUsingDate.format('YYYY年 M月') }}</h1>
       <div>
-        <button type="button" title="今すぐ同期" aria-label="今すぐ同期" :disabled="isSyncing" :class="{ 'is-syncing': isSyncing }" @click="syncCalendarData">
-          <IconArrowsRotate size="0.96rem" />
+        <button type="button" title="今日に戻る" aria-label="今日に戻る" @click.prevent="goToday">
+          <IconArrowRotateLeft size="1.25rem" />
         </button>
         <button type="button" title="ユーザー設定" aria-label="ユーザー設定" @click="router.push({ name: 'UserConfig' })">
           <IconGear size="1.25rem" />
@@ -495,7 +486,7 @@ watch(
           </div>
         </div>
 
-        <div class="month-grid" :class="{ 'variable-cell-height': userStore.calendarCellHeightMode === 'VARIABLE' }">
+        <div class="month-grid" :class="{ 'variable-cell-height': userStore.calendarCellHeightMode === 'VARIABLE' }" :style="monthGridStyle">
           <div
             v-for="(day, idx) in calDaysArray"
             :key="day.key || idx"
@@ -543,6 +534,7 @@ watch(
 </template>
 
 <style lang="scss" scoped>
+@use '@/styles/vars.scss' as var;
 $event-bar-radius: 4px;
 
 .month-horizontal-view {
@@ -552,15 +544,44 @@ $event-bar-radius: 4px;
   flex-direction: column;
   overflow: auto;
   height: 100%;
+  overflow-y: hidden;
   touch-action: pan-y;
+  background-color: var(--bg-2);
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: var(--space-md);
+    background-color: var(--bg-2);
+    pointer-events: none;
+  }
 
   .month-content {
     display: flex;
     flex: 1 0 auto;
     min-height: calc(100% - 54px);
+    max-height: calc(100% - 54px - var(--space-sm) - var(--space-sm) - var(--space-md));
     flex-direction: column;
-    overflow: visible;
+    overflow-y: auto;
+    border-radius: var(--border-radius);
+    background-color: var(--bg-2);
+    margin: var(--space-sm);
     font-family: var(--calendar-font-family);
+  }
+
+  @include var.mdown(sm) {
+    &::after {
+      display: none;
+    }
+
+    .month-content {
+      max-height: calc(100% - 54px - var(--space-sm) - var(--space-sm));
+      margin-bottom: 0;
+    }
   }
 
   .month-slide-prev-enter-active,
@@ -603,15 +624,15 @@ $event-bar-radius: 4px;
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     padding: var(--space-xs) var(--space-md);
-    background: var(--bg-0);
-    @media (max-width: 768px) {
+    background: var(--bg-2);
+    @include var.mdown(sm) {
       padding: var(--space-xxs) var(--space-xs);
     }
     button {
-      background-color: var(--bg-0);
+      background-color: var(--bg-2);
 
       &:hover {
-        background: var(--bg-1);
+        background: var(--bg-3);
       }
     }
 
@@ -619,7 +640,7 @@ $event-bar-radius: 4px;
       display: flex;
       align-items: center;
       gap: var(--space-xs);
-      @media (max-width: 768px) {
+      @include var.mdown(sm) {
         gap: 0;
       }
       &:nth-child(3) {
@@ -629,7 +650,7 @@ $event-bar-radius: 4px;
 
     h1 {
       font-size: var(--text-size-xl);
-      @media (max-width: 768px) {
+      @include var.mdown(sm) {
         font-size: var(--text-size-lg);
       }
       display: flex;
@@ -677,6 +698,7 @@ $event-bar-radius: 4px;
     flex: 1 0 auto;
     min-height: 0;
     overflow: hidden;
+    border-radius: 0 0 var(--border-radius) var(--border-radius);
 
     &.variable-cell-height {
       grid-auto-rows: minmax(var(--calendar-cell-min-height), auto);
@@ -692,8 +714,16 @@ $event-bar-radius: 4px;
     user-select: none;
     background: var(--bg-0);
 
+    &:nth-last-child(7) {
+      border-bottom-left-radius: var(--border-radius);
+    }
+
+    &:last-child {
+      border-bottom-right-radius: var(--border-radius);
+    }
+
     &.other-month {
-      background-color: var(--bg-2);
+      background-color: var(--bg-1);
 
       .day-num {
         color: var(--text-light);
@@ -830,12 +860,6 @@ $event-bar-radius: 4px;
         right: auto;
       }
     }
-  }
-}
-
-@keyframes calendar-sync-spin {
-  to {
-    transform: rotate(360deg);
   }
 }
 </style>

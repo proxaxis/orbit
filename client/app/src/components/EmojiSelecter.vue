@@ -272,7 +272,7 @@ onBeforeUnmount(() => {
   background: var(--bg-0);
   border-radius: var(--border-radius);
   border: 1px solid var(--border);
-  box-shadow: 0 24px 60px var(--shadow);
+  box-shadow: 0 6px 16px var(--shadow);
   display: flex;
   flex-direction: column;
   overflow: hidden;

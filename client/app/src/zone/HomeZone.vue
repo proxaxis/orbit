@@ -164,17 +164,19 @@ function selectPaneForRoute(routeName) {
 }
 
 // リサイズ開始（Nav）
-const startResizeNav = () => {
+const startResizeNav = (/** @type {PointerEvent} */ evt) => {
   isResizingNav.value = true;
+  if (evt.currentTarget instanceof HTMLElement) evt.currentTarget.setPointerCapture(evt.pointerId);
   document.body.style.cursor = 'col-resize';
   document.body.style.userSelect = 'none';
 };
 
 // リサイズ開始（Sub）
-const startResizeSub = (/** @type {MouseEvent} */ evt) => {
+const startResizeSub = (/** @type {PointerEvent} */ evt) => {
   isResizingSub.value = true;
   subResizeStartX.value = evt.clientX;
   subResizeStartWidth.value = subWidth.value;
+  if (evt.currentTarget instanceof HTMLElement) evt.currentTarget.setPointerCapture(evt.pointerId);
   document.body.style.cursor = 'col-resize';
   document.body.style.userSelect = 'none';
 };
@@ -186,7 +188,7 @@ const MIN_WIDTH_SUB = 260;
 const MAX_WIDTH_SUB = 600;
 
 // マウス移動時の処理
-const handleMouseMove = (/** @type {MouseEvent} */ evt) => {
+const handleResizeMove = (/** @type {PointerEvent} */ evt) => {
   if (isResizingNav.value) {
     const newWidth = evt.clientX;
     if (MIN_WIDTH_NAV <= newWidth && newWidth <= MAX_WIDTH_NAV) {
@@ -214,8 +216,8 @@ watch(navWidth, (width) => userStore.setNavPaneWidth(width));
 watch(subWidth, (width) => userStore.setSubPaneWidth(width));
 
 onMounted(() => {
-  window.addEventListener('mousemove', handleMouseMove);
-  window.addEventListener('mouseup', stopResize);
+  window.addEventListener('pointermove', handleResizeMove);
+  window.addEventListener('pointerup', stopResize);
   window.addEventListener('pointermove', moveToggle);
   window.addEventListener('pointerup', stopToggleDrag);
 });
@@ -227,8 +229,8 @@ watch(layoutMode, (mode) => {
 });
 
 onUnmounted(() => {
-  window.removeEventListener('mousemove', handleMouseMove);
-  window.removeEventListener('mouseup', stopResize);
+  window.removeEventListener('pointermove', handleResizeMove);
+  window.removeEventListener('pointerup', stopResize);
   window.removeEventListener('pointermove', moveToggle);
   window.removeEventListener('pointerup', stopToggleDrag);
 });
@@ -242,27 +244,26 @@ onUnmounted(() => {
       </div>
     </aside>
 
-    <div class="resize-handle" @mousedown.prevent="startResizeNav"></div>
+    <div class="resize-handle" @pointerdown.prevent="startResizeNav"></div>
 
     <div class="workspace-pane">
       <main>
         <router-view />
       </main>
 
-      <div class="resize-handle" @mousedown.prevent="startResizeSub"></div>
+      <div class="resize-handle" @pointerdown.prevent="startResizeSub"></div>
 
       <aside class="sub-pane" :class="{ 'is-collapsing': isCollapsingMobileSub }" :style="{ width: `${subWidth}px` }" @touchstart="startMobileSubResize" @touchmove="resizeMobileSub" @touchend="stopMobileSubResize" @touchcancel="stopMobileSubResize">
         <div ref="mobileSubContent" class="aside-content" @touchstart="handleMobileSubContentTouchStart">
           <router-view name="sub" />
         </div>
       </aside>
-
-      <button v-if="layoutMode !== 'desktop' && activePane === 'nav'" class="pane-backdrop" type="button" aria-label="ペインを閉じる" @click="closePane"></button>
     </div>
   </div>
 </template>
 
 <style lang="scss" scoped>
+@use '@/styles/vars.scss' as var;
 .home-zone {
   display: flex;
   height: 100vh;
@@ -305,7 +306,8 @@ main {
 .resize-handle {
   width: 0.5rem;
   cursor: col-resize;
-  background-color: var(--border);
+  touch-action: none;
+  background-color: var(--bg-2);
   transition: background-color 0.2s;
   flex: 0 0 0.5rem;
   z-index: 10;
@@ -316,7 +318,7 @@ main {
   }
 }
 
-@media (max-width: 1023px) {
+@include var.mdown(md) {
   .home-zone {
     flex-direction: column;
     position: relative;
@@ -332,7 +334,7 @@ main {
     min-height: 0;
     overflow-y: auto;
     z-index: 30;
-    box-shadow: 8px 0 20px var(--shadow);
+    box-shadow: 3px 0 8px var(--shadow);
     transform: translateX(-105%);
     transition: transform 0.2s ease;
     touch-action: pan-y;
@@ -359,7 +361,7 @@ main {
     writing-mode: vertical-rl;
     letter-spacing: 0.1em;
     z-index: 20;
-    box-shadow: 0 2px 8px var(--shadow);
+    box-shadow: 0 1px 4px var(--shadow);
     cursor: grab;
     touch-action: none;
 
@@ -405,10 +407,10 @@ main {
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(360px, 88vw) !important;
+    width: min(360px, 88vw);
     height: auto;
     z-index: 30;
-    box-shadow: -8px 0 20px var(--shadow);
+    box-shadow: -3px 0 8px var(--shadow);
     transform: translateX(105%);
     transition: transform 0.2s ease;
   }
@@ -424,13 +426,17 @@ main {
   }
 }
 
-@media (min-width: 768px) and (max-width: 1023px) {
+@include var.mdown(md) {
   .layout-tablet .workspace-pane {
     display: flex;
     flex-direction: row;
     flex: 1;
     width: 100%;
     height: 100vh;
+  }
+
+  .layout-tablet .workspace-pane > .resize-handle {
+    display: block;
   }
 
   .layout-tablet main {
@@ -445,7 +451,7 @@ main {
     inset: auto;
     display: flex;
     flex: 0 0 auto;
-    width: min(360px, 42vw) !important;
+    width: min(360px, 42vw);
     height: 100%;
     transform: none;
     box-shadow: none;
@@ -462,7 +468,7 @@ main {
   }
 }
 
-@media (max-width: 767px) {
+@include var.mdown(sm) {
   .layout-mobile .workspace-pane {
     display: flex;
     flex-direction: column;
@@ -486,7 +492,7 @@ main {
     height: auto;
     min-height: 0;
     border-top: 1px solid var(--border);
-    box-shadow: 0 -6px 16px var(--shadow);
+    box-shadow: 0 -3px 8px var(--shadow);
     transform: none;
     z-index: 5;
     touch-action: none;

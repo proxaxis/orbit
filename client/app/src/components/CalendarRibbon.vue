@@ -7,6 +7,10 @@ const calendarStore = useCalendarStore();
 const props = defineProps({
   gCalendarId: {
     type: String,
+    default: '',
+  },
+  cid: {
+    type: String,
     required: true,
   },
   useLabel: {
@@ -25,11 +29,11 @@ const props = defineProps({
 
 const emit = defineEmits(['select']);
 
-const calendar = computed(() => calendarStore.list.find((cal) => cal.id === props.gCalendarId) ?? { summary: '', backgroundColor: '' });
+const calendar = computed(() => calendarStore.list.find((cal) => cal.id === (props.cid ?? props.gCalendarId)) ?? { summary: '', backgroundColor: '' });
 </script>
 
 <template>
-  <button v-if="props.selectable" type="button" class="calendar-ribbon selectable" :class="{ selected: props.selected }" @click="emit('select', props.gCalendarId)">
+  <button v-if="props.selectable" type="button" class="calendar-ribbon selectable" :class="{ selected: props.selected }" @click="emit('select', props.cid)">
     <span class="color" :style="{ backgroundColor: calendar.backgroundColor }"></span>
     <span class="name" v-if="props.useLabel">{{ calendar.summary }}</span>
   </button>
@@ -43,6 +47,7 @@ const calendar = computed(() => calendarStore.list.find((cal) => cal.id === prop
 .calendar-ribbon {
   display: flex;
   flex: 1;
+  flex-shrink: 0;
   align-items: center;
   gap: var(--space-sm);
   user-select: none;

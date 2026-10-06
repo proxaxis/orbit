@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router';
 import { USER_FONT_FAMILIES, USER_TEXT_SIZE_VALUES, useUserStore } from '@/stores/user.js';
 import { clearOfflineCache, deleteOffline, USER_SETTINGS_KEY } from '@/services/offline-storage.js';
 import MenuBar from '@/components/MenuBar.vue';
-import IconGear from '@/components/icons/IconGear.vue';
 import IconFloppyDisk from '@/components/icons/IconFloppyDisk.vue';
 import IconTrash from '@/components/icons/IconTrash.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
@@ -16,6 +15,7 @@ const savedMessage = ref('');
 const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const draft = reactive({
   theme: userStore.userSelectedTheme,
+  themeColor: userStore.themeColor,
   firstDayOfWeek: userStore.firstDayOfWeek,
   useMiniCalendar: userStore.useMiniCalendar,
   useWheelMonthNavigation: userStore.useWheelMonthNavigation,
@@ -53,6 +53,8 @@ function applyTheme() {
 
 function save() {
   userStore.applyTheme(draft.theme);
+  userStore.themeColor = draft.themeColor;
+  userStore.applyThemeColor();
   userStore.setFirstDayOfWeek(Number(draft.firstDayOfWeek));
   userStore.useMiniCalendar = draft.useMiniCalendar;
   userStore.useWheelMonthNavigation = draft.useWheelMonthNavigation;
@@ -69,6 +71,23 @@ function save() {
   userStore.saveSettings();
   savedMessage.value = '設定を保存しました。';
 }
+
+/** カレンダー一覧と表示中の予定を最新状態へ同期します。 */
+// async function syncCalendarData() {
+//   if (isSyncing.value || !authStore.isAuthenticated || userStore.isOffline) return;
+//   isSyncing.value = true;
+//   userStore.setLoading(true, 'Syncing calendars and events...');
+//   try {
+//     await eventStore.syncPendingOperations();
+//     await calendarStore.loadCalendars();
+//     events.value = await eventStore.syncEvents(userStore.nowUsingDate.year(), userStore.nowUsingDate.month());
+//   } catch (error) {
+//     userStore.setError(true, error);
+//   } finally {
+//     isSyncing.value = false;
+//     userStore.setLoading(false);
+//   }
+// }
 
 async function clearCache() {
   const confirmed = await userStore.confirm({
@@ -126,6 +145,10 @@ async function clearSettings() {
             <option value="LIGHT">ライト</option>
             <option value="DARK">ダーク</option>
           </select>
+        </label>
+        <label
+          >テーマカラー
+          <input v-model="draft.themeColor" type="color" aria-label="テーマカラー" />
         </label>
         <label class="switch-row"><input v-model="draft.useMiniCalendar" type="checkbox" />小型カレンダーを表示する</label>
         <label class="switch-row"><input v-model="draft.useWheelMonthNavigation" type="checkbox" />スクロールで月を移動する</label>

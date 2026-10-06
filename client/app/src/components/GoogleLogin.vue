@@ -26,7 +26,7 @@ button {
   font-size: var(--text-size-lg);
   background-color: var(--bg-2);
   border-radius: var(--border-radius);
-  width: 100%;
+  width: calc(100% - var(--space-sm) * 2);
 
   &:hover {
     background-color: var(--bg-3);

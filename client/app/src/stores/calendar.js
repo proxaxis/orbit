@@ -11,10 +11,12 @@ export const useCalendarStore = defineStore('calendar', () => {
 
   /** @type {ShallowRef<null|Set<GoogleCalendarListEntry>>} */
   const _gCalendarsList = shallowRef(null);
+  /** @type {ShallowRef<Set<GoogleCalendarListEntry>>} 一時利用するセッションカレンダー */
+  const _sessionCalendars = shallowRef(new Set());
 
   /** @type {ComputedRef<GoogleCalendarListEntry[]>} */
   const list = computed(() => {
-    const calendars = Array.from(_gCalendarsList.value ?? new Set());
+    const calendars = Array.from(new Map([...Array.from(_gCalendarsList.value ?? new Set()), ...Array.from(_sessionCalendars.value)].map((calendar) => [calendar.id, calendar])).values());
     const order = userStore.calendarOrder;
     return calendars.sort((left, right) => {
       const leftIndex = order.indexOf(left.id);
@@ -30,6 +32,47 @@ export const useCalendarStore = defineStore('calendar', () => {
   const listWritableCalendars = computed(() => list.value.filter((cal) => cal.accessRole === 'writer' || cal.accessRole === 'owner' || cal.primary));
 
   const listVisibleCalendars = computed(() => list.value.filter((cal) => !userStore.hiddenCalendarIds.includes(cal.id)));
+
+  /** @param {GoogleCalendarResource|GoogleCalendarListEntry} calendar */
+  function addSessionCalendar(calendar) {
+    if (!calendar?.id) return;
+    const entry = {
+      kind: 'calendar#calendarListEntry',
+      etag: calendar.etag ?? '',
+      id: calendar.id,
+      summary: calendar.summary ?? calendar.id,
+      description: calendar.description,
+      location: calendar.location,
+      timeZone: calendar.timeZone,
+      backgroundColor: calendar.backgroundColor ?? '#607d8b',
+      foregroundColor: calendar.foregroundColor ?? '#ffffff',
+      accessRole: calendar.accessRole ?? 'reader',
+      session: true,
+    };
+    _sessionCalendars.value = new Set([..._sessionCalendars.value].filter((item) => item.id !== entry.id).concat(entry));
+    writeOffline('session-calendars', Array.from(_sessionCalendars.value));
+  }
+
+  /** セッションカレンダーを全て消去します。 */
+  function clearSessionCalendars() {
+    _sessionCalendars.value = new Set();
+    writeOffline('session-calendars', []);
+  }
+
+  /** @param {string} calendarId セッション一覧から除去する ID */
+  function removeSessionCalendar(calendarId) {
+    _sessionCalendars.value = new Set([..._sessionCalendars.value].filter((calendar) => calendar.id !== calendarId));
+    writeOffline('session-calendars', Array.from(_sessionCalendars.value));
+  }
+
+  /** @param {string} calendarId @returns {Promise<GoogleCalendarListEntry|null>} ID から検索して保存します。 */
+  async function searchSessionCalendar(calendarId) {
+    const normalizedId = calendarId.trim();
+    if (!normalizedId || !authStore.isAuthenticated || userStore.isOffline) return null;
+    const resource = await gCalAPI.getCalendar(authStore.token, normalizedId);
+    addSessionCalendar(resource);
+    return list.value.find((item) => item.id === normalizedId) ?? null;
+  }
 
   /** @param {GoogleCalendarListEntry} calendar */
   function addCalendar(calendar) {
@@ -64,7 +107,9 @@ export const useCalendarStore = defineStore('calendar', () => {
 
   async function loadCalendars() {
     const savedCalendars = await readOffline('calendars', []);
+    const savedSessionCalendars = await readOffline('session-calendars', []);
     if (Array.isArray(savedCalendars) && savedCalendars.length > 0) _gCalendarsList.value = new Set(savedCalendars);
+    if (Array.isArray(savedSessionCalendars)) _sessionCalendars.value = new Set(savedSessionCalendars);
     if (!authStore.isAuthenticated || userStore.isOffline) return;
 
     userStore.setLoading(true, 'Loading calendars...');
@@ -86,6 +131,11 @@ export const useCalendarStore = defineStore('calendar', () => {
     list,
     listWritableCalendars,
     listVisibleCalendars,
+    sessionCalendars: computed(() => Array.from(_sessionCalendars.value)),
+    addSessionCalendar,
+    clearSessionCalendars,
+    removeSessionCalendar,
+    searchSessionCalendar,
     addCalendar,
     updateCalendar,
     removeCalendar,
