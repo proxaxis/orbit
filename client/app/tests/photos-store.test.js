@@ -1,0 +1,196 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
+import dayjs from '@/services/dayjs.js';
+
+const mocks = vi.hoisted(() => ({
+  patchEvent: vi.fn(async () => ({})),
+  createAlbum: vi.fn(async () => ({ id: 'album-1', productUrl: 'https://photos.google.com/album/1' })),
+  getAlbum: vi.fn(async () => ({ id: 'album-1' })),
+  shareAlbum: vi.fn(async () => ({ shareableUrl: 'https://photos.app.goo.gl/xyz', shareToken: 'token-1' })),
+  joinSharedAlbum: vi.fn(async () => ({ album: { id: 'album-1' } })),
+  uploadMediaBytes: vi.fn(async () => 'upload-token-1'),
+  batchCreateMediaItems: vi.fn(async () => ({})),
+  listAlbumMediaItems: vi.fn(async () => [{ id: 'm1' }]),
+  downloadMediaFile: vi.fn(async () => new Blob(['x'])),
+  createPickerSession: vi.fn(async () => ({ id: 'sess-1', pickerUri: 'https://picker/x', mediaItemsSet: true })),
+  getPickerSession: vi.fn(async () => ({ id: 'sess-1', mediaItemsSet: true })),
+  listPickedMediaItems: vi.fn(async () => []),
+  deletePickerSession: vi.fn(async () => null),
+}));
+
+const authState = vi.hoisted(() => ({
+  token: 'cal-token',
+  isAuthenticated: true,
+  photoToken: 'photo-token',
+  isPhotoSharingAuthorized: true,
+  fetchPhotoToken: vi.fn(async () => 'photo-token'),
+  clearPhotoToken: vi.fn(),
+}));
+
+vi.mock('@/services/google-calendar-api.js', () => ({ patchEvent: mocks.patchEvent }));
+vi.mock('@/services/google-photo-api.js', () => mocks);
+vi.mock('@/stores/auth.js', () => ({ BFF_BASE_URL: '', useAuthStore: () => authState }));
+
+const { usePhotosStore } = await import('@/stores/photos.js');
+const { useUserStore } = await import('@/stores/user.js');
+
+function handyEvent(overrides = {}) {
+  return {
+    id: 'evt-1',
+    calendarId: 'cal-1',
+    summary: '旅行',
+    startDateTime: dayjs('2026-10-05T10:00:00'),
+    raw: { start: { dateTime: '2026-10-05T10:00:00' }, end: { dateTime: '2026-10-05T12:00:00' }, extendedProperties: { shared: { otherKey: 'keep' } } },
+    ...overrides,
+  };
+}
+
+describe('usePhotosStore', () => {
+  /** @type {ReturnType<typeof usePhotosStore>} */
+  let store;
+  /** @type {ReturnType<typeof useUserStore>} */
+  let userStore;
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    vi.stubGlobal('open', vi.fn());
+    store = usePhotosStore();
+    userStore = useUserStore();
+    userStore.setUsePhotoSharing(true);
+    authState.isPhotoSharingAuthorized = true;
+    authState.isAuthenticated = true;
+  });
+
+  describe('bindingOf', () => {
+    it('extendedProperties.shared からアルバム情報を読む', () => {
+      const evt = handyEvent({
+        raw: { extendedProperties: { shared: { photoAlbumId: 'a1', photoAlbumShareUrl: 'u', photoAlbumShareToken: 't' } } },
+      });
+      expect(store.bindingOf(evt)).toEqual({ albumId: 'a1', shareUrl: 'u', shareToken: 't' });
+    });
+
+    it('紐づけなしは null', () => {
+      expect(store.bindingOf(handyEvent())).toBeNull();
+      expect(store.bindingOf(null)).toBeNull();
+    });
+  });
+
+  describe('canUsePhotoSharing', () => {
+    it('設定有効 + 認証済みで true', () => {
+      expect(store.canUsePhotoSharing()).toBe(true);
+    });
+
+    it('設定無効・OAuth 未認証・未ログインでは false', () => {
+      userStore.setUsePhotoSharing(false);
+      expect(store.canUsePhotoSharing()).toBe(false);
+      userStore.setUsePhotoSharing(true);
+      authState.isPhotoSharingAuthorized = false;
+      expect(store.canUsePhotoSharing()).toBe(false);
+      authState.isPhotoSharingAuthorized = true;
+      authState.isAuthenticated = false;
+      expect(store.canUsePhotoSharing()).toBe(false);
+    });
+  });
+
+  describe('ensureEventAlbum', () => {
+    it('既存の紐づけがあれば API を呼ばず返す', async () => {
+      const evt = handyEvent({ raw: { extendedProperties: { shared: { photoAlbumId: 'a9' } } } });
+      const binding = await store.ensureEventAlbum(evt);
+      expect(binding.albumId).toBe('a9');
+      expect(mocks.createAlbum).not.toHaveBeenCalled();
+    });
+
+    it('アルバムを自動作成し shared プロパティへ保存する（他プロパティ保持）', async () => {
+      const evt = handyEvent();
+      const binding = await store.ensureEventAlbum(evt);
+
+      expect(mocks.createAlbum).toHaveBeenCalledWith('photo-token', '旅行 (2026-10-05)');
+      expect(mocks.shareAlbum).toHaveBeenCalledWith('photo-token', 'album-1', { isCollaborative: false, isCommentable: false });
+      expect(mocks.patchEvent).toHaveBeenCalledWith('cal-token', 'cal-1', 'evt-1', {
+        extendedProperties: {
+          shared: { otherKey: 'keep', photoAlbumId: 'album-1', photoAlbumShareUrl: 'https://photos.app.goo.gl/xyz', photoAlbumShareToken: 'token-1' },
+        },
+      });
+      expect(binding).toEqual({ albumId: 'album-1', shareUrl: 'https://photos.app.goo.gl/xyz', shareToken: 'token-1' });
+      // ローカルのイベントにも反映される
+      expect(evt.raw.extendedProperties.shared.photoAlbumId).toBe('album-1');
+    });
+
+    it('他の参加者がいる場合はコラボレーション共有にする', async () => {
+      const evt = handyEvent({ raw: { attendees: [{ email: 'me@x.com', self: true }, { email: 'other@x.com' }] } });
+      await store.ensureEventAlbum(evt);
+      expect(mocks.shareAlbum).toHaveBeenCalledWith('photo-token', 'album-1', { isCollaborative: true, isCommentable: true });
+    });
+
+    it('機能未使用状態ではエラー', async () => {
+      userStore.setUsePhotoSharing(false);
+      await expect(store.ensureEventAlbum(handyEvent())).rejects.toThrow('写真共有');
+    });
+  });
+
+  describe('uploadFiles', () => {
+    const files = [{ blob: new Blob(['x']), fileName: 'a.jpg', mimeType: 'image/jpeg' }];
+
+    it('バイトアップロード→batchCreate でアルバム末尾に追加する', async () => {
+      const evt = handyEvent();
+      await store.uploadFiles(evt, files);
+
+      expect(mocks.uploadMediaBytes).toHaveBeenCalledWith('photo-token', files[0].blob, 'a.jpg', 'image/jpeg');
+      expect(mocks.batchCreateMediaItems).toHaveBeenCalledWith('photo-token', [{ simpleMediaItem: { uploadToken: 'upload-token-1', fileName: 'a.jpg' } }], 'album-1');
+    });
+
+    it('アルバム未作成でも ensureEventAlbum 経由で作成される', async () => {
+      await store.uploadFiles(handyEvent(), files);
+      expect(mocks.createAlbum).toHaveBeenCalled();
+    });
+
+    it('空のファイル一覧は何もしない', async () => {
+      const result = await store.uploadFiles(handyEvent(), []);
+      expect(result).toBeNull();
+      expect(mocks.uploadMediaBytes).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('openAlbum', () => {
+    const binding = { albumId: 'album-1', shareUrl: 'u', shareToken: 'st-1' };
+
+    it('参加済みなら getAlbum の結果を返す', async () => {
+      mocks.getAlbum.mockResolvedValue({ id: 'album-1' });
+      const album = await store.openAlbum(binding);
+      expect(album.id).toBe('album-1');
+      expect(mocks.joinSharedAlbum).not.toHaveBeenCalled();
+    });
+
+    it('403/404 なら shareToken で参加する', async () => {
+      const err = new Error('forbidden');
+      err.status = 403;
+      mocks.getAlbum.mockRejectedValue(err);
+      const album = await store.openAlbum(binding);
+      expect(mocks.joinSharedAlbum).toHaveBeenCalledWith('photo-token', 'st-1');
+      expect(album.id).toBe('album-1');
+    });
+  });
+
+  describe('uploadPickedPhotos', () => {
+    it('Picker 選択物をダウンロード→再アップロードしてアルバムへ入れる', async () => {
+      mocks.listPickedMediaItems.mockResolvedValue([
+        { mediaFile: { baseUrl: 'https://lh3/x', filename: 'picked.jpg', mimeType: 'image/jpeg' } },
+      ]);
+      const binding = await store.uploadPickedPhotos(handyEvent(), null);
+
+      expect(mocks.downloadMediaFile).toHaveBeenCalledWith('photo-token', 'https://lh3/x');
+      expect(mocks.batchCreateMediaItems).toHaveBeenCalledWith('photo-token', [{ simpleMediaItem: { uploadToken: 'upload-token-1', fileName: 'picked.jpg' } }], 'album-1');
+      expect(mocks.deletePickerSession).toHaveBeenCalledWith('photo-token', 'sess-1');
+      expect(binding.albumId).toBe('album-1');
+    });
+
+    it('選択なし（キャンセル）は null を返す', async () => {
+      mocks.listPickedMediaItems.mockResolvedValue([]);
+      const result = await store.uploadPickedPhotos(handyEvent(), null);
+      expect(result).toBeNull();
+      expect(mocks.uploadMediaBytes).not.toHaveBeenCalled();
+      expect(mocks.deletePickerSession).toHaveBeenCalled();
+    });
+  });
+});

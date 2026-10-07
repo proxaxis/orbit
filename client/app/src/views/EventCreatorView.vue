@@ -54,3 +54,13 @@ async function submit({ body, calendarId, peopleToCreate = [] }) {
     <EventForm @submit="submit" @cancel="router.back()" />
   </section>
 </template>
+
+<style lang="css" scoped>
+button {
+  background-color: var(--bg-1);
+
+  &:hover {
+    background-color: var(--bg-2);
+  }
+}
+</style>

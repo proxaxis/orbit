@@ -15,14 +15,15 @@ import GoogleLogin from '@/components/GoogleLogin.vue';
 import IconEllipsisVertical from '@/components/icons/IconEllipsisVertical.vue';
 import IconUserLock from '@/components/icons/IconUserLock.vue';
 import IconEyeSlash from '@/components/icons/IconEyeSlash.vue';
-import AppInstallButton from '@/components/AppInstallButton.vue';
 import IconUserGroup from '@/components/icons/IconUserGroup.vue';
+import IconUserPlus from '@/components/icons/IconUserPlus.vue';
 import IconCircleInfo from '@/components/icons/IconCircleInfo.vue';
 import IconCalendarPlus from '@/components/icons/IconCalendarPlus.vue';
 import IconCloudArrowDown from '@/components/icons/IconCloudArrowDown.vue';
 import IconEye from '@/components/icons/IconEye.vue';
 import IconCrown from '@/components/icons/IconCrown.vue';
 import IconTrash from '@/components/icons/IconTrash.vue';
+import AccordionMenu from '@/components/AccordionMenu.vue';
 
 const router = useRouter();
 const calendarStore = useCalendarStore();
@@ -163,14 +164,9 @@ function hideAllCalendars() {
       </AskLoginMessage>
 
       <section class="calendar-section" :class="{ 'is-open': isCalendarSectionOpen }">
-        <MenuBar>
-          <template #main>
-            <button type="button" class="accordion-title" :aria-expanded="isCalendarSectionOpen" @click="isCalendarSectionOpen = !isCalendarSectionOpen">
-              <span class="title">カレンダー</span>
-              <!-- <span class="accordion-indicator" aria-hidden="true">{{ isCalendarSectionOpen ? '−' : '+' }}</span> -->
-            </button>
-          </template>
-          <template #sub>
+        <AccordionMenu title="カレンダーリストの開閉">
+          <template #summary>カレンダーリスト</template>
+          <template #menu>
             <DropdownMenu>
               <template #button>
                 <button class="icon-ellipsis-vertical-wrapper" title="カレンダーの操作">
@@ -183,10 +179,7 @@ function hideAllCalendars() {
               <button @click="hideAllCalendars"><IconEyeSlash />全てを非表示</button>
             </DropdownMenu>
           </template>
-        </MenuBar>
-
-        <Transition name="accordion">
-          <div v-show="isCalendarSectionOpen" class="accordion-body">
+          <div class="accordion-content">
             <ul v-if="authStore.isAuthenticated">
               <li
                 v-for="c in regularCalendars"
@@ -216,24 +209,22 @@ function hideAllCalendars() {
                     <button @click="userStore.setCalendarVisibility(c.id, false)"><IconEyeSlash />非表示</button>
                     <button @click="router.push({ name: 'CalendarDetail', query: { cid: c.id } })"><IconCircleInfo />カレンダーの詳細</button>
                     <button @click="router.push({ name: 'SharingConfig', query: { cid: c.id } })"><IconUserGroup />共有設定</button>
+                    <button @click="router.push({ name: 'ShareManage', query: { cid: c.id } })"><IconUserPlus />期間を指定して共有</button>
                     <button @click="userStore.setDefaultCalendar(c.id)"><IconCrown />デフォルトにする</button>
                   </DropdownMenu>
                 </div>
               </li>
             </ul>
+            <small v-if="authStore.isAuthenticated && regularCalendars.length === 0">表示するカレンダーはありません</small>
+            <small v-if="!authStore.isAuthenticated" class="login-message">カレンダーを同期するにはログインしてください</small>
           </div>
-        </Transition>
+        </AccordionMenu>
       </section>
 
-      <section class="session-section" :class="{ 'is-open': isSessionSectionOpen }">
-        <MenuBar>
-          <template #main>
-            <button type="button" class="accordion-title" :aria-expanded="isSessionSectionOpen" @click="isSessionSectionOpen = !isSessionSectionOpen">
-              <span class="title">セッションリスト</span>
-              <!-- <span class="accordion-indicator" aria-hidden="true">{{ isSessionSectionOpen ? '−' : '+' }}</span> -->
-            </button>
-          </template>
-          <template #sub>
+      <section class="session-section">
+        <AccordionMenu title="セッションリストの開閉">
+          <template #summary>セッションリスト</template>
+          <template #menu>
             <DropdownMenu>
               <template #button>
                 <button class="icon-ellipsis-vertical-wrapper" title="カレンダーの操作">
@@ -245,10 +236,7 @@ function hideAllCalendars() {
               <button :disabled="!calendarStore.sessionCalendars.length" @click="calendarStore.clearSessionCalendars"><IconTrash />全て削除</button>
             </DropdownMenu>
           </template>
-        </MenuBar>
-
-        <Transition name="accordion">
-          <div v-show="isSessionSectionOpen" class="accordion-body">
+          <div class="accordion-content">
             <div class="session-calendar-search">
               <div class="session-search-row">
                 <input v-model="sessionCalendarQuery" placeholder="カレンダーを検索..." @input="searchPeopleForSessionCalendar" @keydown.enter.prevent="searchSessionCalendar" />
@@ -267,7 +255,7 @@ function hideAllCalendars() {
                   </button>
                 </li>
               </ul>
-              <p v-if="sessionCalendarError" class="error">{{ sessionCalendarError }}</p>
+              <small v-if="sessionCalendarError" class="error">{{ sessionCalendarError }}</small>
             </div>
 
             <ul v-if="authStore.isAuthenticated" class="session-calendar-list">
@@ -287,8 +275,10 @@ function hideAllCalendars() {
                 </div>
               </li>
             </ul>
+            <small v-if="authStore.isAuthenticated && calendarStore.sessionCalendars.length === 0">表示するカレンダーはありません</small>
+            <small v-if="!authStore.isAuthenticated" class="login-message">カレンダーを同期するにはログインしてください</small>
           </div>
-        </Transition>
+        </AccordionMenu>
       </section>
     </div>
   </div>
@@ -315,52 +305,13 @@ function hideAllCalendars() {
   }
 }
 
-.accordion-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 0;
-  background: transparent;
-  text-align: left;
-
-  .title {
-    flex: 1;
-  }
-}
-
-.accordion-indicator {
-  width: 1.5rem;
-  text-align: center;
-  color: var(--text-light);
-  font-size: var(--text-size-lg);
-}
-
-.accordion-enter-active,
-.accordion-leave-active {
-  overflow: hidden;
-  transition:
-    max-height 0.22s ease,
-    opacity 0.18s ease,
-    transform 0.22s ease;
-}
-
-.accordion-enter-from,
-.accordion-leave-to {
-  max-height: 0;
-  opacity: 0;
-  transform: translateY(-0.35rem);
-}
-
-.accordion-enter-to,
-.accordion-leave-from {
-  max-height: 80rem;
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.accordion-body {
+.accordion-content {
   overflow: visible;
+  small {
+    display: block;
+    padding: var(--space-xs) var(--space-md);
+    color: var(--text-light);
+  }
 }
 
 ul {
@@ -412,8 +363,7 @@ ul {
 }
 
 .icon-ellipsis-vertical-wrapper {
-  // カレンダーリストのボタンとそろえるために padding を調整
-  padding: var(--space-sm) 0 var(--space-sm) var(--space-sm);
+  padding: var(--space-sm);
   background-color: var(--bg-1);
 
   &:hover {
@@ -423,7 +373,7 @@ ul {
 
 .google-login-wrapper {
   width: calc(100% - var(--space-sm) * 2);
-  margin-top: var(--space-sm);
+  margin: var(--space-sm) auto;
 }
 
 .session-calendar-search {

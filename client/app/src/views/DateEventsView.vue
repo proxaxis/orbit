@@ -1,5 +1,5 @@
 <script setup>
-import { inject, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import dayjs, { toDayjs } from '@/services/dayjs.js';
 import { useCalendarStore } from '@/stores/calendar.js';
@@ -23,7 +23,9 @@ const router = useRouter();
 const calendarStore = useCalendarStore();
 const userStore = useUserStore();
 const eventStore = useEventStore();
-const collapseMobileSubPane = inject('collapseMobileSubPane', /** @type {() => void} */ (() => {}));
+const props = defineProps({
+  collapseMobileSubPane: { type: Function, default: () => {} },
+});
 
 /** @type {Ref<({ open: (event: MouseEvent) => void, close: () => void }|null)[]>} コンテキストメニュー表示用のドロップダウンへの直接の参照 */
 const rfsDrompdownMenu = ref([]);
@@ -233,7 +235,7 @@ watch(
         </h2>
       </template>
       <template #sub>
-        <button v-if="userStore.isMobile" type="button" class="icon-x-mark-wrapper" title="下部ペインを閉じる" aria-label="下部ペインを閉じる" @click="collapseMobileSubPane">
+        <button v-if="userStore.isMobile" type="button" class="icon-x-mark-wrapper" title="下部ペインを閉じる" aria-label="下部ペインを閉じる" @click="props.collapseMobileSubPane">
           <IconXMark />
         </button>
       </template>

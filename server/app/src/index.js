@@ -26,6 +26,16 @@ redis.on('error', (err) => {
 // セッションキーのヘルパー関数（プレフィックスを付与して管理を容易にする）
 const getSessionKey = (/** @type {string} */ sessionId) => `session:${sessionId}`;
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30日（Cookieの有効期限と揃える）
+const SESSION_SECRET =
+  process.env.SESSION_SECRET ?? 'E3LgvqwIuHPlBTmUBKtoi0KM99HcIObfAPeEaEy732YKx6YDm20sxIfCHKlWxmrF';
+
+// 追加スコープ認可のコールバック URI（Google Cloud Console に登録が必要）
+const PHOTO_SHARING_REDIRECT_URI = `${new URL(process.env.GOOGLE_REDIRECT_URI).origin}/enable?t=photo-sharing`;
+
+const PHOTO_SHARING_SCOPES = [
+  'https://www.googleapis.com/auth/photoslibrary',
+  'https://www.googleapis.com/auth/photospicker.mediaitems.readonly',
+];
 
 // CORS 設定（Vite 開発サーバーからの Cookie 送信を許可）
 app.use(
@@ -39,11 +49,12 @@ app.use(
 /**
  * Google OAuth2 クライアント初期化
  */
-const getOAuth2Client = () => new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI
-);
+const getOAuth2Client = (redirectUri = process.env.GOOGLE_REDIRECT_URI) =>
+  new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    redirectUri
+  );
 
 // ログイン開始 - Google の OAuth 認証画面へリダイレクト
 app.get('/auth/login', (c) => {
@@ -91,7 +102,7 @@ app.get('/auth/callback', async (c) => {
     c,
     'session_id',
     sessionId,
-    process.env.SESSION_SECRET ?? 'E3LgvqwIuHPlBTmUBKtoi0KM99HcIObfAPeEaEy732YKx6YDm20sxIfCHKlWxmrF',
+    SESSION_SECRET,
     {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -104,11 +115,67 @@ app.get('/auth/callback', async (c) => {
   return c.redirect(process.env.CLIENT_URL ?? '');
 });
 
+// Photo Sharing の追加スコープ認可を開始 - 既存セッションに Photos の権限を追加するため
+// Google の OAuth 認証画面へリダイレクト（コールバックは /enable?t=photo-sharing）
+app.get('/auth/photo-sharing', async (c) => {
+  const sessionId = await getSignedCookie(c, SESSION_SECRET, 'session_id');
+
+  if (!sessionId || !(await redis.exists(getSessionKey(sessionId)))) {
+    return c.json({ error: 'UNAUTHORIZED' }, 401);
+  }
+
+  const client = getOAuth2Client(PHOTO_SHARING_REDIRECT_URI);
+
+  const authUrl = client.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    include_granted_scopes: true,
+    scope: PHOTO_SHARING_SCOPES,
+  });
+
+  return c.redirect(authUrl);
+});
+
+// 追加スコープ認可のコールバック - t パラメータで種別を判別してトークンを交換し、
+// 既存セッションのリフレッシュトークンを更新する
+app.get('/enable', async (c) => {
+  const t = c.req.query('t');
+  const code = c.req.query('code');
+
+  if (t !== 'photo-sharing') {
+    return c.text('Unsupported enable type', 400);
+  }
+  if (!code) {
+    return c.text('Authorization code missing', 400);
+  }
+
+  const sessionId = await getSignedCookie(c, SESSION_SECRET, 'session_id');
+
+  if (!sessionId) {
+    return c.json({ error: 'UNAUTHORIZED' }, 401);
+  }
+
+  const client = getOAuth2Client(PHOTO_SHARING_REDIRECT_URI);
+  const { tokens } = await client.getToken(code);
+
+  // 追加スコープを含む新しいリフレッシュトークンが返された場合は既存セッションを更新
+  if (tokens.refresh_token) {
+    await redis.set(
+      getSessionKey(sessionId),
+      tokens.refresh_token,
+      'EX',
+      SESSION_TTL_SECONDS
+    );
+  }
+
+  return c.redirect(process.env.CLIENT_URL ?? '');
+});
+
 // 有効な Google Access Token を取得および更新
 app.get('/api/token', async (c) => {
   const sessionId = await getSignedCookie(
     c,
-    process.env.SESSION_SECRET ?? 'E3LgvqwIuHPlBTmUBKtoi0KM99HcIObfAPeEaEy732YKx6YDm20sxIfCHKlWxmrF',
+    SESSION_SECRET,
     'session_id'
   );
 
@@ -142,7 +209,7 @@ app.get('/api/token', async (c) => {
 app.post('/auth/logout', async (c) => {
   const sessionId = await getSignedCookie(
     c,
-    process.env.SESSION_SECRET ?? 'E3LgvqwIuHPlBTmUBKtoi0KM99HcIObfAPeEaEy732YKx6YDm20sxIfCHKlWxmrF',
+    SESSION_SECRET,
     'session_id'
   );
 

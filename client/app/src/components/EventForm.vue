@@ -11,8 +11,12 @@ import EmojiSelecter from '@/components/EmojiSelecter.vue';
 import IconAnglesDown from '@/components/icons/IconAnglesDown.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
 import { WEEKDAYS, buildRecurrence, parseRecurrence } from '@/services/rrule.js';
+import { ensureNotificationPermission, notificationPermission, rescheduleNotifications } from '@/services/notifications.js';
 import IconCalendar from '@/components/icons/IconCalendar.vue';
+import IconBell from '@/components/icons/IconBell.vue';
 import DatePicker from '@/components/DatePicker.vue';
+import AccordionMenu from '@/components/AccordionMenu.vue';
+import IconPlus from '@/components/icons/IconPlus.vue';
 
 const props = defineProps({
   submitLabel: { type: String, default: '保存' },
@@ -50,6 +54,12 @@ let peopleSearchTimer = null;
 let peopleSearchGeneration = 0;
 /** @type {{startDate: string, endDate: string, startTime: string, endTime: string}} 入力された日付と時間 */
 const dateFields = reactive({ startDate: '', endDate: '', startTime: '', endTime: '' });
+/** @type {Ref<{value: number, unit: 'minute'|'hour'|'day'}[]>} イベント開始前に送る通知の一覧 */
+const reminders = ref([]);
+/** 通知設定の初期値スナップショット（変更検知用） */
+let initialReminderKey = '[]';
+/** popup 以外（email など）の既存リマインダー（編集 UI 対象外のため送信時にそのまま保持する） */
+let preservedReminderOverrides = [];
 const recurrence = reactive({
   frequency: '',
   interval: 1,
@@ -127,6 +137,69 @@ function selectDate(field, value) {
   if (field === 'startDate') formData.startDateTime = updated;
   else formData.endDateTime = updated;
   openDatePicker.value = null;
+}
+
+/**
+ * 分数を通知入力行の {value, unit} 形式に変換する
+ * @param {number} minutes 開始何分前か
+ * @returns {{value: number, unit: 'minute'|'hour'|'day'}}
+ */
+function minutesToReminder(minutes) {
+  if (minutes > 0 && minutes % 1440 === 0) return { value: minutes / 1440, unit: 'day' };
+  if (minutes > 0 && minutes % 60 === 0) return { value: minutes / 60, unit: 'hour' };
+  return { value: minutes, unit: 'minute' };
+}
+
+/**
+ * 通知入力行を分数の配列に変換する（最大5件、0〜40320分）
+ * @returns {number[]}
+ */
+function reminderMinutesList() {
+  return reminders.value
+    .map((row) => (Number(row.value) || 0) * (row.unit === 'day' ? 1440 : row.unit === 'hour' ? 60 : 1))
+    .map((minutes) => Math.min(40320, Math.max(0, Math.floor(minutes))))
+    .slice(0, 5);
+}
+
+/** 通知を一行追加し、まだ許可がなければ通知権限を要求する */
+async function addReminderRow() {
+  reminders.value.push({ value: 10, unit: 'minute' });
+  await ensureNotificationPermission();
+}
+
+/** @param {number} index 削除する通知行の番号 */
+function removeReminderRow(index) {
+  reminders.value.splice(index, 1);
+}
+
+/**
+ * イベントの既存リマインダー（またはカレンダー既定値）を通知入力行に反映する
+ * @param {any} evt 取得したイベント（新規作成時は null）
+ * @param {string} calendarId 対象カレンダー ID
+ */
+function initReminders(evt, calendarId) {
+  const raw = evt?.raw?.reminders;
+  let minutesList = [];
+  preservedReminderOverrides = [];
+  if (raw?.useDefault === false) {
+    const overrides = Array.isArray(raw.overrides) ? raw.overrides : [];
+    minutesList = overrides.filter((/** @type {any} */ item) => item?.method === 'popup').map((/** @type {any} */ item) => item.minutes);
+    preservedReminderOverrides = overrides.filter((/** @type {any} */ item) => item?.method !== 'popup' && typeof item?.minutes === 'number');
+  } else {
+    // useDefault の場合はカレンダー既定のリマインダーを初期表示する
+    const defaults = calendarStore.list.find((/** @type {any} */ cal) => cal.id === calendarId)?.defaultReminders ?? [];
+    minutesList = defaults.filter((/** @type {any} */ item) => item?.method === 'popup').map((/** @type {any} */ item) => item.minutes);
+  }
+  reminders.value = minutesList
+    .filter((/** @type {any} */ minutes) => typeof minutes === 'number' && minutes >= 0)
+    .map(minutesToReminder)
+    .slice(0, 5);
+  initialReminderKey = JSON.stringify(
+    minutesList
+      .filter((/** @type {any} */ minutes) => typeof minutes === 'number' && minutes >= 0)
+      .map((/** @type {number} */ minutes) => Math.floor(minutes))
+      .sort((a, b) => a - b),
+  );
 }
 
 const dateTimeCalculator = computed(() => {
@@ -331,6 +404,18 @@ function submitForm() {
     start: formData.isAllDay ? { date: formData.startDateTime.format('YYYY-MM-DD') } : { dateTime: formData.startDateTime.toISOString(), timeZone: formData.timeZone },
     end: formData.isAllDay ? { date: formData.endDateTime.format('YYYY-MM-DD') } : { dateTime: formData.endDateTime.toISOString(), timeZone: formData.timeZone },
   };
+  const reminderMinutes = reminderMinutesList();
+  const reminderKey = JSON.stringify([...reminderMinutes].sort((a, b) => a - b));
+  if (reminderKey !== initialReminderKey) {
+    // 通知設定が変更された場合のみ reminders を送信する（未変更ならカレンダー既定値のまま）
+    const overrides = [...preservedReminderOverrides, ...reminderMinutes.map((minutes) => ({ method: 'popup', minutes }))];
+    body.reminders = overrides.length ? { useDefault: false, overrides } : { useDefault: false };
+    if (reminderMinutes.length) {
+      ensureNotificationPermission().then(() => rescheduleNotifications());
+    } else {
+      rescheduleNotifications();
+    }
+  }
   emit('submit', { body, calendarId: formData.calendarId, peopleToCreate: peopleRegistrationEmails.value });
 }
 
@@ -438,6 +523,7 @@ onMounted(async () => {
         startTime: formData.startDateTime.format('HHmm'),
         endTime: formData.endDateTime.format('HHmm'),
       });
+      initReminders(null, formData.calendarId);
     }
     // 編集対象のイベントが選択されている場合は、イベントを取得してフォームに反映
     else {
@@ -464,6 +550,7 @@ onMounted(async () => {
         startTime: formData.startDateTime.format('HHmm'),
         endTime: formData.endDateTime.format('HHmm'),
       });
+      initReminders(originalEvent.value, formData.calendarId);
       attendees.value = (originalEvent.value?.raw?.attendees ?? []).reduce((result, attendee) => {
         if (typeof attendee.email === 'string') result.push({ ...attendee, email: attendee.email });
         return result;
@@ -577,87 +664,128 @@ watch(() => formData.summary, updateTitleSuggestions);
       </label>
     </section>
     <!-- 詳細設定 -->
-    <details>
-      <summary>詳細設定</summary>
-      <!-- 招待するユーザー -->
-      <section>
-        <label for="attendee-query">招待するユーザー</label>
-        <div>
-          <span v-for="attendee in attendees" :key="attendee.email">
-            {{ attendee.displayName || attendee.email }}
-            <label v-if="!attendee.displayName"> <input type="checkbox" :checked="peopleRegistrationEmails.includes(attendee.email)" @change="togglePeopleRegistration(attendee.email)" />連絡先に登録 </label>
-            <button type="button" :aria-label="`${attendee.email}を削除`" @click="removeAttendee(attendee.email)">
-              <IconXMark />
-            </button>
-          </span>
-        </div>
-        <input id="attendee-query" v-model="attendeeQuery" autocomplete="off" placeholder="名前またはメールアドレス" data-enter-focus @keydown.enter="focusNextOnEnter" @keydown="addUnknownAttendee" @blur="clearPeopleSuggestionsLater" />
-        <p v-if="attendeeQuery.startsWith('@')">ラベルで検索中</p>
-        <p v-else-if="attendeeQuery.includes('@')">Enter で未知のメールアドレスを追加</p>
-        <ul v-if="isSearchingPeople || peopleStore.suggestions.length || attendeeQuery.includes('@')">
-          <li v-if="isSearchingPeople">検索中...</li>
-          <li v-for="person in peopleStore.suggestions" :key="person.resourceName">
-            <button type="button" @mousedown.prevent="addAttendee(person)">
-              <span>{{ person.names?.[0]?.displayName || '名前なし' }}</span>
-              <small>{{ person.emailAddresses?.[0]?.value }}</small>
-            </button>
-          </li>
-          <li v-if="!isSearchingPeople && !peopleStore.suggestions.length && attendeeQuery.includes('@') && !attendeeQuery.startsWith('@')">
-            <button type="button" @mousedown.prevent="addUnknownEmail">
-              <span>メールアドレスを招待</span>
-              <small>{{ attendeeQuery }}</small>
-            </button>
-          </li>
-          <li v-if="!isSearchingPeople && !peopleStore.suggestions.length && !attendeeQuery.includes('@')">候補が見つかりません</li>
-        </ul>
-      </section>
-      <!-- タイムゾーン -->
-      <section>
-        <label v-if="!formData.isAllDay"
-          ><span>タイムゾーン</span>
-          <TimezoneSelecter v-model="formData.timeZone" />
-        </label>
-      </section>
-      <!-- 繰り返し設定 -->
-      <section>
-        <span>繰り返し設定</span>
-        <fieldset class="recurrence-fieldset">
-          <legend>繰り返し</legend>
-          <label>
-            ルール
-            <select v-model="recurrence.frequency">
-              <option value="">繰り返さない</option>
-              <option value="DAILY">毎日</option>
-              <option value="WEEKLY">毎週</option>
-              <option value="MONTHLY">毎月</option>
-              <option value="YEARLY">毎年</option>
-            </select>
+    <AccordionMenu label="詳細設定">
+      <div class="accordion-content">
+        <!-- 招待するユーザー -->
+        <section>
+          <label for="attendee-query"><span>招待するユーザー</span></label>
+          <div>
+            <span v-for="attendee in attendees" :key="attendee.email">
+              {{ attendee.displayName || attendee.email }}
+              <label v-if="!attendee.displayName"> <input type="checkbox" :checked="peopleRegistrationEmails.includes(attendee.email)" @change="togglePeopleRegistration(attendee.email)" />連絡先に登録 </label>
+              <button type="button" :aria-label="`${attendee.email}を削除`" @click="removeAttendee(attendee.email)">
+                <IconXMark />
+              </button>
+            </span>
+          </div>
+          <input id="attendee-query" v-model="attendeeQuery" autocomplete="off" placeholder="名前またはメールアドレス" data-enter-focus @keydown.enter="focusNextOnEnter" @keydown="addUnknownAttendee" @blur="clearPeopleSuggestionsLater" />
+          <p v-if="attendeeQuery.startsWith('@')">ラベルで検索中</p>
+          <p v-else-if="attendeeQuery.includes('@')">Enter で未知のメールアドレスを追加</p>
+          <ul v-if="isSearchingPeople || peopleStore.suggestions.length || attendeeQuery.includes('@')">
+            <li v-if="isSearchingPeople">検索中...</li>
+            <li v-for="person in peopleStore.suggestions" :key="person.resourceName">
+              <button type="button" @mousedown.prevent="addAttendee(person)">
+                <span>{{ person.names?.[0]?.displayName || '名前なし' }}</span>
+                <small>{{ person.emailAddresses?.[0]?.value }}</small>
+              </button>
+            </li>
+            <li v-if="!isSearchingPeople && !peopleStore.suggestions.length && attendeeQuery.includes('@') && !attendeeQuery.startsWith('@')">
+              <button type="button" @mousedown.prevent="addUnknownEmail">
+                <span>メールアドレスを招待</span>
+                <small>{{ attendeeQuery }}</small>
+              </button>
+            </li>
+            <li v-if="!isSearchingPeople && !peopleStore.suggestions.length && !attendeeQuery.includes('@')">候補が見つかりません</li>
+          </ul>
+        </section>
+        <!-- タイムゾーン -->
+        <section>
+          <label v-if="!formData.isAllDay"
+            ><span>タイムゾーン</span>
+            <TimezoneSelecter v-model="formData.timeZone" />
           </label>
-          <template v-if="recurrence.frequency">
-            <label class="inline-field">間隔 <input v-model.number="recurrence.interval" type="number" min="1" max="99" /> {{ recurrence.frequency === 'DAILY' ? '日' : recurrence.frequency === 'WEEKLY' ? '週' : recurrence.frequency === 'MONTHLY' ? 'か月' : '年' }}ごと</label>
-            <div v-if="recurrence.frequency === 'WEEKLY' || recurrence.frequency === 'MONTHLY'" class="weekday-options">
-              <span>曜日</span>
-              <label v-for="weekday in WEEKDAYS" :key="weekday.value"><input v-model="recurrence.weekdays" type="checkbox" :value="weekday.value" />{{ weekday.label }}</label>
-            </div>
-            <label v-if="recurrence.frequency === 'MONTHLY'" class="inline-field">日付 <input v-model.number="recurrence.monthDay" type="number" min="1" max="31" placeholder="開始日" /> 日</label>
-            <label v-if="recurrence.frequency === 'YEARLY'" class="inline-field">月 <input v-model.number="recurrence.month" type="number" min="1" max="12" placeholder="開始月" /> 月</label>
-            <div class="recurrence-end">
-              <label>回数 <input v-model.number="recurrence.count" type="number" min="1" placeholder="無制限" /></label>
-              <label>または期限 <input v-model="recurrence.until" type="date" /></label>
-            </div>
-            <label>除外日 <input v-model="recurrence.exclusions" placeholder="YYYY-MM-DD, YYYY-MM-DD" /></label>
+        </section>
+        <!-- 繰り返し設定 -->
+        <section>
+          <fieldset class="recurrence-fieldset">
+            <legend>繰り返し</legend>
             <label>
-              休日の扱い
-              <select v-model="recurrence.holidayAdjustment">
-                <option value="">通常どおり</option>
-                <option value="NEXT_WEEKDAY">休日なら次の平日</option>
-                <option value="PREVIOUS_WEEKDAY">休日なら前の平日</option>
+              <span>頻度</span>
+              <select v-model="recurrence.frequency">
+                <option value="">繰り返さない</option>
+                <option value="DAILY">毎日</option>
+                <option value="WEEKLY">毎週</option>
+                <option value="MONTHLY">毎月</option>
+                <option value="YEARLY">毎年</option>
               </select>
             </label>
-          </template>
-        </fieldset>
-      </section>
-    </details>
+            <template v-if="recurrence.frequency">
+              <label
+                ><span>間隔</span>
+                <div class="inline-field">
+                  <input v-model.number="recurrence.interval" type="number" min="1" max="99" />
+                  {{ recurrence.frequency === 'DAILY' ? '日' : recurrence.frequency === 'WEEKLY' ? '週' : recurrence.frequency === 'MONTHLY' ? '月' : '年' }}ごと
+                </div>
+              </label>
+              <div v-if="recurrence.frequency === 'WEEKLY' || recurrence.frequency === 'MONTHLY'" class="weekday-options">
+                <span>曜日</span>
+                <div>
+                  <label v-for="weekday in WEEKDAYS" :key="weekday.value"><input v-model="recurrence.weekdays" type="checkbox" :value="weekday.value" />{{ weekday.label }}</label>
+                </div>
+              </div>
+              <label v-if="recurrence.frequency === 'MONTHLY'"
+                ><span>開始日</span>
+                <div class="inline-field"><input v-model.number="recurrence.monthDay" type="number" min="1" max="31" placeholder="D" /> 日</div>
+              </label>
+              <label v-if="recurrence.frequency === 'YEARLY'"
+                ><span>開始月</span>
+                <div class="inline-field"><input v-model.number="recurrence.month" type="number" min="1" max="12" placeholder="M" /> 月</div>
+              </label>
+              <div class="recurrence-end">
+                <div class="inline-field">
+                  <label><span>回数</span> <input v-model.number="recurrence.count" type="number" min="1" placeholder="無制限" /></label>
+                  <label><span>または期限</span> <input v-model="recurrence.until" type="date" /></label>
+                </div>
+              </div>
+              <label><span>除外日</span> <input v-model="recurrence.exclusions" placeholder="YYYY-MM-DD, YYYY-MM-DD" /></label>
+              <label>
+                <span>休日の扱い</span>
+                <select v-model="recurrence.holidayAdjustment">
+                  <option value="">通常どおり</option>
+                  <option value="NEXT_WEEKDAY">休日なら次の平日</option>
+                  <option value="PREVIOUS_WEEKDAY">休日なら前の平日</option>
+                </select>
+              </label>
+            </template>
+          </fieldset>
+        </section>
+
+        <!-- 通知設定 -->
+        <section>
+          <span><IconBell size="1rem" /> 通知</span>
+          <div class="notification-rows">
+            <div v-for="(reminder, index) in reminders" :key="index" class="notification-row">
+              <div>
+              <input v-model.number="reminder.value" type="number" min="0" max="40320" :aria-label="`通知${index + 1}の時間`" />
+              <select v-model="reminder.unit" :aria-label="`通知${index + 1}の単位`">
+                <option value="minute">分</option>
+                <option value="hour">時間</option>
+                <option value="day">日</option>
+              </select>
+              <span>前に通知</span>
+              </div>
+              <button type="button" :aria-label="`通知${index + 1}を削除`" @click="removeReminderRow(index)">
+                <IconXMark />
+              </button>
+            </div>
+            <button v-if="reminders.length < 5" type="button" @click="addReminderRow">
+              <IconPlus /> 通知を追加
+            </button>
+            <p v-if="notificationPermission() === 'denied'" class="notification-warning">ブラウザの通知が拒否されています<br />ブラウザの設定でこのアプリからの通知を許可してください</p>
+          </div>
+        </section>
+      </div>
+    </AccordionMenu>
 
     <section>
       <button data-app-button="secondary" type="button" @click="emit('cancel')">キャンセル</button>
@@ -835,19 +963,15 @@ form > section:nth-child(7) {
 }
 
 // 詳細設定
-form > details {
+form .accordion-content {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-
-  > summary {
-    padding: var(--space-xs) 0;
-  }
-
+    padding: var(--space-sm) var(--space-md);
+    
   > section {
     display: flex;
     flex-direction: column;
-    gap: var(--space-xs);
 
     > label > span,
     > span {
@@ -856,7 +980,7 @@ form > details {
   }
 
   // 招待先
-  > section:first-of-type {
+  > section:nth-child(1) {
     > div {
       display: flex;
       flex-wrap: wrap;
@@ -902,7 +1026,7 @@ form > details {
     }
 
     > input {
-      width: 100%;
+      width: calc(100% - var(--space-xs) * 2 - 2px);
     }
 
     > p {
@@ -945,7 +1069,7 @@ form > details {
   }
 
   // タイムゾーン
-  > section:nth-of-type(2) {
+  > section:nth-child(2) {
     > label {
       display: flex;
       flex-direction: column;
@@ -954,7 +1078,7 @@ form > details {
   }
 
   // 繰り返し設定
-  > section:nth-of-type(3) {
+  > section:nth-child(3) {
     gap: var(--space-xs);
 
     .recurrence-fieldset {
@@ -963,36 +1087,130 @@ form > details {
       gap: var(--space-sm);
       margin: 0;
 
-      > label,
-      .inline-field,
-      .recurrence-end > label,
-      .weekday-options > label {
+      legend {
+        font-size: var(--text-size-xxs);
+        padding: 0 var(--space-xs);
+      }
+
+      > label {
+        display: flex;
+        flex-direction: column;
+
+        > span {
+          font-size: var(--text-size-xxs);
+        }
+      }
+
+      .inline-field {
         display: flex;
         align-items: center;
         gap: var(--space-xs);
-      }
 
-      select,
-      input {
-        max-width: 100%;
+        > label > span {
+          font-size: var(--text-size-xxs);
+        }
       }
 
       .weekday-options {
         display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: var(--space-xs) var(--space-sm);
+        flex-direction: column;
 
-        > span {
-          flex-basis: 100%;
-          font-size: var(--text-size-xs);
+        > div {
+          display: flex;
+          flex-wrap: wrap;
+          gap: var(--space-sm);
+
+          > label {
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+          }
         }
       }
 
       .recurrence-end {
+        .inline-field {
+          display: flex;
+          label:nth-child(1) {
+            width: 6rem;
+            input {
+              width: calc(100% - var(--space-xs) * 2 - 2px);
+            }
+          }
+          label:nth-child(2) {
+            flex-grow: 1;
+            input {
+              width: calc(100% - var(--space-xs) * 2 - 2px);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 通知設定
+  > section:nth-child(4) {
+    > span {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-xs);
+      font-size: var(--font-size-xxs);
+      color: var(--sub-text);
+    }
+
+    > .notification-rows {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-xs);
+
+      .notification-row {
         display: flex;
-        flex-wrap: wrap;
-        gap: var(--space-sm);
+        align-items: center;
+        justify-content: space-between;
+        border: 1px solid var(--border);
+        border-radius: var(--border-radius);
+        padding: var(--space-xs) var(--space-sm);
+
+        > div {
+          display: flex;
+          align-items: center;
+          gap: var(--space-xs);
+
+          > span {
+            font-size: var(--font-size-xxs);
+          }
+
+          input[type='number'] {
+            width: 3rem;
+          }
+        }
+
+        // 通知削除ボタン
+        > button {
+          background: var(--bg-1);
+
+          &:hover {
+            background: var(--bg-2);
+          }
+        }
+      }
+
+      // 通知追加ボタン
+      > button {
+        align-self: flex-start;
+        width: calc(100% - 2px);
+        font-size: var(--font-size-xxs);
+        padding: var(--space-xs) 0;
+        background-color: var(--bg-1);
+        border: 1px solid var(--border);
+        &:hover {
+          background-color: var(--bg-2);
+        }
+      }
+
+      .notification-warning {
+        font-size: var(--font-size-xxs);
+        color: var(--danger);
       }
     }
   }

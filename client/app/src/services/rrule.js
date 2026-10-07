@@ -51,8 +51,8 @@ export function buildRecurrence(settings) {
   if (settings.frequency === 'MONTHLY' && settings.monthDay) parts.push(`BYMONTHDAY=${Math.min(31, Math.max(1, Number(settings.monthDay)))}`);
   if (settings.frequency === 'YEARLY' && settings.month) parts.push(`BYMONTH=${Math.min(12, Math.max(1, Number(settings.month)))}`);
 
-  const count = Math.max(1, Number(settings.count) || 0);
-  if (count) parts.push(`COUNT=${count}`);
+  const count = Math.max(0, Math.floor(Number(settings.count) || 0));
+  if (count >= 1) parts.push(`COUNT=${count}`);
   else if (settings.until) {
     const until = dateToken(settings.until);
     if (until) parts.push(`UNTIL=${until}${settings.isAllDay ? '' : 'T235959Z'}`);

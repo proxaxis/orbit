@@ -275,6 +275,12 @@ export const useUserStore = defineStore('user', () => {
   /** @type {Ref<'FIXED'|'VARIABLE'>} @description 月表示のカレンダーセル高さ */
   const calendarCellHeightMode = ref('VARIABLE');
 
+  /** @type {Ref<'MONTH'|'WEEK'>} @description メインカレンダーの表示モード */
+  const mainCalendarView = ref('MONTH');
+
+  /** @type {Ref<boolean>} @description イベントへの写真共有機能を有効にするか（要 Google Photos OAuth） */
+  const usePhotoSharing = ref(false);
+
   /** @type {Ref<keyof typeof USER_FONT_FAMILIES>} @description 通常 UI のフォント */
   const uiFontFamily = ref('NOTO_SANS_JP');
 
@@ -329,6 +335,8 @@ export const useUserStore = defineStore('user', () => {
       useWheelMonthNavigation: useWheelMonthNavigation.value,
       maxEventBarsPerCell: maxEventBarsPerCell.value,
       calendarCellHeightMode: calendarCellHeightMode.value,
+      mainCalendarView: mainCalendarView.value,
+      usePhotoSharing: usePhotoSharing.value,
       uiFontFamily: uiFontFamily.value,
       calendarFontFamily: calendarFontFamily.value,
       uiTextSize: uiTextSize.value,
@@ -359,6 +367,8 @@ export const useUserStore = defineStore('user', () => {
       if (saved.calendarCellHeightMode === 'FIXED' || saved.calendarCellHeightMode === 'VARIABLE') {
         calendarCellHeightMode.value = saved.calendarCellHeightMode;
       }
+      if (saved.mainCalendarView === 'MONTH' || saved.mainCalendarView === 'WEEK') mainCalendarView.value = saved.mainCalendarView;
+      if (typeof saved.usePhotoSharing === 'boolean') usePhotoSharing.value = saved.usePhotoSharing;
       if (typeof saved.uiFontFamily === 'string' && Object.hasOwn(USER_FONT_FAMILIES, saved.uiFontFamily)) {
         uiFontFamily.value = saved.uiFontFamily;
       }
@@ -446,6 +456,19 @@ export const useUserStore = defineStore('user', () => {
   function setSubPaneWidth(width) {
     if (!Number.isInteger(width) || width < 260 || width > 600) return;
     subPaneWidth.value = width;
+    saveSettings();
+  }
+
+  /** @param {'MONTH'|'WEEK'} mode メインカレンダーの表示モード */
+  function setMainCalendarView(mode) {
+    if (mode !== 'MONTH' && mode !== 'WEEK') return;
+    mainCalendarView.value = mode;
+    saveSettings();
+  }
+
+  /** @param {boolean} enabled 写真共有機能を有効にするか（有効化は OAuth 認証後にのみ行う） */
+  function setUsePhotoSharing(enabled) {
+    usePhotoSharing.value = Boolean(enabled);
     saveSettings();
   }
 
@@ -585,6 +608,8 @@ export const useUserStore = defineStore('user', () => {
     useWheelMonthNavigation,
     maxEventBarsPerCell,
     calendarCellHeightMode,
+    mainCalendarView,
+    usePhotoSharing,
     uiFontFamily,
     calendarFontFamily,
     uiTextSize,
@@ -625,6 +650,8 @@ export const useUserStore = defineStore('user', () => {
     setDefaultCalendar,
     setNavPaneWidth,
     setSubPaneWidth,
+    setMainCalendarView,
+    setUsePhotoSharing,
     openUserDialog,
     confirm,
     resolveConfirm,

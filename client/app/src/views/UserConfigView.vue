@@ -2,15 +2,43 @@
 import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { USER_FONT_FAMILIES, USER_TEXT_SIZE_VALUES, useUserStore } from '@/stores/user.js';
+import { useAuthStore, BFF_BASE_URL } from '@/stores/auth.js';
 import { clearOfflineCache, deleteOffline, USER_SETTINGS_KEY } from '@/services/offline-storage.js';
 import MenuBar from '@/components/MenuBar.vue';
+import { ensureNotificationPermission, notificationPermission } from '@/services/notifications.js';
 import IconFloppyDisk from '@/components/icons/IconFloppyDisk.vue';
 import IconTrash from '@/components/icons/IconTrash.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
+import IconBell from '@/components/icons/IconBell.vue';
+import IconImage from '@/components/icons/IconImage.vue';
 
 const router = useRouter();
 const userStore = useUserStore();
+const authStore = useAuthStore();
 const savedMessage = ref('');
+/** @type {Ref<'unsupported'|NotificationPermission>} ブラウザーの通知許可状態 */
+const notificationPermissionState = ref(notificationPermission());
+
+/** ブラウザーの通知許可を要求し、表示中の状態を再取得する */
+async function requestNotificationPermission() {
+  notificationPermissionState.value = await ensureNotificationPermission();
+}
+
+/** 写真共有の有効化（Google OAuth 認証へリダイレクト） */
+function startPhotoSharingAuth() {
+  window.location.href = `${BFF_BASE_URL}/auth/photo-sharing`;
+}
+
+/** 写真共有を無効化し、保存済みの写真トークンを破棄する */
+async function disablePhotoSharing() {
+  const confirmed = await userStore.confirm({
+    title: '写真共有を無効化',
+    message: 'イベントへの写真共有機能を無効にします。作成済みのアルバムは削除されません。',
+  });
+  if (!confirmed) return;
+  userStore.setUsePhotoSharing(false);
+  authStore.clearPhotoToken();
+}
 
 const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const draft = reactive({
@@ -220,6 +248,29 @@ async function clearSettings() {
             <input v-model="draft.labels[index]" maxlength="8" required />
           </label>
         </div>
+      </section>
+
+      <section class="config-section">
+        <h2>写真共有</h2>
+        <p class="hint">イベントに写真の共有アルバムを紐づけます。有効化には Google アカウントでの追加認証が必要です。</p>
+        <p v-if="!authStore.isAuthenticated" class="hint">利用するには Google アカウントでログインしてください。</p>
+        <template v-else-if="userStore.usePhotoSharing && authStore.isPhotoSharingAuthorized">
+          <p class="hint">写真共有は有効です。イベント詳細画面から写真を追加できます。</p>
+          <button type="button" class="clear-cache-button" @click="disablePhotoSharing"><IconXMark />無効にする</button>
+        </template>
+        <template v-else>
+          <p v-if="userStore.usePhotoSharing" class="hint">認証が切れています。再度認証してください。</p>
+          <button type="button" class="clear-cache-button" @click="startPhotoSharingAuth"><IconImage />Google アカウントで認証して有効化</button>
+        </template>
+      </section>
+
+      <section class="config-section">
+        <h2>通知</h2>
+        <p class="hint">予定の通知にはブラウザーの通知機能を使います。通知タイミングは予定の編集画面で設定できます。</p>
+        <p v-if="notificationPermissionState === 'unsupported'" class="hint">このブラウザーは通知に対応していません。</p>
+        <p v-else-if="notificationPermissionState === 'granted'" class="hint">通知は許可されています。</p>
+        <p v-else-if="notificationPermissionState === 'denied'" class="hint">通知がブロックされています。ブラウザーのサイト設定から許可してください。</p>
+        <button v-if="notificationPermissionState === 'default'" type="button" class="clear-cache-button" @click="requestNotificationPermission"><IconBell />通知を許可する</button>
       </section>
 
       <section class="config-section">

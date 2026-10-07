@@ -4,10 +4,13 @@ import { useAuthStore } from '@/stores/auth.js';
 import { useCalendarStore } from '@/stores/calendar.js';
 import { useUserStore } from '@/stores/user.js';
 import UserDialog from '@/components/UserDialog.vue';
+import { initEventNotifications } from '@/services/notifications.js';
+import { useShareStore } from '@/stores/share.js';
 
 const authStore = useAuthStore();
 const calendarStore = useCalendarStore();
 const userStore = useUserStore();
+const shareStore = useShareStore();
 
 /** @type {MediaQueryList|null} @description システムテーマの変更を監視するためのオブジェクト */
 let mQueryList = null;
@@ -55,6 +58,8 @@ onMounted(async () => {
   userStore.applyFonts();
   userStore.applyTextSizes();
   window.addEventListener('resize', handleWindowResize);
+  initEventNotifications();
+  shareStore.initShareSync();
   mQueryList = window.matchMedia('(prefers-color-scheme: dark)');
   mQueryList.addEventListener('change', handleSystemThemeChange);
 
@@ -113,7 +118,7 @@ html {
 }
 
 body {
-  background-color: var(--bg-0);
+  background-color: var(--bg-1);
   color: var(--text);
   line-height: var(--line-height);
 }
@@ -165,7 +170,6 @@ button {
 }
 
 input,
-select,
 textarea {
   background-color: var(--bg-2);
   color: var(--text);
@@ -181,30 +185,38 @@ textarea {
   }
 }
 
+select {
+  background-color: var(--bg-2);
+  color: var(--text);
+  outline: 0;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border);
+  padding: var(--space-sm) var(--space-xs);
+  font-size: var(--text-size-md);
+  cursor: pointer;
+
+  &:focus {
+    border-color: var(--accent);
+    outline: none;
+  }
+}
+
+input[type='checkbox'] {
+  accent-color: var(--accent);
+  transform: scale(1.5);
+  cursor: pointer;
+  margin-left: 4px;
+}
+
 input[readonly],
 textarea[readonly] {
   opacity: 0.7;
   cursor: not-allowed;
 }
 
-select {
-  padding: var(--space-xs) var(--space-xxs);
-}
-
 .icons {
   fill: var(--text);
 }
 
-details {
-  * {
-    font-size: var(--text-size-sm);
-  }
 
-  summary {
-    cursor: pointer;
-    user-select: none;
-    font-size: var(--text-size-md);
-    text-decoration: underline;
-  }
-}
 </style>

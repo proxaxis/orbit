@@ -6,6 +6,8 @@ import { useUserStore } from '@/stores/user.js';
 import * as gCalAPI from '@/services/google-calendar-api.js';
 import dayjs, { toDayjs } from '@/services/dayjs';
 import { readOffline, writeOffline } from '@/services/offline-storage.js';
+import { rescheduleNotifications } from '@/services/notifications.js';
+import { useShareStore } from '@/stores/share.js';
 
 /**
  * @typedef {Object} OperationEntry
@@ -20,6 +22,12 @@ export const useEventStore = defineStore('event', () => {
   const authStore = useAuthStore();
   const calendarStore = useCalendarStore();
   const userStore = useUserStore();
+
+  /** 予定データの変更後に実行する副作用（通知リスケジュールと共有カレンダー同期） */
+  function notifyEventDataChanged() {
+    rescheduleNotifications();
+    useShareStore().scheduleShareSync();
+  }
 
   /** @type {Ref<Map<string, any>>} @description イベントデータ */
   const _cache = ref(new Map());
@@ -120,6 +128,7 @@ export const useEventStore = defineStore('event', () => {
     }
     pendingOperations.value = remaining;
     persistOperations();
+    notifyEventDataChanged();
   }
 
   /**
@@ -192,6 +201,7 @@ export const useEventStore = defineStore('event', () => {
       }),
     );
 
+    notifyEventDataChanged();
     return Array.from(set);
   }
 
@@ -269,6 +279,7 @@ export const useEventStore = defineStore('event', () => {
     const localEvent = { ...body, id: localId, calendarId: gCalendarId, created: new Date().toISOString(), updated: new Date().toISOString() };
     await upsertStoredEvent(localEvent);
     _cache.value = new Map();
+    notifyEventDataChanged();
     if (userStore.isOffline || !authStore.isAuthenticated) {
       queueOperation({ type: 'create', calendarId: gCalendarId, localId, body });
       return true;
@@ -314,6 +325,7 @@ export const useEventStore = defineStore('event', () => {
     const existing = (await getStoredEvents()).find((/** @type {HandyCalendarEvent} */ event) => event.id === gEeventId && event.calendarId === gCalendarId) ?? {};
     await upsertStoredEvent({ ...existing, ...body, id: gEeventId, calendarId: gCalendarId, updated: new Date().toISOString() });
     _cache.value = new Map();
+    notifyEventDataChanged();
     if (userStore.isOffline || !authStore.isAuthenticated) {
       queueOperation({ type: 'update', calendarId: gCalendarId, eventId: gEeventId, body });
       return true;
@@ -336,6 +348,7 @@ export const useEventStore = defineStore('event', () => {
   async function removeEvent(gEventId, gCalendarId) {
     await removeStoredEvent(gEventId, gCalendarId);
     _cache.value = new Map();
+    notifyEventDataChanged();
     if (userStore.isOffline || !authStore.isAuthenticated) {
       queueOperation({ type: 'remove', calendarId: gCalendarId, eventId: gEventId });
       return true;

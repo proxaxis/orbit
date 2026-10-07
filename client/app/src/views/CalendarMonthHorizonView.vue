@@ -1,5 +1,5 @@
 <script setup>
-import { computed, inject, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import dayjs, { toDayjs } from '@/services/dayjs.js';
 import { useEventStore } from '@/stores/event.js';
@@ -13,6 +13,7 @@ import IconCaretRight from '@/components/icons/IconCaretRight.vue';
 import IconBars from '@/components/icons/IconBars.vue';
 import IconGear from '@/components/icons/IconGear.vue';
 import IconUserGroup from '@/components/icons/IconUserGroup.vue';
+import IconBarsStaggered from '@/components/icons/IconBarsStaggered.vue';
 import IconArrowRotateLeft from '@/components/icons/IconArrowRotateLeft.vue';
 
 const router = useRouter();
@@ -23,8 +24,9 @@ const authStore = useAuthStore();
 
 const calendarTextSizeStyle = computed(() => Object.fromEntries(Object.entries(USER_TEXT_SIZE_VALUES[userStore.calendarTextSize]).map(([name, value]) => [`--text-size-${name}`, value])));
 
-/** @type {(pane: 'main'|'nav'|'sub') => void} 左ペイン開閉操作 */
-const selectPane = inject('selectPane', /** @type {(pane: 'main'|'nav'|'sub') => void} */ (() => {}));
+const props = defineProps({
+  selectPane: { type: Function, default: () => {} },
+});
 const lastWheelNavigationAt = ref(0);
 /** @type {Ref<'prev'|'next'|'today'>} 月切り替えアニメーションの方向 */
 const monthTransition = ref('next');
@@ -455,10 +457,10 @@ watch(
 </script>
 
 <template>
-  <div class="month-horizontal-view" @wheel="handleCalendarWheel" @touchstart="startMonthSwipe" @touchmove="handleMonthSwipeMove" @touchend="finishMonthSwipe" @touchcancel="finishMonthSwipe">
+  <div class="calendar-month-horizontal-view" @wheel="handleCalendarWheel" @touchstart="startMonthSwipe" @touchmove="handleMonthSwipeMove" @touchend="finishMonthSwipe" @touchcancel="finishMonthSwipe">
     <header class="month-toolbar">
       <div>
-        <button v-if="userStore.isMobile || userStore.isTablet" type="button" title="カレンダーを開閉" aria-label="カレンダーを開閉" @click="selectPane('nav')">
+        <button v-if="userStore.isMobile || userStore.isTablet" type="button" title="カレンダーを開閉" aria-label="カレンダーを開閉" @click="props.selectPane('nav')">
           <IconBars />
         </button>
         <button type="button" title="前月へ戻る" aria-label="前月へ戻る" @click="goPreviousMonth">
@@ -472,6 +474,9 @@ watch(
       <div>
         <button type="button" title="今日に戻る" aria-label="今日に戻る" @click.prevent="goToday">
           <IconArrowRotateLeft size="1.25rem" />
+        </button>
+        <button type="button" title="週タイムライン表示に切り替え" aria-label="週タイムライン表示に切り替え" @click="userStore.setMainCalendarView('WEEK')">
+          <IconBarsStaggered size="1.25rem" />
         </button>
         <button type="button" title="ユーザー設定" aria-label="ユーザー設定" @click="router.push({ name: 'UserConfig' })">
           <IconGear size="1.25rem" />
@@ -537,28 +542,28 @@ watch(
 @use '@/styles/vars.scss' as var;
 $event-bar-radius: 4px;
 
-.month-horizontal-view {
+.calendar-month-horizontal-view {
   --calendar-cell-min-height: calc(100px + 2px + 2px + 1px);
-  flex: 1;
   display: flex;
   flex-direction: column;
   overflow: auto;
   height: 100%;
   overflow-y: hidden;
   touch-action: pan-y;
-  background-color: var(--bg-2);
-  position: relative;
+  // background-color: var(--bg-1);
+  // position: relative;
+  border-radius: var(--border-radius);
 
-  &::after {
-    content: '';
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    height: var(--space-md);
-    background-color: var(--bg-2);
-    pointer-events: none;
-  }
+  // &::after {
+  //   content: '';
+  //   position: absolute;
+  //   right: 0;
+  //   bottom: 0;
+  //   left: 0;
+  //   height: var(--space-md);
+  //   background-color: var(--bg-1);
+  //   pointer-events: none;
+  // }
 
   .month-content {
     display: flex;
@@ -568,7 +573,7 @@ $event-bar-radius: 4px;
     flex-direction: column;
     overflow-y: auto;
     border-radius: var(--border-radius);
-    background-color: var(--bg-2);
+    background-color: var(--bg-1);
     margin: var(--space-sm);
     font-family: var(--calendar-font-family);
   }
@@ -579,6 +584,8 @@ $event-bar-radius: 4px;
     }
 
     .month-content {
+      flex: 1 1 auto;
+      min-height: 0;
       max-height: calc(100% - 54px - var(--space-sm) - var(--space-sm));
       margin-bottom: 0;
     }
@@ -623,16 +630,14 @@ $event-bar-radius: 4px;
   .month-toolbar {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    padding: var(--space-xs) var(--space-md);
-    background: var(--bg-2);
-    @include var.mdown(sm) {
-      padding: var(--space-xxs) var(--space-xs);
-    }
+    padding: var(--space-sm) var(--space-sm) 0 var(--space-sm);
+    background: var(--bg-1);
+
     button {
-      background-color: var(--bg-2);
+      background-color: var(--bg-1);
 
       &:hover {
-        background: var(--bg-3);
+        background: var(--bg-2);
       }
     }
 
@@ -684,7 +689,7 @@ $event-bar-radius: 4px;
     grid-template-columns: repeat(7, 1fr);
     text-align: center;
     font-weight: bold;
-    border-bottom: 1px solid var(--border);
+    outline: 1px solid var(--border);
     background: var(--bg-0);
     position: sticky;
     top: 0;
@@ -708,7 +713,7 @@ $event-bar-radius: 4px;
   .day-cell {
     min-height: var(--calendar-cell-min-height);
     box-sizing: border-box;
-    border-bottom: 1px solid var(--border);
+    border-top: 1px solid var(--border);
     position: relative;
     padding: 2px;
     user-select: none;
@@ -723,7 +728,7 @@ $event-bar-radius: 4px;
     }
 
     &.other-month {
-      background-color: var(--bg-1);
+      background-color: var(--bg-2);
 
       .day-num {
         color: var(--text-light);

@@ -3,6 +3,8 @@ import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import dayjs from '@/services/dayjs.js';
 import { useEventStore } from '@/stores/event.js';
+import { useAuthStore } from '@/stores/auth.js';
+import { usePhotosStore } from '@/stores/photos.js';
 import MenuBar from '@/components/MenuBar.vue';
 import CalendarRibbon from '@/components/CalendarRibbon.vue';
 import IconPen from '@/components/icons/IconPen.vue';
@@ -16,15 +18,87 @@ import IconUserCheck from '@/components/icons/IconUserCheck.vue';
 import IconAnglesDown from '@/components/icons/IconAnglesDown.vue';
 import IconClone from '@/components/icons/IconClone.vue';
 import IconArrowUpRightFromSquare from '@/components/icons/IconArrowUpRightFromSquare.vue';
+import IconImage from '@/components/icons/IconImage.vue';
+import IconDownload from '@/components/icons/IconDownload.vue';
+import IconCloudArrowDown from '@/components/icons/IconCloudArrowDown.vue';
+import IconArrowsRotate from '@/components/icons/IconArrowsRotate.vue';
 
 const router = useRouter();
 const eventStore = useEventStore();
 const userStore = useUserStore();
+const authStore = useAuthStore();
+const photosStore = usePhotosStore();
 
 /** @type {Ref<HandyCalendarEvent|null>} */
 const event = ref(null);
 /** @type {Ref<boolean>} 参加ステータス更新中かどうか */
 const isUpdatingAttendance = ref(false);
+
+/** @type {ComputedRef<OrbitEventPhotoAlbum|null>} イベントに紐づく共有アルバム */
+const albumBinding = computed(() => photosStore.bindingOf(event.value));
+/** @type {Ref<GooglePhotosAlbum|null>} 取得したアルバム情報 */
+const album = ref(null);
+/** @type {Ref<GooglePhotosMediaItem[]>} アルバム内の写真 */
+const albumPhotos = ref([]);
+/** @type {Ref<boolean>} 写真の読み込み中かどうか */
+const isPhotosLoading = ref(false);
+/** @type {Ref<string>} 写真操作のエラー */
+const photoError = ref('');
+/** @type {Ref<HTMLInputElement|null>} ローカルファイル入力 */
+const rfFileInput = ref(null);
+
+/** 写真共有機能のセクションを表示するか */
+const photoSectionVisible = computed(() => authStore.isAuthenticated && (userStore.usePhotoSharing || !!albumBinding.value));
+/** API 経由で写真を操作できるか */
+const photoApiReady = computed(() => photosStore.canUsePhotoSharing());
+/** イベントに本人以外の参加者がいるか */
+const hasOtherAttendees = computed(() => (event.value?.raw?.attendees ?? []).some((attendee) => !attendee.self));
+
+/** アルバムの写真一覧を読み込む（未参加なら shareToken で参加する） */
+async function loadAlbumPhotos() {
+  const binding = albumBinding.value;
+  if (!binding || !photoApiReady.value) return;
+  isPhotosLoading.value = true;
+  photoError.value = '';
+  try {
+    album.value = await photosStore.openAlbum(binding);
+    albumPhotos.value = await photosStore.listAlbumPhotos(binding);
+  } catch (error) {
+    photoError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    isPhotosLoading.value = false;
+  }
+}
+
+/** @param {Event} inputEvent ローカルファイルの選択 */
+async function onSelectLocalFiles(inputEvent) {
+  const input = /** @type {HTMLInputElement} */ (inputEvent.target);
+  const files = Array.from(input.files ?? []).map((file) => ({ blob: file, fileName: file.name, mimeType: file.type || 'application/octet-stream' }));
+  input.value = '';
+  if (!files.length || !event.value) return;
+  photoError.value = '';
+  try {
+    await photosStore.uploadFiles(event.value, files);
+    await loadAlbumPhotos();
+  } catch (error) {
+    photoError.value = error instanceof Error ? error.message : String(error);
+  }
+}
+
+/** Google フォトのライブラリから写真を選択してアルバムへコピーする */
+async function pickFromGooglePhotos() {
+  if (!event.value) return;
+  photoError.value = '';
+  // ポップアップブロックを避けるため、クリック処理内で先にウィンドウを開いておく
+  const pickerWindow = window.open('', 'orbit-photos-picker', 'width=960,height=720');
+  try {
+    const result = await photosStore.uploadPickedPhotos(event.value, pickerWindow);
+    if (result) await loadAlbumPhotos();
+  } catch (error) {
+    if (pickerWindow && !pickerWindow.closed) pickerWindow.close();
+    photoError.value = error instanceof Error ? error.message : String(error);
+  }
+}
 
 const myAttendee = computed(() => event.value?.raw?.attendees?.find((attendee) => attendee.self) ?? null);
 
@@ -121,6 +195,7 @@ onMounted(async () => {
     const result = await eventStore.getEventById(userStore.nowSelectedEvent.eid, userStore.nowSelectedEvent.cid);
     if (!result) throw new Error('The event could not be found. Go back to the calendar and select a different event.');
     event.value = result;
+    loadAlbumPhotos();
   } catch (err) {
     userStore.setError(true, err);
   } finally {
@@ -228,6 +303,49 @@ onMounted(async () => {
           </li>
         </ul>
       </details>
+      <!-- 共有アルバム -->
+      <section v-if="photoSectionVisible" class="photos-section">
+        <h3><IconImage size="1rem" /> 共有アルバム</h3>
+        <template v-if="albumBinding">
+          <p v-if="hasOtherAttendees" class="hint">このアルバムは参加者と共有されています。</p>
+          <p v-if="isPhotosLoading" class="hint">写真を読み込んでいます...</p>
+          <div v-if="albumPhotos.length" class="photo-grid">
+            <a v-for="photo in albumPhotos" :key="photo.id" :href="`${photo.baseUrl}=d`" :title="`${photo.filename ?? '写真'} をダウンロード`" target="_blank" rel="noopener noreferrer" class="photo-cell">
+              <img :src="`${photo.baseUrl}=w240-h240-c`" :alt="photo.filename ?? '写真'" loading="lazy" />
+              <span class="download-badge"><IconDownload size="0.7rem" /></span>
+            </a>
+          </div>
+          <p v-else-if="!isPhotosLoading && photoApiReady" class="hint">まだ写真がありません。</p>
+          <div class="photo-actions">
+            <a v-if="albumBinding.shareUrl || album?.productUrl" :href="albumBinding.shareUrl || album?.productUrl" target="_blank" rel="noopener noreferrer" class="album-link">
+              <IconArrowUpRightFromSquare size="0.85rem" /> アルバムを開く
+            </a>
+            <button v-if="photoApiReady" type="button" :disabled="isPhotosLoading || photosStore.isPhotoBusy" @click="loadAlbumPhotos">
+              <IconArrowsRotate size="0.85rem" /> 再読み込み
+            </button>
+          </div>
+        </template>
+        <template v-else-if="photoApiReady">
+          <p class="hint">写真を選択してアップロードすると、このイベント専用の共有アルバムが作成されます。{{ hasOtherAttendees ? '参加者がいるため、作成後は参加者と共有されます。' : '' }}</p>
+        </template>
+        <template v-else-if="!userStore.usePhotoSharing">
+          <p class="hint">写真共有は無効です。共有されたアルバムを利用するには、ユーザー設定で有効化してください。</p>
+        </template>
+        <p v-else class="hint">Google アカウントの認証が必要です。ユーザー設定から認証してください。</p>
+
+        <div v-if="photoApiReady" class="photo-actions">
+          <input ref="rfFileInput" type="file" accept="image/*,video/*" multiple hidden @change="onSelectLocalFiles" />
+          <button type="button" :disabled="photosStore.isPhotoBusy" @click="rfFileInput?.click()">
+            <IconCloudArrowDown size="0.85rem" /> ファイルをアップロード
+          </button>
+          <button type="button" :disabled="photosStore.isPhotoBusy" @click="pickFromGooglePhotos">
+            <IconImage size="0.85rem" /> Google フォトから選択
+          </button>
+        </div>
+        <p v-if="photosStore.isPhotoBusy" class="hint">{{ photosStore.photoStatus }}</p>
+        <p v-if="photoError" class="photo-error">{{ photoError }}</p>
+      </section>
+
       <details class="more-info">
         <summary>More Information</summary>
         <ul>
@@ -413,6 +531,94 @@ small,
   color: var(--text);
   &:hover:not(:disabled) {
     opacity: 0.8;
+  }
+}
+
+.photos-section {
+  margin-top: var(--space-sm);
+  padding: var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius);
+  background: var(--bg-1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+
+  h3 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-size: var(--text-size-md);
+  }
+
+  .hint {
+    color: var(--text-light);
+    font-size: var(--text-size-sm);
+  }
+
+  .photo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: var(--space-xs);
+  }
+
+  .photo-cell {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    background: var(--bg-2);
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .download-badge {
+      position: absolute;
+      right: var(--space-xxs);
+      bottom: var(--space-xxs);
+      display: flex;
+      padding: var(--space-xxs);
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--bg-0) 70%, transparent);
+      color: var(--text);
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+
+    &:hover .download-badge,
+    &:focus-visible .download-badge {
+      opacity: 1;
+    }
+  }
+
+  .photo-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+
+    button,
+    .album-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-xxs);
+      padding: var(--space-xs) var(--space-sm);
+      border: 1px solid var(--border);
+      border-radius: var(--border-radius);
+      font-size: var(--text-size-xs);
+
+      &:hover {
+        background-color: var(--bg-2);
+      }
+    }
+  }
+
+  .photo-error {
+    color: var(--danger);
+    font-size: var(--text-size-xs);
   }
 }
 

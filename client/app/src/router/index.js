@@ -5,14 +5,14 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      component: () => import('@/zone/HomeZone.vue'),
+      component: () => import('@/zones/HomeLayout.vue'),
       name: 'HomeZone',
       children: [
         {
           path: '',
           name: 'Home',
           components: {
-            default: () => import('@/views/CalendarMonthHorizonView.vue'),
+            default: () => import('@/views/CalendarMainView.vue'),
             nav: () => import('@/views/UserCalendarsView.vue'),
             sub: () => import('@/views/DateEventsView.vue'),
           },
@@ -21,7 +21,7 @@ const router = createRouter({
           path: '/evt/new',
           name: 'EventCreator',
           components: {
-            default: () => import('@/views/CalendarMonthHorizonView.vue'),
+            default: () => import('@/views/CalendarMainView.vue'),
             nav: () => import('@/views/UserCalendarsView.vue'),
             sub: () => import('@/views/EventCreatorView.vue'),
           },
@@ -30,7 +30,7 @@ const router = createRouter({
           path: '/evt/detail',
           name: 'EventDetail',
           components: {
-            default: () => import('@/views/CalendarMonthHorizonView.vue'),
+            default: () => import('@/views/CalendarMainView.vue'),
             nav: () => import('@/views/UserCalendarsView.vue'),
             sub: () => import('@/views/EventDetailView.vue'),
           },
@@ -39,7 +39,7 @@ const router = createRouter({
           path: '/evt/edit',
           name: 'EventEditor',
           components: {
-            default: () => import('@/views/CalendarMonthHorizonView.vue'),
+            default: () => import('@/views/CalendarMainView.vue'),
             nav: () => import('@/views/UserCalendarsView.vue'),
             sub: () => import('@/views/EventEditorView.vue'),
           },
@@ -48,16 +48,25 @@ const router = createRouter({
           path: '/people/edit',
           name: 'PeopleEditor',
           components: {
-            default: () => import('@/views/CalendarMonthHorizonView.vue'),
+            default: () => import('@/views/CalendarMainView.vue'),
             nav: () => import('@/views/UserCalendarsView.vue'),
             sub: () => import('@/views/PeopleEditor.vue'),
+          },
+        },
+        {
+          path: '/cal/share',
+          name: 'ShareManage',
+          components: {
+            default: () => import('@/views/CalendarMainView.vue'),
+            nav: () => import('@/views/UserCalendarsView.vue'),
+            sub: () => import('@/views/ShareManageView.vue'),
           },
         },
         {
           path: '/cal/sharing',
           name: 'SharingConfig',
           components: {
-            default: () => import('@/views/CalendarMonthHorizonView.vue'),
+            default: () => import('@/views/CalendarMainView.vue'),
             nav: () => import('@/views/UserCalendarsView.vue'),
             sub: () => import('@/views/SharingConfigView.vue'),
           },
@@ -66,7 +75,7 @@ const router = createRouter({
           path: '/cal/new',
           name: 'CalendarCreator',
           components: {
-            default: () => import('@/views/CalendarMonthHorizonView.vue'),
+            default: () => import('@/views/CalendarMainView.vue'),
             nav: () => import('@/views/UserCalendarsView.vue'),
             sub: () => import('@/views/CalendarCreatorView.vue'),
           },
@@ -75,7 +84,7 @@ const router = createRouter({
           path: '/cal/add',
           name: 'CalendarAdder',
           components: {
-            default: () => import('@/views/CalendarMonthHorizonView.vue'),
+            default: () => import('@/views/CalendarMainView.vue'),
             nav: () => import('@/views/UserCalendarsView.vue'),
             sub: () => import('@/views/CalendarAdder.vue'),
           },
@@ -84,7 +93,7 @@ const router = createRouter({
           path: '/cal/detail',
           name: 'CalendarDetail',
           components: {
-            default: () => import('@/views/CalendarMonthHorizonView.vue'),
+            default: () => import('@/views/CalendarMainView.vue'),
             nav: () => import('@/views/UserCalendarsView.vue'),
             sub: () => import('@/views/CaledarDetailView.vue'),
           },
@@ -93,12 +102,18 @@ const router = createRouter({
           path: '/usr/config',
           name: 'UserConfig',
           components: {
-            default: () => import('@/views/CalendarMonthHorizonView.vue'),
+            default: () => import('@/views/CalendarMainView.vue'),
             nav: () => import('@/views/UserCalendarsView.vue'),
             sub: () => import('@/views/UserConfigView.vue'),
           },
         },
       ],
+    },
+    {
+      // Google OAuth 認証後のリダイレクト先（例: 写真共有の有効化）
+      path: '/enable',
+      name: 'Enable',
+      component: () => import('@/views/EnableView.vue'),
     },
   ],
 });

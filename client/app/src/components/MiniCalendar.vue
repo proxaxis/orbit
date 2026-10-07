@@ -14,6 +14,8 @@ const eventStore = useEventStore();
 
 /** @type {Ref<HandyCalendarEvent[]>} */
 const events = ref([]);
+/** @type {Ref<Dayjs>} ミニカレンダーが表示している月（メインカレンダーとは連動しない） */
+const usingDate = ref(dayjs());
 
 /**
  * @typedef {Object} CalendarCell
@@ -29,8 +31,8 @@ const events = ref([]);
 
 /** @type {ComputedRef<CalendarCell[]>} */
 const calendarDays = computed(() => {
-  const year = userStore.nowUsingDate.year();
-  const month = userStore.nowUsingDate.month();
+  const year = usingDate.value.year();
+  const month = usingDate.value.month();
 
   const firstDayOfMonth = toDayjs(year, month, 1);
   const lastDayOfMonth = toDayjs(year, month + 1, 0);
@@ -63,6 +65,21 @@ const calendarDays = computed(() => {
   return days;
 });
 
+/** ミニカレンダーの表示月を前月へ移動（メインカレンダーには影響しない） */
+function goPrevMonth() {
+  usingDate.value = usingDate.value.subtract(1, 'month').startOf('month');
+}
+
+/** ミニカレンダーの表示月を翌月へ移動（メインカレンダーには影響しない） */
+function goNextMonth() {
+  usingDate.value = usingDate.value.add(1, 'month').startOf('month');
+}
+
+/** ミニカレンダーの表示月を今月へ戻す（メインカレンダーには影響しない） */
+function goCurrentMonth() {
+  usingDate.value = dayjs();
+}
+
 /**
  * セルクリック時の処理
  * @param {CalendarCell} cell
@@ -78,9 +95,9 @@ function handleCellClick(cell) {
 }
 
 watch(
-  () => [calendarStore.listVisibleCalendars, userStore.nowUsingDate],
+  () => [calendarStore.listVisibleCalendars, usingDate.value],
   async () => {
-    events.value = await eventStore.listEvents(userStore.nowUsingDate.year(), userStore.nowUsingDate.month());
+    events.value = await eventStore.listEvents(usingDate.value.year(), usingDate.value.month());
   },
   { immediate: true },
 );
@@ -90,15 +107,15 @@ watch(
   <div class="calendar-mini">
     <!-- ナビゲーションバー -->
     <header>
-      <h3>{{ `${userStore.nowUsingDate.year()}年 ${userStore.nowUsingDate.month() + 1}月` }}</h3>
+      <h3>{{ `${usingDate.year()}年 ${usingDate.month() + 1}月` }}</h3>
       <nav>
-        <button type="button" @click="userStore.goToday">
+        <button type="button" @click="goCurrentMonth">
           <IconArrowRotateLeft />
         </button>
-        <button type="button" @click="userStore.goPrevMonth">
+        <button type="button" @click="goPrevMonth">
           <IconCaretLeft />
         </button>
-        <button type="button" @click="userStore.goNextMonth">
+        <button type="button" @click="goNextMonth">
           <IconCaretRight />
         </button>
       </nav>
