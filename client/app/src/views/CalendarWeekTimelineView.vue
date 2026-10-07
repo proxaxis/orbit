@@ -10,10 +10,11 @@ import IconCaretLeft from '@/components/icons/IconCaretLeft.vue';
 import IconCaretRight from '@/components/icons/IconCaretRight.vue';
 import IconBars from '@/components/icons/IconBars.vue';
 import IconGear from '@/components/icons/IconGear.vue';
-import IconCalendar from '@/components/icons/IconCalendar.vue';
+import IconCalendarDays from '@/components/icons/IconCalendarDays.vue';
 import IconArrowRotateLeft from '@/components/icons/IconArrowRotateLeft.vue';
 import IconEllipsisVertical from '@/components/icons/IconEllipsisVertical.vue';
 import DropdownMenu from '@/components/DropdownMenu.vue';
+import InlineEmoji from '@/components/InlineEmoji.vue';
 
 const router = useRouter();
 const eventStore = useEventStore();
@@ -283,7 +284,7 @@ onUnmounted(() => {
             <IconArrowRotateLeft size="1.25rem" />
           </button>
           <button type="button" title="月表示にする" aria-label="月表示にする" @click="userStore.setMainCalendarView('MONTH')">
-            <IconCalendar size="1.25rem" />
+            <IconCalendarDays size="1.25rem" />
           </button>
           <button type="button" title="ユーザー設定" aria-label="ユーザー設定" @click="router.push({ name: 'UserConfig' })">
             <IconGear size="1.25rem" />
@@ -296,7 +297,7 @@ onUnmounted(() => {
             </button>
           </template>
           <button type="button" @click="goToday"><IconArrowRotateLeft size="1rem" />今週に戻る</button>
-          <button type="button" @click="userStore.setMainCalendarView('MONTH')"><IconCalendar size="1rem" />月表示にする</button>
+          <button type="button" @click="userStore.setMainCalendarView('MONTH')"><IconCalendarDays size="1rem" />月表示にする</button>
           <button type="button" @click="router.push({ name: 'UserConfig' })"><IconGear size="1rem" />ユーザー設定</button>
         </DropdownMenu>
       </div>
@@ -318,7 +319,7 @@ onUnmounted(() => {
           <div class="week-allday">
             <div class="allday-label">終日</div>
             <div v-for="day in weekDays" :key="day.format('YYYY-MM-DD')" class="allday-cell" @click="selectDateCell(day)">
-              <button v-for="evt in allDayEventsFor(day)" :key="`${evt.calendarId}:${evt.id}`" type="button" class="allday-chip" :style="{ backgroundColor: getEventColor(evt) }" @click="(e) => handleEventClick(e, evt, day)">{{ evt.icon ?? '📌' }}{{ evt.summary }}</button>
+              <button v-for="evt in allDayEventsFor(day)" :key="`${evt.calendarId}:${evt.id}`" type="button" class="allday-chip" :style="{ backgroundColor: getEventColor(evt) }" @click="(e) => handleEventClick(e, evt, day)"><InlineEmoji :emoji="evt.icon ?? '📌'" /> {{ evt.summary }}</button>
             </div>
           </div>
 
@@ -338,7 +339,7 @@ onUnmounted(() => {
                 :style="{ top: `${block.top}%`, height: `${block.height}%`, left: `calc(${block.left}% + 1px)`, width: `calc(${block.width}% - 2px)`, backgroundColor: getEventColor(block.event) }"
                 @click="(e) => handleEventClick(e, block.event, day)">
                 <span class="event-time">{{ getEventTimeText(block.event, day) }}</span>
-                <span class="event-title">{{ block.event.icon ?? '📌' }}{{ block.event.summary }}</span>
+                <span class="event-title"><InlineEmoji :emoji="block.event.icon ?? '📌'" /> {{ block.event.summary }}</span>
               </button>
               <div v-if="isToday(day)" class="now-line" :style="{ top: nowLineTop }"></div>
             </div>

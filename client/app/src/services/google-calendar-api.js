@@ -1,7 +1,7 @@
 import { useAuthStore } from '@/stores/auth.js';
 
-/** @type {string|undefined} Google Calendar API のベース URL */
-export const API_BASE_URL = import.meta.env.VITE_GOOGLE_CALENDAR_API_BASE_URL;
+/** @type {string} Google Calendar API のベース URL */
+export const API_BASE_URL = (import.meta.env.VITE_GOOGLE_CALENDAR_API_BASE_URL || 'https://www.googleapis.com/calendar/v3').replace(/\/+$/, '');
 
 /**
  * 予定の一覧取得

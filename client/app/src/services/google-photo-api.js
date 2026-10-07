@@ -1,9 +1,9 @@
 import { useAuthStore } from '@/stores/auth.js';
 
-/** @type {string|undefined} Google Photos Library API のベース URL */
-export const API_BASE_URL = import.meta.env.VITE_GOOGLE_PHOTOS_LIBRARY_API_BASE_URL;
-/** @type {string|undefined} Google Photos Picker API のベース URL */
-export const PICKER_API_BASE_URL = import.meta.env.VITE_GOOGLE_PHOTOS_PICKER_API_BASE_URL;
+/** @type {string} Google Photos Library API のベース URL */
+export const API_BASE_URL = (import.meta.env.VITE_GOOGLE_PHOTOS_LIBRARY_API_BASE_URL || 'https://photoslibrary.googleapis.com/v1').replace(/\/+$/, '');
+/** @type {string} Google Photos Picker API のベース URL */
+export const PICKER_API_BASE_URL = (import.meta.env.VITE_GOOGLE_PHOTOS_PICKER_API_BASE_URL || 'https://photospicker.googleapis.com/v1').replace(/\/+$/, '');
 
 /**
  * ============================================================================

@@ -1,13 +1,17 @@
 <script setup>
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import dayjs from '@/services/dayjs.js';
 import { useAuthStore } from '@/stores/auth.js';
 import { useCalendarStore } from '@/stores/calendar.js';
 import { useUserStore } from '@/stores/user.js';
 import { useShareStore } from '@/stores/share.js';
+import { usePeopleStore } from '@/stores/people.js';
 import MenuBar from '@/components/MenuBar.vue';
+import CalendarRibbon from '@/components/CalendarRibbon.vue';
+import DatePicker from '@/components/DatePicker.vue';
 import AskLoginMessage from '@/components/AskLoginMessage.vue';
+import IconCalendar from '@/components/icons/IconCalendar.vue';
 import IconUserPlus from '@/components/icons/IconUserPlus.vue';
 import IconTrash from '@/components/icons/IconTrash.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
@@ -20,6 +24,7 @@ const authStore = useAuthStore();
 const calendarStore = useCalendarStore();
 const userStore = useUserStore();
 const shareStore = useShareStore();
+const peopleStore = usePeopleStore();
 
 const roleOptions = [
   { value: 'freeBusyReader', label: '予定の有無のみ（空き時間）' },
@@ -53,8 +58,25 @@ const successMessage = ref('');
 const processingSpecId = ref(null);
 /** @type {Ref<string|null>} クリップボードにコピーしたカレンダー ID */
 const copiedCalendarId = ref(null);
+/** @type {Ref<boolean>} People API 検索中かどうか */
+const isSearchingPeople = ref(false);
+/** @type {number|null} People API 検索のデバウンスタイマー */
+let peopleSearchTimer = null;
+/** @type {number} People API 検索の世代 */
+let peopleSearchGeneration = 0;
+/** 候補を選択して入力欄を更新した直後の再検索を抑制する */
+let suppressRecipientSearch = false;
+/** @type {Ref<'rangeStart'|'rangeEnd'|null>} 開いている日付ピッカーの対象 */
+const openDatePicker = ref(null);
+/** @type {{rangeStart: string, rangeEnd: string}} 入力された範囲日付（数字のみ） */
+const rangeDateFields = reactive({
+  rangeStart: today.format('YYYYMMDD'),
+  rangeEnd: today.add(1, 'week').format('YYYYMMDD'),
+});
 
 const formCalendarIds = computed(() => new Set(form.calendarIds));
+
+const showRecipientSuggestions = computed(() => isSearchingPeople.value || peopleStore.suggestions.length > 0 || form.recipient.trim().length >= 2);
 
 /** @returns {string} 選択された期限指定から有効期限日付を求める */
 function resolveExpiresAt() {
@@ -69,6 +91,90 @@ function resolveExpiresAt() {
 function specSummary(spec) {
   const names = spec.calendarIds.map((id) => calendarStore.list.find((cal) => cal.id === id)?.summary ?? id).join(', ');
   return `${spec.rangeStart} 〜 ${spec.rangeEnd} / ${names}`;
+}
+
+/** @param {string} value @returns {string} 日付を桁数に応じて空白区切りで表示する */
+function formatDateField(value) {
+  if (value.length === 8) return `${value.slice(0, 4)} ${value.slice(4, 6)} ${value.slice(6, 8)}`;
+  if (value.length === 6) return `${value.slice(0, 2)} ${value.slice(2, 4)} ${value.slice(4, 6)}`;
+  if (value.length === 4) return `${value.slice(0, 2)} ${value.slice(2, 4)}`;
+  return value;
+}
+
+/** @param {string} digits @returns {string} 入力された数字を YYYY-MM-DD に変換する（不完全・無効なら空文字） */
+function digitsToISODate(digits) {
+  let year = 0,
+    month = 0,
+    day = 0;
+  if (digits.length === 8) {
+    year = Number(digits.slice(0, 4));
+    month = Number(digits.slice(4, 6));
+    day = Number(digits.slice(6, 8));
+  } else if (digits.length === 6) {
+    year = 2000 + Number(digits.slice(0, 2));
+    month = Number(digits.slice(2, 4));
+    day = Number(digits.slice(4, 6));
+  } else if (digits.length === 4) {
+    year = dayjs().year();
+    month = Number(digits.slice(0, 2));
+    day = Number(digits.slice(2, 4));
+  } else {
+    return '';
+  }
+  const parsed = dayjs(new Date(year, month - 1, day));
+  return parsed.isValid() && parsed.year() === year && parsed.month() === month - 1 && parsed.date() === day ? parsed.format('YYYY-MM-DD') : '';
+}
+
+/** @param {'rangeStart'|'rangeEnd'} field @param {Event} event 日付のタイピング入力 */
+function updateRangeDateField(field, event) {
+  const input = /** @type {HTMLInputElement} */ (event.currentTarget);
+  const digits = input.value.replace(/\D/g, '').slice(0, 8);
+  rangeDateFields[field] = digits;
+  let iso = digitsToISODate(digits);
+  // 4桁入力で終了日が開始日より前になる場合は翌年とみなす
+  if (field === 'rangeEnd' && digits.length === 4 && iso && form.rangeStart && iso < form.rangeStart) {
+    iso = dayjs(iso).add(1, 'year').format('YYYY-MM-DD');
+  }
+  form[field] = iso;
+}
+
+/** @param {'rangeStart'|'rangeEnd'} field @returns {string} DatePicker に渡す ISO 日付 */
+function datePickerValue(field) {
+  return form[field] || dayjs().format('YYYY-MM-DD');
+}
+
+/** @param {'rangeStart'|'rangeEnd'} field @param {string} value DatePicker で選択された日付 */
+function selectRangeDate(field, value) {
+  form[field] = value;
+  rangeDateFields[field] = value.replace(/\D/g, '');
+  openDatePicker.value = null;
+}
+
+/** @param {string} calendarId 共有対象カレンダーの選択を切り替える */
+function toggleCalendar(calendarId) {
+  if (formCalendarIds.value.has(calendarId)) form.calendarIds = form.calendarIds.filter((id) => id !== calendarId);
+  else form.calendarIds = [...form.calendarIds, calendarId];
+}
+
+/** @param {GooglePeoplePerson} person People API の候補を共有相手に設定する */
+function selectRecipient(person) {
+  const email = person.emailAddresses?.find((entry) => entry.value)?.value?.trim();
+  if (!email) return;
+  suppressRecipientSearch = true;
+  form.recipient = email;
+  peopleStore.clearSuggestions();
+}
+
+/** 入力欄からフォーカスが外れた後、候補選択の時間を確保して一覧を閉じる */
+function clearPeopleSuggestionsLater() {
+  window.setTimeout(() => peopleStore.clearSuggestions(), 150);
+}
+
+/** @param {string} email @returns {Promise<boolean>} メールアドレスが連絡先に存在するか */
+async function isKnownRecipient(email) {
+  const needle = email.toLowerCase();
+  const people = await peopleStore.search(email);
+  return people.some((person) => person.emailAddresses?.some((entry) => entry.value?.trim().toLowerCase() === needle));
 }
 
 /** @param {string} calendarId コピーカレンダー ID をクリップボードへコピーする */
@@ -107,6 +213,14 @@ async function submitShare() {
     return;
   }
 
+  let registerContact = false;
+  if (!(await isKnownRecipient(recipient))) {
+    registerContact = await userStore.confirm({
+      title: '連絡先に登録',
+      message: `${recipient} は連絡先に見つかりませんでした. 連絡先に登録しますか？`,
+    });
+  }
+
   const firstCalendar = calendarStore.list.find((cal) => cal.id === form.calendarIds[0]);
   try {
     await shareStore.createShare({
@@ -118,9 +232,14 @@ async function submitShare() {
       expiresAt,
       role: form.role,
     });
-    successMessage.value = `${recipient} に共有カレンダーを作成しました. 相手にカレンダー ID を伝えてください. `;
     form.recipient = '';
     form.title = '';
+    if (registerContact) {
+      peopleStore.setPendingRegistrationEmails([recipient]);
+      router.push({ name: 'PeopleEditor' });
+      return;
+    }
+    successMessage.value = `${recipient} に共有カレンダーを作成しました. 相手にカレンダー ID を伝えてください. `;
   } catch (error) {
     formError.value = error instanceof Error ? error.message : String(error);
   }
@@ -152,6 +271,40 @@ async function revokeShare(spec) {
     processingSpecId.value = null;
   }
 }
+
+watch(
+  () => form.recipient,
+  (query, _previousQuery, onCleanup) => {
+    if (peopleSearchTimer !== null) window.clearTimeout(peopleSearchTimer);
+    const generation = ++peopleSearchGeneration;
+    const normalizedQuery = query.trim();
+    if (suppressRecipientSearch || normalizedQuery.length < 2 || (normalizedQuery.startsWith('@') && normalizedQuery.length < 3)) {
+      suppressRecipientSearch = false;
+      isSearchingPeople.value = false;
+      peopleStore.clearSuggestions();
+      return;
+    }
+
+    isSearchingPeople.value = true;
+    peopleSearchTimer = window.setTimeout(async () => {
+      try {
+        await peopleStore.search(normalizedQuery);
+      } finally {
+        if (generation === peopleSearchGeneration) isSearchingPeople.value = false;
+        peopleSearchTimer = null;
+      }
+    }, 300);
+    onCleanup(() => {
+      if (peopleSearchTimer !== null) window.clearTimeout(peopleSearchTimer);
+    });
+  },
+);
+
+onUnmounted(() => {
+  peopleSearchGeneration += 1;
+  if (peopleSearchTimer !== null) window.clearTimeout(peopleSearchTimer);
+  peopleStore.clearSuggestions();
+});
 </script>
 
 <template>
@@ -177,30 +330,54 @@ async function revokeShare(spec) {
           <h2>新しい共有を作成</h2>
         </div>
         <form @submit.prevent="submitShare">
-          <label
-            >共有相手のメールアドレス
-            <input v-model="form.recipient" type="email" placeholder="name@example.com" required />
-          </label>
+          <div class="recipient-field">
+            <label
+              >共有相手
+              <input v-model="form.recipient" type="text" autocomplete="off" placeholder="名前またはメールアドレス" required @blur="clearPeopleSuggestionsLater" />
+            </label>
+            <p v-if="form.recipient.trim().startsWith('@')" class="hint">ラベルで検索中</p>
+            <ul v-if="showRecipientSuggestions" class="recipient-suggestions">
+              <li v-if="isSearchingPeople">検索中...</li>
+              <li v-for="person in peopleStore.suggestions" :key="person.resourceName">
+                <button type="button" @mousedown.prevent="selectRecipient(person)">
+                  <span>{{ person.names?.[0]?.displayName || '名前なし' }}</span>
+                  <small>{{ person.emailAddresses?.[0]?.value }}</small>
+                </button>
+              </li>
+              <li v-if="!isSearchingPeople && !peopleStore.suggestions.length">候補が見つかりません</li>
+            </ul>
+          </div>
           <label
             >共有の名前（省略可）
             <input v-model="form.title" type="text" placeholder="例: 10月の予定" />
           </label>
           <fieldset>
             <legend>共有するカレンダー</legend>
-            <label v-for="cal in calendarStore.listWritableCalendars" :key="cal.id" class="switch-row">
-              <input type="checkbox" :checked="formCalendarIds.has(cal.id)" @change="$event.target.checked ? form.calendarIds.push(cal.id) : (form.calendarIds = form.calendarIds.filter((id) => id !== cal.id))" />
-              {{ cal.summary }}
-            </label>
             <p v-if="!calendarStore.listWritableCalendars.length" class="hint">共有できるカレンダーがありません.</p>
+            <div v-else class="calendar-list">
+              <CalendarRibbon v-for="cal in calendarStore.listWritableCalendars" :key="cal.id" :cid="cal.id" :selectable="true" :selected="formCalendarIds.has(cal.id)" @select="toggleCalendar" />
+            </div>
           </fieldset>
           <div class="date-row">
             <label
               >範囲の開始日
-              <input v-model="form.rangeStart" type="date" required />
+              <div class="date-field">
+                <button type="button" aria-label="開始日をカレンダーから選択" @click="openDatePicker = 'rangeStart'">
+                  <IconCalendar />
+                </button>
+                <input :value="formatDateField(rangeDateFields.rangeStart)" inputmode="numeric" maxlength="10" placeholder="YYYY MM DD" required @input="updateRangeDateField('rangeStart', $event)" />
+                <DatePicker v-if="openDatePicker === 'rangeStart'" :model-value="datePickerValue('rangeStart')" @update:model-value="selectRangeDate('rangeStart', $event)" @close="openDatePicker = null" />
+              </div>
             </label>
             <label
               >範囲の終了日
-              <input v-model="form.rangeEnd" type="date" required />
+              <div class="date-field">
+                <button type="button" aria-label="終了日をカレンダーから選択" @click="openDatePicker = 'rangeEnd'">
+                  <IconCalendar />
+                </button>
+                <input :value="formatDateField(rangeDateFields.rangeEnd)" inputmode="numeric" maxlength="10" placeholder="YYYY MM DD" required @input="updateRangeDateField('rangeEnd', $event)" />
+                <DatePicker v-if="openDatePicker === 'rangeEnd'" :model-value="datePickerValue('rangeEnd')" @update:model-value="selectRangeDate('rangeEnd', $event)" @close="openDatePicker = null" />
+              </div>
             </label>
           </div>
           <div class="date-row">
@@ -265,7 +442,6 @@ async function revokeShare(spec) {
 .share-manage-view {
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
   overflow-y: auto;
   height: 100%;
 }
@@ -280,7 +456,6 @@ section {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
-  border-bottom: 1px solid var(--border);
 
   h2 {
     font-size: var(--text-size-md);
@@ -299,11 +474,49 @@ section {
   gap: var(--space-sm);
 
   > label,
-  .date-row label {
+  .date-row label,
+  .recipient-field > label {
+    display: flex;
+    flex-direction: column;
+    font-size: var(--text-size-xs);
+  }
+
+  .recipient-field {
     display: flex;
     flex-direction: column;
     gap: var(--space-xs);
+  }
+
+  .recipient-suggestions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xxs);
+    padding: var(--space-xs);
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius);
+    background: var(--bg-2);
+    list-style: none;
     font-size: var(--text-size-xs);
+
+    button {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      align-items: flex-start;
+      padding: var(--space-xs) var(--space-sm);
+      border: 0;
+      background: transparent;
+      text-align: left;
+
+      &:hover {
+        background: var(--bg-3);
+      }
+
+      small {
+        color: var(--text-light);
+        overflow-wrap: anywhere;
+      }
+    }
   }
 
   .date-row {
@@ -314,6 +527,29 @@ section {
     label {
       flex: 1;
       min-width: 9rem;
+    }
+  }
+
+  .date-field {
+    position: relative;
+    display: flex;
+    gap: var(--space-xs);
+    align-items: center;
+
+    > button {
+      background-color: var(--bg-2);
+      border: 1px solid var(--border);
+      padding: var(--space-sm);
+      flex-shrink: 0;
+
+      &:hover {
+        background-color: var(--bg-3);
+      }
+    }
+
+    > input {
+      flex: 1;
+      min-width: 0;
     }
   }
 
@@ -332,11 +568,10 @@ section {
     }
   }
 
-  .switch-row {
+  .calendar-list {
     display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: var(--space-sm);
+    flex-direction: column;
+    gap: var(--space-xxs);
   }
 
   .actions {
@@ -358,6 +593,11 @@ section {
 .success {
   font-size: var(--text-size-xs);
   color: var(--primary);
+}
+
+.share-list .heading {
+  border-bottom: 1px solid var(--border);
+  margin-top: var(--space-sm);
 }
 
 .share-list ul {

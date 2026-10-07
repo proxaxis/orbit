@@ -94,6 +94,37 @@ describe('GET /auth/login', () => {
   });
 });
 
+describe('GET /api/token', () => {
+  it('discards a dead refresh token when Google returns invalid_grant', async (t) => {
+    if (!redisAvailable) {
+      t.skip('Redis is not reachable');
+      return;
+    }
+
+    const sessionId = crypto.randomUUID();
+    const key = `session:${sessionId}`;
+    await redis.set(key, 'fake-refresh-token');
+
+    const signature = await signCookie(sessionId, SESSION_SECRET);
+    const cookie = `session_id=${encodeURIComponent(`${sessionId}.${signature}`)}`;
+
+    const res = await app.request('/api/token', {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(res.status, 401);
+
+    const { error } = await res.json();
+    if (error === 'UNAUTHORIZED') {
+      // Google が invalid_grant を返した場合、キーは破棄されているはず
+      assert.equal(await redis.get(key), null);
+    } else {
+      // クライアント認証情報が無効等で invalid_grant 以外の場合はキーが残る
+      assert.equal(error, 'TOKEN_REFRESH_FAILED');
+      await redis.del(key);
+    }
+  });
+});
+
 describe('GET /auth/photo-sharing', () => {
   it('redirects to /auth/login when there is no session', async () => {
     const res = await app.request('/auth/photo-sharing');

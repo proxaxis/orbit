@@ -282,7 +282,24 @@ app.get('/api/token', async (c) => {
     const { token } = await client.getAccessToken();
     return c.json({ gAccessToken: token });
   } catch (err) {
-    console.error('Failed to refresh access token:', err);
+    // GaxiosError は config.data にリフレッシュトークンを含むため、
+    // エラーオブジェクト全体はログに出さずメッセージとレスポンスボディだけ残す
+    const oauthError = /** @type {any} */ (err)?.response?.data;
+    console.error(
+      'Failed to refresh access token:',
+      err instanceof Error ? err.message : String(err),
+      oauthError
+    );
+
+    // invalid_grant はトークン失効/revoke 済みなので、残ったキーを破棄して再認可を促す
+    if (oauthError?.error === 'invalid_grant') {
+      await redis.del(key);
+      if (t === 'photo-sharing') {
+        return c.json({ error: 'PHOTO_SHARING_NOT_AUTHORIZED' }, 404);
+      }
+      return c.json({ error: 'UNAUTHORIZED' }, 401);
+    }
+
     return c.json({ error: 'TOKEN_REFRESH_FAILED' }, 401);
   }
 });

@@ -164,7 +164,7 @@ function hideAllCalendars() {
       </AskLoginMessage>
 
       <section class="calendar-section" :class="{ 'is-open': isCalendarSectionOpen }">
-        <AccordionMenu title="カレンダーリストの開閉" :useMenuSlot="true">
+        <AccordionMenu title="カレンダーリストの開閉" :useMenuSlot="true" :open="true">
           <template #summary>カレンダーリスト</template>
           <template #menu>
             <DropdownMenu>
@@ -210,6 +210,7 @@ function hideAllCalendars() {
                             </button>
                           </template>
                           <button @click="userStore.setCalendarVisibility(c.id, false)"><IconEyeSlash />非表示</button>
+                          <button @click="userStore.setCalendarVisibility(c.id, true)"><IconEye />表示</button>
                           <button @click="router.push({ name: 'CalendarDetail', query: { cid: c.id } })"><IconCircleInfo />カレンダーの詳細</button>
                           <button @click="router.push({ name: 'SharingConfig', query: { cid: c.id } })"><IconUserGroup />共有設定</button>
                           <button @click="router.push({ name: 'ShareManage', query: { cid: c.id } })"><IconUserPlus />期間を指定して共有</button>

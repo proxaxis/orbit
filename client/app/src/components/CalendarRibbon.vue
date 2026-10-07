@@ -62,7 +62,7 @@ const calendar = computed(() => calendarStore.list.find((cal) => cal.id === (pro
 }
 
 .calendar-ribbon.selectable {
-  width: calc(100% - var(--space-sm) * 2);
+  width: 100%;
   padding: var(--space-xs) var(--space-sm);
   // padding: var(--space-sm) var(--space-sm);
   border: 1px solid transparent;

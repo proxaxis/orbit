@@ -20,8 +20,10 @@ import IconClone from '@/components/icons/IconClone.vue';
 import IconArrowUpRightFromSquare from '@/components/icons/IconArrowUpRightFromSquare.vue';
 import IconImage from '@/components/icons/IconImage.vue';
 import IconDownload from '@/components/icons/IconDownload.vue';
-import IconCloudArrowDown from '@/components/icons/IconCloudArrowDown.vue';
+import IconCloudArrowUp from '@/components/icons/IconCloudArrowUp.vue';
 import IconArrowsRotate from '@/components/icons/IconArrowsRotate.vue';
+import InlineEmoji from '@/components/InlineEmoji.vue';
+import AccordionMenu from '@/components/AccordionMenu.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -251,7 +253,7 @@ watch(
 
     <article v-if="!!event">
       <div class="heading">
-        <h2>{{ event.icon ?? '📌' }}{{ event?.summary }}</h2>
+        <h2><InlineEmoji :emoji="event.icon ?? '📌'" /> {{ event?.summary }}</h2>
         <button title="タイトルをコピー" @click="userStore.writeClipboard(event?.summary ?? '')">
           <IconClone size="1rem" />
         </button>
@@ -339,32 +341,32 @@ watch(
               <span class="download-badge"><IconDownload size="0.7rem" /></span>
             </a>
           </div>
-          <p v-else-if="!isPhotosLoading && photoApiReady" class="hint">まだ写真がありません。</p>
+          <p v-else-if="!isPhotosLoading && photoApiReady" class="hint">まだ写真がありません</p>
           <div class="photo-actions">
             <a v-if="albumBinding.productUrl || album?.productUrl" :href="albumBinding.productUrl || album?.productUrl" target="_blank" rel="noopener noreferrer" class="album-link"> <IconArrowUpRightFromSquare size="0.85rem" /> アルバムを開く </a>
             <button v-if="photoApiReady" type="button" :disabled="isPhotosLoading || photosStore.isPhotoBusy" @click="loadAlbumPhotos"><IconArrowsRotate size="0.85rem" /> 再読み込み</button>
           </div>
         </template>
         <template v-else-if="photoApiReady">
-          <p class="hint">写真を選択してアップロードすると、このイベント専用のアルバムが Google フォトに作成されます。{{ hasOtherAttendees ? '参加者と共有するには、作成後に Google フォトで共有設定を行ってください。' : '' }}</p>
+          <p class="hint">写真を選択してアップロードすると、このイベント専用のアルバムが Google フォトに作成されます. {{ hasOtherAttendees ? '参加者と共有するには、作成後に Google フォトで共有設定を行ってください.' : '' }}</p>
         </template>
         <template v-else-if="!userStore.usePhotoSharing">
-          <p class="hint">写真共有は無効です。アルバムを利用するには、ユーザー設定で有効化してください。</p>
+          <p class="hint">写真共有は無効です. アルバムを利用するには、ユーザー設定で有効化してください.</p>
         </template>
-        <p v-else class="hint">Google アカウントの認証が必要です。ユーザー設定から認証してください。</p>
+        <p v-else class="hint">Google アカウントの認証が必要です. ユーザー設定から認証してください.</p>
 
         <div v-if="photoApiReady" class="photo-actions">
           <input ref="rfFileInput" type="file" accept="image/*,video/*" multiple hidden @change="onSelectLocalFiles" />
-          <button type="button" :disabled="photosStore.isPhotoBusy" @click="rfFileInput?.click()"><IconCloudArrowDown size="0.85rem" /> ファイルをアップロード</button>
+          <button type="button" :disabled="photosStore.isPhotoBusy" @click="rfFileInput?.click()"><IconCloudArrowUp size="0.85rem" /> ファイルをアップロード</button>
           <button type="button" :disabled="photosStore.isPhotoBusy" @click="pickFromGooglePhotos"><IconImage size="0.85rem" /> Google フォトから選択</button>
         </div>
         <p v-if="photosStore.isPhotoBusy" class="hint">{{ photosStore.photoStatus }}</p>
         <p v-if="photoError" class="photo-error">{{ photoError }}</p>
       </section>
 
-      <details class="more-info">
-        <summary>More Information</summary>
-        <ul>
+      <AccordionMenu title="イベントの詳細情報" :useMenuSlot="false">
+        <template #summary>その他の詳細情報</template>
+        <ul class="other-more-info">
           <li>
             Status: <span class="inline-text">{{ event.raw.status ?? 'Unavailable' }}</span>
           </li>
@@ -387,7 +389,7 @@ watch(
             Event Type: <span class="inline-text">{{ event.raw.birthdayProperties?.type ?? 'Unavailable' }}</span>
           </li>
         </ul>
-      </details>
+      </AccordionMenu>
     </article>
     <article v-else>
       <p>We could not load the event details.</p>
@@ -551,7 +553,7 @@ small,
 }
 
 .photos-section {
-  margin-top: var(--space-sm);
+  margin: var(--space-sm) 0;
   padding: var(--space-sm);
   border: 1px solid var(--border);
   border-radius: var(--border-radius);
@@ -672,4 +674,6 @@ span[data-response-status='needsAction'] {
   padding: 0 var(--space-xs);
   color: var(--text);
 }
+
+
 </style>

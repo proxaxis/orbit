@@ -18,6 +18,7 @@ import IconCircleInfo from '@/components/icons/IconCircleInfo.vue';
 import IconUserGroup from '@/components/icons/IconUserGroup.vue';
 import IconAnglesRight from '@/components/icons/IconAnglesRight.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
+import InlineEmoji from '@/components/InlineEmoji.vue';
 
 const router = useRouter();
 const calendarStore = useCalendarStore();
@@ -249,7 +250,7 @@ watch(
         </div>
         <div class="info">
           <div>
-            {{ evt.icon ?? '📌' }}{{ evt.summary }}
+            <InlineEmoji :emoji="evt.icon ?? '📌'" /> {{ evt.summary }}
             <IconUserGroup v-if="hasOtherAttendees(evt)" size="0.8rem" />
           </div>
           <div v-if="getDateText(evt).inlineText">
@@ -266,7 +267,7 @@ watch(
 
         <DropdownMenu :ref="(el) => setDropdownRef(i, el)">
           <template #button>
-            <button class="icon-ellipsis-vertical-wrapper">
+            <button class="icon-ellipsis-vertical-wrapper" title="イベントの操作" aria-label="イベントの操作">
               <IconEllipsisVertical />
             </button>
           </template>
@@ -364,10 +365,7 @@ li {
 }
 
 .icon-ellipsis-vertical-wrapper {
-  background-color: var(--bg-2);
-  &:hover {
-    background-color: var(--bg-4);
-  }
+  background-color: transparent;
 }
 
 .icon-x-mark-wrapper {

@@ -17,6 +17,7 @@ import IconUserGroup from '@/components/icons/IconUserGroup.vue';
 import IconBarsStaggered from '@/components/icons/IconBarsStaggered.vue';
 import IconArrowRotateLeft from '@/components/icons/IconArrowRotateLeft.vue';
 import IconEllipsisVertical from '@/components/icons/IconEllipsisVertical.vue';
+import InlineEmoji from '@/components/InlineEmoji.vue';
 
 const router = useRouter();
 const eventStore = useEventStore();
@@ -45,7 +46,7 @@ const suppressNextCellClick = ref(false);
 /** @type {Ref<{ open: (event: MouseEvent) => void, close: () => void }|null>} コンテキストメニュー表示用のドロップダウンへの直接の参照 */
 const rfDropdownForContextMenu = ref(null);
 
-/** @type {Ref<HandyCalendarEvent[]>} 全てのカレンダーに登録されたイベントのうち、指定された月に登録されたもの */
+/** @type {Ref<HandyCalendarEvent[]>} 全てのカレンダーに登録されたイベントのうち、表示範囲（対象月と前後のはみ出し日）に登録されたもの */
 const events = ref([]);
 
 /** @type {Ref<HTMLElement|null>} ツールバー */
@@ -446,7 +447,21 @@ const getMonthCellClass = (day) => {
 watch(
   () => [calendarStore.listVisibleCalendars, userStore.nowUsingDate],
   async () => {
-    events.value = await eventStore.listEvents(userStore.nowUsingDate.year(), userStore.nowUsingDate.month());
+    // 前後の月にはみ出した日付セルにもイベントバーを表示するため、表示範囲がまたぐ全ての月のイベントを取得して結合する
+    const days = calDaysArray.value;
+    const firstMonth = days[0]?.date.startOf('month');
+    const lastMonth = days[days.length - 1]?.date.startOf('month');
+    const months = new Set();
+    for (let cursor = firstMonth; cursor && !cursor.isAfter(lastMonth); cursor = cursor.add(1, 'month')) {
+      months.add(`${cursor.year()}:${cursor.month()}`);
+    }
+    const merged = new Map();
+    for (const key of months) {
+      const [year, month] = key.split(':').map(Number);
+      const items = await eventStore.listEvents(year, month);
+      items.forEach((evt) => merged.set(`${evt.calendarId}:${evt.id}:${evt.startDateTime.unix()}`, evt));
+    }
+    events.value = Array.from(merged.values());
   },
   { immediate: true },
 );
@@ -472,7 +487,7 @@ watch(
           <button type="button" title="今日に戻る" aria-label="今日に戻る" @click.prevent="goToday">
             <IconArrowRotateLeft size="1.25rem" />
           </button>
-          <button type="button" title="TL表示にする" aria-label="タイムライン表示にする" @click="userStore.setMainCalendarView('WEEK')">
+          <button type="button" title="タイムライン表示にする" aria-label="タイムライン表示にする" @click="userStore.setMainCalendarView('WEEK')">
             <IconBarsStaggered size="1.25rem" />
           </button>
           <button type="button" title="ユーザー設定" aria-label="ユーザー設定" @click="router.push({ name: 'UserConfig' })">
@@ -528,7 +543,7 @@ watch(
                   @click="(e) => handleEventClick(e, slot.event, day.date)"
                   @mousedown.stop>
                   <span v-if="slot.isLabelStart">
-                    {{ slot.event.icon ?? '📌' }}{{ slot.event.summary }}
+                    <InlineEmoji :emoji="slot.event.icon ?? '📌'" /> {{ slot.event.summary }}
                     <IconUserGroup v-if="hasOtherAttendees(slot.event)" size="0.75rem" />
                   </span>
                 </div>

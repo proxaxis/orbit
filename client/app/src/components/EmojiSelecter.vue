@@ -3,6 +3,7 @@ import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue';
 import emojiData from '@/assets/emoji-data.json';
 import { readOffline, writeOffline } from '@/services/offline-storage.js';
 import IconXMark from '@/components/icons/IconXMark.vue';
+import InlineEmoji from '@/components/InlineEmoji.vue';
 
 const props = defineProps({
   modelValue: {
@@ -17,12 +18,17 @@ const isOpen = ref(false);
 const searchInput = ref(null);
 const search = ref('');
 const categoryOverrides = ref({});
-const categories = emojiData.categories;
+/** @type {Array<{id: string, label: string}>} */
+const categories = [{ id: 'history', label: '履歴' }, ...Object.keys(emojiData).map((key) => ({ id: key, label: key }))];
+const categoryLabelMap = Object.fromEntries(categories.map((category) => [category.id, category.label]));
+const editableCategoryIds = new Set(categories.filter((category) => category.id !== 'history').map((category) => category.id));
+const defaultCategoryId = categories.find((category) => category.id !== 'history').id;
 const historyKey = 'emoji-history';
 const storageKey = 'emoji-category-overrides';
 const maxHistory = 48;
 const historyList = ref([]);
 const pickedEmoji = ref(null);
+const activeCategory = ref('history');
 
 const loadOverrides = async () => {
   const saved = await readOffline(storageKey, {});
@@ -36,6 +42,9 @@ const persistOverrides = async () => {
 const loadHistory = async () => {
   const saved = await readOffline(historyKey, []);
   historyList.value = Array.isArray(saved) ? saved : [];
+  if (!historyList.value.length && activeCategory.value === 'history') {
+    activeCategory.value = defaultCategoryId;
+  }
 };
 
 const persistHistory = async () => {
@@ -51,18 +60,16 @@ const editableCategories = computed(() => {
   return categories.filter((category) => category.id !== 'history');
 });
 
-const categoryLabelMap = computed(() => {
-  return categories.reduce((acc, item) => {
-    acc[item.id] = item.label;
-    return acc;
-  }, {});
-});
-
 const normalizedItems = computed(() => {
-  return emojiData.items.map((item) => ({
-    ...item,
-    category: categoryOverrides.value[item.char] || item.category,
-  }));
+  return Object.entries(emojiData).flatMap(([category, items]) =>
+    items.map((item) => {
+      const override = categoryOverrides.value[item.char];
+      return {
+        ...item,
+        category: editableCategoryIds.has(override) ? override : category,
+      };
+    }),
+  );
 });
 
 const addToHistory = (emoji) => {
@@ -76,30 +83,26 @@ const addToHistory = (emoji) => {
 
 const matchesQuery = (item, query) => {
   if (!query) return true;
-  const haystack = [item.nameJa, item.nameEn, categoryLabelMap.value[item.category] || ''].join(' ').toLowerCase();
+  const haystack = [item.name, categoryLabelMap[item.category] || item.category].join(' ').toLowerCase();
   return query.split(/\s+/).every((token) => haystack.includes(token));
 };
 
-const filteredGroups = computed(() => {
-  const query = search.value.trim().toLowerCase();
-  const historyLabel = categoryLabelMap.value.history || '履歴';
-  const historyItems = historyList.value.map((char) => normalizedItems.value.find((item) => item.char === char)).filter((item) => item && matchesQuery(item, query));
+const uniqueByChar = (items) => {
+  return [...new Map(items.map((item) => [item.char, item])).values()];
+};
 
-  const baseGroups = categories
-    .filter((category) => category.id !== 'history')
-    .map((category) => ({
-      ...category,
-      items: normalizedItems.value.filter((item) => item.category === category.id && matchesQuery(item, query)),
-    }));
+const isSearching = computed(() => search.value.trim().length > 0);
 
-  const grouped = historyItems.length ? [{ id: 'history', label: historyLabel, items: historyItems }, ...baseGroups] : baseGroups;
-
-  return grouped.filter((group) => group.items.length > 0);
+const activeItems = computed(() => {
+  if (activeCategory.value === 'history') {
+    return historyList.value.map((char) => normalizedItems.value.find((item) => item.char === char)).filter(Boolean);
+  }
+  return uniqueByChar(normalizedItems.value.filter((item) => item.category === activeCategory.value));
 });
 
 const flatEmojiItems = computed(() => {
   const query = search.value.trim().toLowerCase();
-  return normalizedItems.value.filter((item) => matchesQuery(item, query));
+  return uniqueByChar(normalizedItems.value.filter((item) => matchesQuery(item, query)));
 });
 
 const selectedItem = computed(() => {
@@ -183,8 +186,8 @@ onBeforeUnmount(() => {
 <template>
   <div class="emoji-selecter">
     <button type="button" class="open-btn" @click="openModal">
-      <span v-if="modelValue" class="open-emoji">{{ modelValue }}</span>
-      <span v-else class="open-label">📌</span>
+      <span v-if="modelValue" class="open-emoji"><InlineEmoji :emoji="modelValue" /></span>
+      <span v-else class="open-label"><InlineEmoji emoji="📌" /></span>
     </button>
 
     <Teleport to="body">
@@ -202,16 +205,6 @@ onBeforeUnmount(() => {
               <button type="button" class="random-btn" @click="randomEmoji">ランダム</button>
             </div>
 
-            <!-- <div class="preview" v-if="modelValue">
-              <div class="preview-emoji">{{ modelValue }}</div>
-              <div class="preview-meta">
-                <div class="preview-code">{{ previewCodepoints }}</div>
-                <div v-if="selectedItem" class="preview-name">
-                  {{ selectedItem.nameJa }} / {{ selectedItem.nameEn }}
-                </div>
-              </div>
-            </div> -->
-
             <div v-if="selectedItem" class="category-editor">
               <label for="emoji-category">カテゴリを選択:</label>
               <select id="emoji-category" :value="selectedItem.category" @change="updateCategory">
@@ -222,18 +215,28 @@ onBeforeUnmount(() => {
               <button type="button" class="reset-btn" @click="resetCategory">デフォルトにする</button>
             </div>
 
-            <div v-if="filteredGroups.length" class="groups">
-              <section v-for="group in filteredGroups" :key="group.id" class="group">
-                <div class="group-label">{{ group.label }}</div>
-                <div class="emoji-grid">
-                  <button v-for="item in group.items" :key="item.name" type="button" class="emoji-btn" :class="{ active: item.char === modelValue }" @click="selectEmoji(item.char)" :aria-label="item.nameJa">
-                    {{ item.char }}
-                  </button>
-                </div>
-              </section>
-            </div>
+            <template v-if="isSearching">
+              <div v-if="flatEmojiItems.length" class="emoji-grid">
+                <button v-for="item in flatEmojiItems" :key="item.char" type="button" class="emoji-btn" :class="{ active: item.char === modelValue }" @click="selectEmoji(item.char)" :aria-label="item.name">
+                  <InlineEmoji :emoji="item.char" />
+                </button>
+              </div>
+              <p v-else class="empty-state">該当する絵文字がありません</p>
+            </template>
 
-            <p v-else class="empty-state">該当する絵文字がありません。</p>
+            <template v-else>
+              <div class="tab-bar" role="tablist" aria-label="絵文字カテゴリ">
+                <button v-for="category in categories" :key="category.id" type="button" role="tab" class="tab-btn" :class="{ active: activeCategory === category.id }" :aria-selected="activeCategory === category.id" @click="activeCategory = category.id">
+                  {{ category.label }}
+                </button>
+              </div>
+              <div v-if="activeItems.length" class="emoji-grid" role="tabpanel">
+                <button v-for="item in activeItems" :key="item.char" type="button" class="emoji-btn" :class="{ active: item.char === modelValue }" @click="selectEmoji(item.char)" :aria-label="item.name">
+                  <InlineEmoji :emoji="item.char" />
+                </button>
+              </div>
+              <p v-else class="empty-state">{{ activeCategory === 'history' ? '履歴はまだありません' : '絵文字がありません' }}</p>
+            </template>
           </div>
         </div>
       </div>
@@ -268,7 +271,7 @@ onBeforeUnmount(() => {
 
 .emoji-modal {
   width: min(720px, 100%);
-  max-height: min(80vh, 720px);
+  height: min(80vh, 720px);
   background: var(--bg-0);
   border-radius: var(--border-radius);
   border: 1px solid var(--border);
@@ -325,36 +328,6 @@ onBeforeUnmount(() => {
   }
 }
 
-// .preview {
-//   display: flex;
-//   align-items: center;
-//   gap: var(--space-sm);
-//   padding: var(--space-xs) var(--space-sm);
-//   border-radius: var(--border-radius);
-//   background: var(--bg-1);
-//   border: 1px solid var(--border);
-// }
-
-// .preview-emoji {
-//   font-size: var(--text-size-xl);
-// }
-
-// .preview-code {
-//   font-size: var(--text-size-sm);
-//   color: var(--text-light);
-// }
-
-// .preview-meta {
-//   display: flex;
-//   flex-direction: column;
-//   gap: var(--space-xxs);
-// }
-
-// .preview-name {
-//   font-size: var(--text-size-sm);
-//   color: var(--text);
-// }
-
 .category-editor {
   display: flex;
   align-items: center;
@@ -377,18 +350,35 @@ onBeforeUnmount(() => {
   background: var(--bg-1);
 }
 
-.groups {
+.tab-bar {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
+  gap: var(--space-xxs);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  position: sticky;
+  top: calc(var(--space-sm) * -1);
+  background: var(--bg-0);
+  z-index: 1;
 }
 
-.group-label {
+.tab-btn {
+  background: transparent;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  padding: var(--space-xs) var(--space-sm);
   font-size: var(--text-size-sm);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--text-light);
-  margin-bottom: var(--space-xxs);
+  white-space: nowrap;
+
+  &:hover {
+    color: var(--text);
+    background-color: var(--bg-1);
+  }
+
+  &.active {
+    color: var(--text);
+    border-bottom-color: var(--primary);
+  }
 }
 
 .emoji-grid {

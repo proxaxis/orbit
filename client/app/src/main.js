@@ -3,6 +3,7 @@ import { createPinia } from 'pinia';
 import router from '@/router/index.js';
 import App from '@/App.vue';
 import { useUserStore } from '@/stores/user.js';
+import twemoji from '@twemoji/api';
 
 const app = createApp(App);
 app.use(createPinia());
