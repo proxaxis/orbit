@@ -106,7 +106,7 @@ onUnmounted(() => {
 * {
   margin: 0;
   padding: 0;
-  box-sizing: content-box;
+  box-sizing: border-box;
   zoom: 1;
   text-autospace: normal;
 }
@@ -115,6 +115,28 @@ html {
   font-family: var(--ui-font-family);
   scroll-behavior: smooth;
   user-select: none;
+  // PC ようにスクロールバーを表示する
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-4) transparent; /* つまみ色 / 背景色 */
+}
+
+/* Chrome, Safari, Edge用 */
+::-webkit-scrollbar {
+  width: 6px;  /* 縦スクロールバーの太さ */
+  height: 6px; /* 横スクロールバーの太さ */
+}
+
+::-webkit-scrollbar-track {
+  background: transparent; /* 背景を透明にしてコンテンツと一体化 */
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.25); /* 半透明のグレー */
+  border-radius: 9999px; /* スマホ風の完全な角丸 */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.5); /* ホバー時に少し濃くする */
 }
 
 body {
@@ -183,6 +205,11 @@ textarea {
     border-color: var(--accent);
     outline: none;
   }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 }
 
 select {
@@ -198,6 +225,11 @@ select {
   &:focus {
     border-color: var(--accent);
     outline: none;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 }
 

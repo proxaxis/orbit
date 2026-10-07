@@ -83,9 +83,15 @@ fieldset {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  padding: var(--space-md);
   border: 1px solid var(--border);
   border-radius: var(--border-radius);
+  min-width: 0;
+  padding: 0 var(--space-sm) var(--space-sm) var(--space-sm);
+  
+  legend {
+    padding: 0 var(--space-xs);
+    font-weight: bold;
+  }
 }
 
 label {
@@ -93,11 +99,6 @@ label {
   flex-direction: column;
   gap: var(--space-xs);
   font-size: var(--text-size-xs);
-}
-
-legend {
-  padding: 0 var(--space-xs);
-  font-weight: bold;
 }
 
 .actions {

@@ -192,25 +192,25 @@ async function clearSettings() {
           </select>
         </label>
         <label
-          >カレンダー UI のフォント
+          >カレンダーのフォント
           <select v-model="draft.calendarFontFamily">
             <option v-for="(family, key) in USER_FONT_FAMILIES" :key="key" :value="key">{{ key }}</option>
           </select>
         </label>
         <label
-          >その他の UI のフォント
+          >その他のフォント
           <select v-model="draft.uiFontFamily">
             <option v-for="(family, key) in USER_FONT_FAMILIES" :key="key" :value="key">{{ key }}</option>
           </select>
         </label>
         <label
-          >カレンダー UI の文字サイズ
+          >カレンダーの文字サイズ
           <select v-model="draft.calendarTextSize">
             <option v-for="(size, key) in USER_TEXT_SIZE_VALUES" :key="key" :value="key">{{ key }}</option>
           </select>
         </label>
         <label
-          >その他の UI の文字サイズ
+          >その他の文字サイズ
           <select v-model="draft.uiTextSize">
             <option v-for="(size, key) in USER_TEXT_SIZE_VALUES" :key="key" :value="key">{{ key }}</option>
           </select>
@@ -229,7 +229,7 @@ async function clearSettings() {
 
       <section class="config-section">
         <h2>休日設定</h2>
-        <p class="hint">休日に指定した曜日は、カレンダー上で設定した色で表示されます。</p>
+        <p class="hint">休日に指定した曜日は、カレンダー上で設定した色で表示されます.</p>
         <div class="weekend-list">
           <div v-for="(day, index) in dayNames" :key="day" class="day-row">
             <label class="switch-row"><input type="checkbox" :checked="!!weekend(index)" @change="toggleWeekend(index)" />{{ day }}</label>
@@ -241,7 +241,7 @@ async function clearSettings() {
 
       <section class="config-section">
         <h2>曜日ラベル</h2>
-        <p class="hint">カレンダー上部に表示する曜日名を変更できます。</p>
+        <p class="hint">カレンダー上部に表示する曜日名を変更できます.</p>
         <div class="labels-grid">
           <label v-for="(day, index) in dayNames" :key="day"
             >{{ day }}
@@ -252,24 +252,24 @@ async function clearSettings() {
 
       <section class="config-section">
         <h2>写真共有</h2>
-        <p class="hint">イベントに写真の共有アルバムを紐づけます。有効化には Google アカウントでの追加認証が必要です。</p>
-        <p v-if="!authStore.isAuthenticated" class="hint">利用するには Google アカウントでログインしてください。</p>
+        <p class="hint">イベントに写真の共有アルバムを紐づけます. 有効化にはGoogleアカウントでの追加認証が必要です.</p>
+        <p v-if="!authStore.isAuthenticated" class="hint">利用するには Google アカウントでログインしてください.</p>
         <template v-else-if="userStore.usePhotoSharing && authStore.isPhotoSharingAuthorized">
-          <p class="hint">写真共有は有効です。イベント詳細画面から写真を追加できます。</p>
+          <p class="hint">写真共有は有効です. イベント詳細画面から写真を追加できます.</p>
           <button type="button" class="clear-cache-button" @click="disablePhotoSharing"><IconXMark />無効にする</button>
         </template>
         <template v-else>
-          <p v-if="userStore.usePhotoSharing" class="hint">認証が切れています。再度認証してください。</p>
-          <button type="button" class="clear-cache-button" @click="startPhotoSharingAuth"><IconImage />Google アカウントで認証して有効化</button>
+          <p v-if="userStore.usePhotoSharing" class="hint">認証が切れています. 再度認証してください.</p>
+          <button type="button" class="clear-cache-button" @click="startPhotoSharingAuth"><IconImage />有効化</button>
         </template>
       </section>
 
       <section class="config-section">
         <h2>通知</h2>
-        <p class="hint">予定の通知にはブラウザーの通知機能を使います。通知タイミングは予定の編集画面で設定できます。</p>
-        <p v-if="notificationPermissionState === 'unsupported'" class="hint">このブラウザーは通知に対応していません。</p>
-        <p v-else-if="notificationPermissionState === 'granted'" class="hint">通知は許可されています。</p>
-        <p v-else-if="notificationPermissionState === 'denied'" class="hint">通知がブロックされています。ブラウザーのサイト設定から許可してください。</p>
+        <p class="hint">予定の通知にはブラウザの通知機能を使います. 通知タイミングは予定の編集画面で設定できます.</p>
+        <p v-if="notificationPermissionState === 'unsupported'" class="hint">このブラウザーは通知に対応していません.</p>
+        <p v-else-if="notificationPermissionState === 'granted'" class="hint">通知は許可されています.</p>
+        <p v-else-if="notificationPermissionState === 'denied'" class="hint">通知がブロックされています. ブラウザの設定から許可してください.</p>
         <button v-if="notificationPermissionState === 'default'" type="button" class="clear-cache-button" @click="requestNotificationPermission"><IconBell />通知を許可する</button>
       </section>
 
@@ -277,7 +277,7 @@ async function clearSettings() {
         <h2>データ管理</h2>
         <p class="hint">設定のデータを削除します。</p>
         <button type="button" class="clear-cache-button" @click="clearSettings"><IconTrash />設定を削除</button>
-        <p class="hint">設定以外の全てのオフラインデータを削除します。</p>
+        <p class="hint">設定以外の全てのオフラインデータを削除します.</p>
         <button type="button" class="clear-cache-button" @click="clearCache"><IconTrash />キャッシュを削除</button>
       </section>
 

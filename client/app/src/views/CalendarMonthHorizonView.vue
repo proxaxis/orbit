@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import dayjs, { toDayjs } from '@/services/dayjs.js';
 import { useEventStore } from '@/stores/event.js';
@@ -15,6 +15,7 @@ import IconGear from '@/components/icons/IconGear.vue';
 import IconUserGroup from '@/components/icons/IconUserGroup.vue';
 import IconBarsStaggered from '@/components/icons/IconBarsStaggered.vue';
 import IconArrowRotateLeft from '@/components/icons/IconArrowRotateLeft.vue';
+import IconEllipsisVertical from '@/components/icons/IconEllipsisVertical.vue';
 
 const router = useRouter();
 const eventStore = useEventStore();
@@ -45,6 +46,14 @@ const rfDropdownForContextMenu = ref(null);
 
 /** @type {Ref<HandyCalendarEvent[]>} 全てのカレンダーに登録されたイベントのうち、指定された月に登録されたもの */
 const events = ref([]);
+
+/** @type {Ref<HTMLElement|null>} ツールバー */
+const rfToolbar = ref(null);
+/** @type {Ref<boolean>} ツールバーが収まらず右ボタン群をメニューに畳む状態か */
+const isCompactToolbar = ref(false);
+/** 展開時の右ボタン群の自然幅（コンパクト表示中も判定基準として保持する） */
+let expandedRightToolbarWidth = 0;
+let toolbarObserver = null;
 
 /** @param {HandyCalendarEvent} evt @returns {string} イベント設定またはカレンダー設定に基づくイベントバーの色 */
 function getEventBarColor(evt) {
@@ -446,6 +455,29 @@ const getMonthCellClass = (day) => {
   return classes;
 };
 
+/**
+ * ツールバーの内容が表示幅に収まるかを実測し、収まらない場合はコンパクト表示に切り替える。
+ * 展開時は3等分グリッドのため、合計幅に加えてタイトルが中央列に収まることも条件にする
+ */
+function updateToolbarLayout() {
+  const toolbar = rfToolbar.value;
+  if (!toolbar || toolbar.clientWidth === 0) return;
+  const left = toolbar.querySelector('.toolbar-left');
+  const title = toolbar.querySelector('h1');
+  const right = toolbar.querySelector('.toolbar-right');
+  if (!left || !title || !right) return;
+  if (!isCompactToolbar.value) expandedRightToolbarWidth = right.scrollWidth;
+  // scrollWidth はセル幅に引きずられるため、Range でテキストの自然幅を測る
+  const range = document.createRange();
+  range.selectNodeContents(title);
+  const titleWidth = range.getBoundingClientRect().width;
+  const style = getComputedStyle(toolbar);
+  const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+  const needed = left.scrollWidth + titleWidth + expandedRightToolbarWidth + padding + 8;
+  const thirdWidth = (toolbar.clientWidth - padding) / 3;
+  isCompactToolbar.value = needed > toolbar.clientWidth || titleWidth > thirdWidth + 1;
+}
+
 // カレンダーリストがロードされたり、月が変わったりしたらイベントを取得または再取得
 watch(
   () => [calendarStore.listVisibleCalendars, userStore.nowUsingDate],
@@ -454,12 +486,33 @@ watch(
   },
   { immediate: true },
 );
+
+// 月タイトルの文字数が変わると必要幅が変わるため再計測する
+watch(
+  () => userStore.nowUsingDate,
+  async () => {
+    await nextTick();
+    updateToolbarLayout();
+  },
+);
+
+onMounted(() => {
+  if (typeof ResizeObserver !== 'undefined' && rfToolbar.value) {
+    toolbarObserver = new ResizeObserver(() => updateToolbarLayout());
+    toolbarObserver.observe(rfToolbar.value);
+  }
+  updateToolbarLayout();
+});
+
+onUnmounted(() => {
+  toolbarObserver?.disconnect();
+});
 </script>
 
 <template>
   <div class="calendar-month-horizontal-view" @wheel="handleCalendarWheel" @touchstart="startMonthSwipe" @touchmove="handleMonthSwipeMove" @touchend="finishMonthSwipe" @touchcancel="finishMonthSwipe">
-    <header class="month-toolbar">
-      <div>
+    <header ref="rfToolbar" class="month-toolbar" :class="{ 'is-compact': isCompactToolbar }">
+      <div class="toolbar-left">
         <button v-if="userStore.isMobile || userStore.isTablet" type="button" title="カレンダーを開閉" aria-label="カレンダーを開閉" @click="props.selectPane('nav')">
           <IconBars />
         </button>
@@ -471,16 +524,28 @@ watch(
         </button>
       </div>
       <h1>{{ relativeYearText }} {{ userStore.nowUsingDate.format('YYYY年 M月') }}</h1>
-      <div>
-        <button type="button" title="今日に戻る" aria-label="今日に戻る" @click.prevent="goToday">
-          <IconArrowRotateLeft size="1.25rem" />
-        </button>
-        <button type="button" title="週タイムライン表示に切り替え" aria-label="週タイムライン表示に切り替え" @click="userStore.setMainCalendarView('WEEK')">
-          <IconBarsStaggered size="1.25rem" />
-        </button>
-        <button type="button" title="ユーザー設定" aria-label="ユーザー設定" @click="router.push({ name: 'UserConfig' })">
-          <IconGear size="1.25rem" />
-        </button>
+      <div class="toolbar-right">
+        <template v-if="!isCompactToolbar">
+          <button type="button" title="今日に戻る" aria-label="今日に戻る" @click.prevent="goToday">
+            <IconArrowRotateLeft size="1.25rem" />
+          </button>
+          <button type="button" title="週タイムライン表示に切り替え" aria-label="週タイムライン表示に切り替え" @click="userStore.setMainCalendarView('WEEK')">
+            <IconBarsStaggered size="1.25rem" />
+          </button>
+          <button type="button" title="ユーザー設定" aria-label="ユーザー設定" @click="router.push({ name: 'UserConfig' })">
+            <IconGear size="1.25rem" />
+          </button>
+        </template>
+        <DropdownMenu v-else>
+          <template #button>
+            <button type="button" title="月表示の操作" aria-label="月表示の操作">
+              <IconEllipsisVertical size="1.25rem" />
+            </button>
+          </template>
+          <button type="button" @click="goToday"><IconArrowRotateLeft size="1rem" />今日に戻る</button>
+          <button type="button" @click="userStore.setMainCalendarView('WEEK')"><IconBarsStaggered size="1rem" />週タイムライン表示に切り替え</button>
+          <button type="button" @click="router.push({ name: 'UserConfig' })"><IconGear size="1rem" />ユーザー設定</button>
+        </DropdownMenu>
       </div>
     </header>
     <Transition :name="`month-slide-${monthTransition}`" mode="out-in">
@@ -550,20 +615,7 @@ $event-bar-radius: 4px;
   height: 100%;
   overflow-y: hidden;
   touch-action: pan-y;
-  // background-color: var(--bg-1);
-  // position: relative;
   border-radius: var(--border-radius);
-
-  // &::after {
-  //   content: '';
-  //   position: absolute;
-  //   right: 0;
-  //   bottom: 0;
-  //   left: 0;
-  //   height: var(--space-md);
-  //   background-color: var(--bg-1);
-  //   pointer-events: none;
-  // }
 
   .month-content {
     display: flex;
@@ -661,6 +713,18 @@ $event-bar-radius: 4px;
       display: flex;
       align-items: center;
       justify-content: center;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    // 収まらない場合は左右2ブロック構成にし、タイトルは右側のメニューボタンに寄せる
+    &.is-compact {
+      grid-template-columns: auto 1fr auto;
+
+      h1 {
+        justify-content: flex-end;
+        padding-right: var(--space-xs);
+      }
     }
   }
 

@@ -90,20 +90,20 @@ async function submitShare() {
   successMessage.value = '';
   const recipient = form.recipient.trim();
   if (!recipient || !recipient.includes('@')) {
-    formError.value = '共有相手のメールアドレスを入力してください。';
+    formError.value = '共有相手のメールアドレスを入力してください. ';
     return;
   }
   if (!form.calendarIds.length) {
-    formError.value = '共有するカレンダーを1つ以上選択してください。';
+    formError.value = '共有するカレンダーを1つ以上選択してください. ';
     return;
   }
   if (!form.rangeStart || !form.rangeEnd || form.rangeEnd < form.rangeStart) {
-    formError.value = '共有する日付範囲を正しく入力してください。';
+    formError.value = '共有する日付範囲を正しく入力してください. ';
     return;
   }
   const expiresAt = resolveExpiresAt();
   if (!expiresAt) {
-    formError.value = '有効期限を入力してください。';
+    formError.value = '有効期限を入力してください. ';
     return;
   }
 
@@ -118,7 +118,7 @@ async function submitShare() {
       expiresAt,
       role: form.role,
     });
-    successMessage.value = `${recipient} に共有カレンダーを作成しました。相手にカレンダー ID を伝えてください。`;
+    successMessage.value = `${recipient} に共有カレンダーを作成しました. 相手にカレンダー ID を伝えてください. `;
     form.recipient = '';
     form.title = '';
   } catch (error) {
@@ -140,7 +140,7 @@ async function syncNow(spec) {
 async function revokeShare(spec) {
   const confirmed = await userStore.confirm({
     title: '共有を解除',
-    message: `${spec.recipient} への共有を解除し、コピーカレンダーを削除します。よろしいですか？`,
+    message: `${spec.recipient} への共有を解除し、コピーカレンダーを削除します. よろしいですか？`,
   });
   if (!confirmed) return;
   processingSpecId.value = spec.id;
@@ -161,11 +161,11 @@ async function revokeShare(spec) {
         <h1 class="title">期間を指定して共有</h1>
       </template>
       <template #sub>
-        <button title="カレンダーに戻る" @click="router.push({ name: 'Home' })">
+        <button class="icon-x-mark-btn" title="カレンダーに戻る" @click="router.push({ name: 'Home' })">
           <IconXMark />
         </button>
       </template>
-      選択した期間の予定だけをコピーしたカレンダーを作成して共有します
+      選択した期間の予定だけを共有します
     </MenuBar>
 
     <AskLoginMessage v-if="!authStore.isAuthenticated">共有するには Google アカウントでログインする必要があります</AskLoginMessage>
@@ -182,16 +182,17 @@ async function revokeShare(spec) {
             <input v-model="form.recipient" type="email" placeholder="name@example.com" required />
           </label>
           <label
-            >共有カレンダーの名前（省略可）
+            >共有の名前（省略可）
             <input v-model="form.title" type="text" placeholder="例: 10月の予定" />
           </label>
           <fieldset>
             <legend>共有するカレンダー</legend>
             <label v-for="cal in calendarStore.listWritableCalendars" :key="cal.id" class="switch-row">
-              <input type="checkbox" :checked="formCalendarIds.has(cal.id)" @change="($event.target.checked ? form.calendarIds.push(cal.id) : (form.calendarIds = form.calendarIds.filter((id) => id !== cal.id)))" />
+              <input type="checkbox" :checked="formCalendarIds.has(cal.id)"
+                @change="($event.target.checked ? form.calendarIds.push(cal.id) : (form.calendarIds = form.calendarIds.filter((id) => id !== cal.id)))" />
               {{ cal.summary }}
             </label>
-            <p v-if="!calendarStore.listWritableCalendars.length" class="hint">共有できるカレンダーがありません。</p>
+            <p v-if="!calendarStore.listWritableCalendars.length" class="hint">共有できるカレンダーがありません. </p>
           </fieldset>
           <div class="date-row">
             <label
@@ -221,7 +222,7 @@ async function revokeShare(spec) {
               </select>
             </label>
           </div>
-          <p class="hint">期限が来ると共有は自動で解除され、コピーカレンダーは削除されます。範囲内の予定が追加・変更・削除されるとコピー先にも反映されます。</p>
+          <p class="hint">期限が来ると共有は自動で解除されます. 範囲内の予定が追加、変更、削除されると相手にも反映されます. </p>
           <p v-if="formError" class="error">{{ formError }}</p>
           <p v-if="successMessage" class="success">{{ successMessage }}</p>
           <div class="actions">
@@ -235,7 +236,7 @@ async function revokeShare(spec) {
           <h2>共有中のカレンダー</h2>
           <span>{{ shareStore.specs.length }}件</span>
         </div>
-        <p v-if="!shareStore.specs.length" class="hint">現在、期間を指定した共有はありません。</p>
+        <p v-if="!shareStore.specs.length" class="hint">現在、期間を指定した共有はありません. </p>
         <ul>
           <li v-for="spec in shareStore.specs" :key="spec.id" :class="{ 'is-expired': shareStore.isExpired(spec) }">
             <div class="spec-info">
@@ -325,19 +326,20 @@ section {
     gap: var(--space-xs);
     border: 1px solid var(--border);
     border-radius: var(--border-radius);
-    padding: var(--space-sm);
     font-size: var(--text-size-xs);
+    min-width: 0;
+    padding: 0 var(--space-sm) var(--space-sm) var(--space-sm);
 
     legend {
-      font-size: var(--text-size-xxs);
-      color: var(--text-light);
+      padding: 0 var(--space-xs);
     }
   }
 
   .switch-row {
+    display: flex;
     flex-direction: row;
     align-items: center;
-    gap: var(--space-xs);
+    gap: var(--space-sm);
   }
 
   .actions {
@@ -436,6 +438,13 @@ section {
         background-color: var(--bg-2);
       }
     }
+  }
+}
+
+.icon-x-mark-btn {
+  background-color: var(--bg-1);
+  &:hover {
+    background-color: var(--bg-2);
   }
 }
 </style>

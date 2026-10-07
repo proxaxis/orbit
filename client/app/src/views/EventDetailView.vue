@@ -208,7 +208,7 @@ onMounted(async () => {
   <section class="event-detail-view">
     <MenuBar>
       <template #main>
-        <h1 class="title">イベントの詳細</h1>
+        <h1 class="title">詳細</h1>
       </template>
       <template #sub>
         <div class="menu-bar-actions">
@@ -232,7 +232,7 @@ onMounted(async () => {
           <IconClone size="1rem" />
         </button>
         <div class="calendar-ribbon-wrapper">
-          <CalendarRibbon :gCalendarId="event?.calendarId" />
+          <CalendarRibbon :cid="event?.calendarId" />
         </div>
       </div>
       <dl>
@@ -382,7 +382,7 @@ onMounted(async () => {
 <style lang="scss" scoped>
 .menu-bar-actions {
   display: flex;
-  gap: var(--space-sm);
+  // gap: var(--space-sm);
 
   button {
     background-color: var(--bg-1);

@@ -136,10 +136,16 @@ defineExpose({
 .dropdown-menu {
   position: relative;
   display: inline-block;
+    display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .dropdown-button {
   user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .dropdown-content {
@@ -160,7 +166,7 @@ defineExpose({
     border-radius: 0;
     text-align: left;
     justify-content: flex-start;
-    width: calc(100% - var(--space-xs) * 2);
+    width: 100%;
     font-size: var(--text-size-md);
     background-color: var(--bg-1);
     padding: var(--space-sm) var(--space-md);

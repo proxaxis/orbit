@@ -49,7 +49,7 @@ async function submit({ body, calendarId, peopleToCreate = [] }) {
           </button>
         </div>
       </template>
-      新しいイベント（予定）を作成します
+      新しいイベントを作成します
     </MenuBar>
     <EventForm @submit="submit" @cancel="router.back()" />
   </section>

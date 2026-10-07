@@ -34,17 +34,21 @@ const theCalendarId = computed(() => {
 const theCalendar = computed(() => calendarStore.listWritableCalendars.find((cal) => cal.id === theCalendarId.value));
 
 const roleOptions = [
+  { value: 'none', label: 'アクセス権なし' },
   { value: 'freeBusyReader', label: '予定の有無のみ' },
   { value: 'reader', label: '予定を閲覧' },
+  { value: 'writerWithoutPrivateAccess', label: '非公開情報予定を除く予定を変更' },
   { value: 'writer', label: '予定を変更' },
+  { value: 'owner', label: '所有者' },
 ];
 
-/** @param {GoogleCalendarAclScope} scope @returns {string} 共有対象の表示名 */
+/** @param {GoogleCalendarAclScope} scope @returns {{ label: string, target?: string }} 共有対象の表示名 */
 function scopeLabel(scope) {
-  if (scope.type === 'default') return '一般公開';
-  if (scope.type === 'domain') return `ドメイン: ${scope.value}`;
-  if (scope.type === 'group') return `グループ: ${scope.value}`;
-  return scope.value || 'ユーザー';
+  if (scope.type === 'default') return { label: '一般公開' };
+  if (scope.type === 'domain') return { label: `このドメイン内のユーザーに共有`, target: scope.value };
+  if (scope.type === 'group') return { label: `このグループ内のユーザーに共有`, target: scope.value };
+  if (scope.type === 'user') return { label: `このユーザーのみに共有`, target: scope.value };
+  return { label: '不明な種類' };
 }
 
 /** @param {GoogleCalendarAclRule['role']} role @returns {string} 権限の表示名 */
@@ -145,7 +149,7 @@ watch([theCalendarId, () => authStore.token], loadRules, { immediate: true });
         <h1 class="title">共有設定</h1>
       </template>
       <template #sub>
-        <button title="カレンダーに戻る" @click="router.push({ name: 'Home' })">
+        <button class="icon-x-mark-btn" title="カレンダーに戻る" @click="router.push({ name: 'Home' })">
           <IconXMark />
         </button>
       </template>
@@ -161,7 +165,7 @@ watch([theCalendarId, () => authStore.token], loadRules, { immediate: true });
         </select>
         <small>設定対象のカレンダー:</small>
         <div class="calendar-ribbon-wrapper" v-if="theCalendar">
-          <CalendarRibbon :gCalendarId="theCalendar.id" :key="theCalendar.id" />
+          <CalendarRibbon :cid="theCalendar.id" :key="theCalendar.id" />
         </div>
         <p v-else>共有設定を変更できるカレンダーがありません</p>
       </label>
@@ -215,20 +219,31 @@ watch([theCalendarId, () => authStore.token], loadRules, { immediate: true });
 
           <ul>
             <li v-for="rule in aclRules" :key="rule.id">
-              <div class="rule-scope">
-                <code>{{ scopeLabel(rule.scope) }}</code>
-                <small>{{ rule.scope?.type }}</small>
-              </div>
-              <span v-if="rule.role === 'owner'" class="owner-label">所有者</span>
-              <select v-else :value="rule.role" :disabled="savingRuleId === rule.id" @change="onRuleRoleChange(rule, $event)">
-                <option v-for="option in roleOptions" :key="option.value" :value="option.value">
-                  {{ option.label }}
-                </option>
-              </select>
-              <span v-if="rule.role === 'owner'" class="role-description">{{ roleLabel(rule.role) }}</span>
-              <button class="delete-button" type="button" title="共有設定を削除" :disabled="savingRuleId === rule.id || rule.role === 'owner'" @click="removeRule(rule)">
-                <IconTrash />
-              </button>
+              <label>
+                <span>共有対象</span>
+                <code>{{ scopeLabel(rule.scope).label }}:</code>
+                <code v-if="scopeLabel(rule.scope).target" class="target">{{ scopeLabel(rule.scope).target }}</code>
+              </label>
+              <label>
+                <span>アクセス権限</span>
+                <code>{{ roleLabel(rule.role) }}</code>
+              </label>
+              <label>
+                <span>権限を変更</span>
+                <select :value="rule.role" :disabled="savingRuleId === rule.id || rule.role === 'owner'" @change="onRuleRoleChange(rule, $event)">
+                  <option v-for="option in roleOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                </select>
+                <p class="danger" v-if="rule.role === 'owner'">所有者の権限は変更できません</p>
+              </label>
+              <label>
+                <span>権限を削除</span>
+                <div class="delete-button-wrapper">
+                  <button type="button" title="共有設定を削除" :disabled="savingRuleId === rule.id || rule.role === 'owner'" @click="removeRule(rule)">
+                    <IconTrash />
+                  </button>
+                </div>
+                <p class="danger" v-if="rule.role === 'owner'">所有者の共有設定は削除できません</p>
+              </label>
             </li>
           </ul>
         </div>
@@ -288,6 +303,7 @@ section {
       width: 100%;
       display: flex;
       gap: var(--space-sm);
+      flex-wrap: wrap;
     }
 
     div:nth-child(2) {
@@ -320,21 +336,61 @@ section {
   }
 
   ul {
-    .rule-scope {
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-      overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+
+    li {
+      border: 1px solid var(--border);
+      border-radius: var(--border-radius);
+      padding: var(--space-sm);
+      margin-top: var(--space-sm);
+
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xxs);
+
+        span {
+          font-size: var(--text-size-xs);
+          color: var(--text-light);
+        }
+
+        p.danger {
+          font-size: var(--text-size-xs);
+          color: var(--danger);
+          padding: 0 var(--space-xs);
+        }
+
+        .delete-button-wrapper {
+          display: flex;
+          align-items: center;
+          gap: var(--space-xs);
+
+          button {
+            background-color: var(--danger);
+            &:hover {
+              opacity: 0.8;
+            }
+          }
+        }
+      }
     }
 
     code {
       word-break: break-all;
-      font-size: var(--text-size-sm);
+      font-size: var(--text-size-xs);
       background-color: var(--bg-2);
       border-radius: var(--border-radius);
-      margin-top: var(--space-xs);
       padding: var(--space-xxs) var(--space-xs);
     }
+  }
+}
+
+.icon-x-mark-btn {
+  background-color: var(--bg-1);
+  &:hover {
+    background-color: var(--bg-2);
   }
 }
 </style>

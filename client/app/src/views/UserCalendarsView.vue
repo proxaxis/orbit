@@ -164,7 +164,7 @@ function hideAllCalendars() {
       </AskLoginMessage>
 
       <section class="calendar-section" :class="{ 'is-open': isCalendarSectionOpen }">
-        <AccordionMenu title="カレンダーリストの開閉">
+        <AccordionMenu title="カレンダーリストの開閉" :useMenuSlot="true">
           <template #summary>カレンダーリスト</template>
           <template #menu>
             <DropdownMenu>
@@ -222,7 +222,7 @@ function hideAllCalendars() {
       </section>
 
       <section class="session-section">
-        <AccordionMenu title="セッションリストの開閉">
+        <AccordionMenu title="セッションリストの開閉" :useMenuSlot="true">
           <template #summary>セッションリスト</template>
           <template #menu>
             <DropdownMenu>
@@ -319,13 +319,13 @@ ul {
   flex-direction: column;
   gap: var(--space-xs);
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: visible;
   margin-bottom: var(--space-sm);
 
   li {
     display: flex;
     border-radius: var(--border-radius);
-    padding: var(--space-xs) 0 var(--space-xs) 0;
+    padding: var(--space-xs) var(--space-sm) var(--space-xs) var(--space-sm);
     gap: var(--space-sm);
 
     &:hover {

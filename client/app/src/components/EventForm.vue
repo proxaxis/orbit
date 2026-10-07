@@ -762,26 +762,24 @@ watch(() => formData.summary, updateTitleSuggestions);
 
         <!-- 通知設定 -->
         <section>
-          <span><IconBell size="1rem" /> 通知</span>
+          <span><IconBell size="0.8rem" /> 通知</span>
           <div class="notification-rows">
             <div v-for="(reminder, index) in reminders" :key="index" class="notification-row">
               <div>
-              <input v-model.number="reminder.value" type="number" min="0" max="40320" :aria-label="`通知${index + 1}の時間`" />
-              <select v-model="reminder.unit" :aria-label="`通知${index + 1}の単位`">
-                <option value="minute">分</option>
-                <option value="hour">時間</option>
-                <option value="day">日</option>
-              </select>
-              <span>前に通知</span>
+                <input v-model.number="reminder.value" type="number" min="0" max="40320" :aria-label="`通知${index + 1}の時間`" />
+                <select v-model="reminder.unit" :aria-label="`通知${index + 1}の単位`">
+                  <option value="minute">分</option>
+                  <option value="hour">時間</option>
+                  <option value="day">日</option>
+                </select>
+                <span>前に通知</span>
               </div>
               <button type="button" :aria-label="`通知${index + 1}を削除`" @click="removeReminderRow(index)">
                 <IconXMark />
               </button>
             </div>
-            <button v-if="reminders.length < 5" type="button" @click="addReminderRow">
-              <IconPlus /> 通知を追加
-            </button>
-            <p v-if="notificationPermission() === 'denied'" class="notification-warning">ブラウザの通知が拒否されています<br />ブラウザの設定でこのアプリからの通知を許可してください</p>
+            <button v-if="reminders.length < 5" type="button" @click="addReminderRow"><IconPlus /> 通知を追加</button>
+            <p v-if="notificationPermission() === 'denied'" class="notification-warning">ブラウザの通知が拒否されています. ブラウザの設定でこのアプリからの通知を許可してください.</p>
           </div>
         </section>
       </div>
@@ -802,16 +800,12 @@ form {
   width: 100%;
 }
 
-fieldset {
-  border: 1px solid var(--border);
-  border-radius: var(--border-radius);
-  padding: var(--space-sm);
-}
-
 // アイコンとタイトルの入力欄
 form > section:nth-child(1) {
+  width: 100%;
   display: flex;
   gap: var(--space-xs);
+  flex-wrap: wrap;
 
   > label {
     display: flex;
@@ -834,11 +828,23 @@ form > section:nth-child(2) {
   gap: var(--space-xs);
   flex-direction: column;
 
+  fieldset {
+    padding: 0 var(--space-sm) var(--space-sm) var(--space-sm);
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius);
+    min-width: 0;
+
+    legend {
+      font-size: var(--text-size-sm);
+      padding: 0 var(--space-xs);
+    }
+  }
+
   > label {
-    // font-size: var(--text-size-xxs);
     display: flex;
     flex-direction: column;
     width: 100%;
+    cursor: pointer;
 
     > span {
       font-size: var(--text-size-xxs);
@@ -922,6 +928,13 @@ form > section:nth-child(5) {
   }
 }
 
+form > section:nth-child(4) > label:nth-child(2),
+form > section:nth-child(5) > label:nth-child(2) {
+  > input {
+    width: 4rem; // 時間入力欄の幅は小さく
+  }
+}
+
 // 日付と時間の計算結果
 form > section:nth-child(6) > p {
   padding: var(--space-xs) var(--space-sm);
@@ -967,8 +980,7 @@ form .accordion-content {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-    padding: var(--space-sm) var(--space-md);
-    
+
   > section {
     display: flex;
     flex-direction: column;
@@ -1026,7 +1038,7 @@ form .accordion-content {
     }
 
     > input {
-      width: calc(100% - var(--space-xs) * 2 - 2px);
+      width: 100%;
     }
 
     > p {
@@ -1085,7 +1097,10 @@ form .accordion-content {
       display: flex;
       flex-direction: column;
       gap: var(--space-sm);
-      margin: 0;
+      padding: 0 var(--space-sm) var(--space-sm) var(--space-sm);
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: var(--border-radius);
 
       legend {
         font-size: var(--text-size-xxs);
@@ -1131,6 +1146,7 @@ form .accordion-content {
       .recurrence-end {
         .inline-field {
           display: flex;
+          flex-wrap: wrap;
           label:nth-child(1) {
             width: 6rem;
             input {
@@ -1154,8 +1170,9 @@ form .accordion-content {
       display: inline-flex;
       align-items: center;
       gap: var(--space-xs);
-      font-size: var(--font-size-xxs);
-      color: var(--sub-text);
+      * {
+        font-size: var(--font-size-xxs);
+      }
     }
 
     > .notification-rows {

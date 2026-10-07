@@ -14,6 +14,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  useMenuSlot: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits(['update:open']);
@@ -130,7 +134,7 @@ defineExpose({
           <IconAngleRight v-else size="0.8em" />
         </span>
       </div>
-      <div class="menu-area">
+      <div class="menu-area" v-if="props.useMenuSlot">
         <slot name="menu"></slot>
       </div>
     </summary>

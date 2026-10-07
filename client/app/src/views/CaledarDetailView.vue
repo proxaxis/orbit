@@ -12,6 +12,7 @@ import CalendarRibbon from '@/components/CalendarRibbon.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
 import AskLoginMessage from '@/components/AskLoginMessage.vue';
 import { getCalendarListColorIdByColor, getRandomCalendarListColorId } from '@/services/google-calendar-colors.js';
+import AccordionMenu from '@/components/AccordionMenu.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -170,7 +171,7 @@ watch(
     <section v-if="authStore.isAuthenticated">
       <div v-if="source.listEntry || source.calendar" class="section-heading">
         <span>設定対象のカレンダー:</span>
-        <CalendarRibbon v-if="theCalendarId" :gCalendarId="theCalendarId" />
+        <CalendarRibbon v-if="theCalendarId" :cid="theCalendarId" />
         <p v-else>カレンダーが選択されていません</p>
       </div>
 
@@ -204,7 +205,7 @@ watch(
 
         <div class="form-heading">
           <h2>表示設定</h2>
-          <span>この端末のカレンダーのみに適用</span>
+          <span>自分のカレンダーのみ変更</span>
         </div>
 
         <label>
@@ -215,13 +216,15 @@ watch(
           <button data-app-button="secondary" type="button" @click="router.back">キャンセル</button>
           <button data-app-button="primary" type="submit" :disabled="userStore.isLoading">保存</button>
         </div>
-        <details>
-          <summary>その他のアクション</summary>
-          <div>
+        <AccordionMenu>
+          <template #summary>
+            <span>その他のアクション</span>
+          </template>
+          <div class="actions">
             <button v-if="canDeleteCalendar" type="button" class="danger-button" :disabled="userStore.isLoading" @click="removeCalendar">カレンダーを削除</button>
             <button v-else-if="canRemoveFromCalendarList" type="button" class="danger-button" :disabled="userStore.isLoading" @click="removeCalendar">リストから削除</button>
           </div>
-        </details>
+        </AccordionMenu>
       </form>
     </section>
   </div>
@@ -231,7 +234,6 @@ watch(
 .section-heading {
   display: flex;
   flex-direction: column;
-  margin-bottom: var(--space-xl);
 
   span {
     font-size: var(--text-size-sm);
@@ -294,9 +296,9 @@ details div {
   }
 }
 .icon-x-mark-wrapper {
-    background-color: var(--bg-1);
-    &:hover {
-      background-color: var(--bg-2);
-    }
+  background-color: var(--bg-1);
+  &:hover {
+    background-color: var(--bg-2);
+  }
 }
 </style>

@@ -473,7 +473,6 @@ $gutter-width: 3.25rem;
     min-width: 0;
     overflow: auto;
     margin: var(--space-sm);
-    border: 1px solid var(--border);
     border-radius: var(--border-radius);
     background: var(--bg-0);
     // 横方向のタッチ操作は週移動スワイプとして扱うため、横パンは抑制する
