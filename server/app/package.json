@@ -1,10 +1,11 @@
 {
   "name": "app",
   "type": "module",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "scripts": {
     "dev": "node --env-file=.env ./node_modules/tsx/dist/cli.mjs watch src/index.js",
     "build": "tsc",
+    "test": "node --test",
     "start": "node --env-file=.env dist/index.js"
   },
   "dependencies": {

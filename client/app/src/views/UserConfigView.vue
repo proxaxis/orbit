@@ -1,16 +1,19 @@
 <script setup>
-import { reactive, ref } from 'vue';
+import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { USER_FONT_FAMILIES, USER_TEXT_SIZE_VALUES, useUserStore } from '@/stores/user.js';
 import { useAuthStore, BFF_BASE_URL } from '@/stores/auth.js';
 import { clearOfflineCache, deleteOffline, USER_SETTINGS_KEY } from '@/services/offline-storage.js';
 import MenuBar from '@/components/MenuBar.vue';
+import GoogleLogin from '@/components/GoogleLogin.vue';
 import { ensureNotificationPermission, notificationPermission } from '@/services/notifications.js';
 import IconFloppyDisk from '@/components/icons/IconFloppyDisk.vue';
 import IconTrash from '@/components/icons/IconTrash.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
 import IconBell from '@/components/icons/IconBell.vue';
 import IconImage from '@/components/icons/IconImage.vue';
+import IconArrowsRotate from '@/components/icons/IconArrowsRotate.vue';
+import IconArrowRightFromBracket from '@/components/icons/IconArrowRightFromBracket.vue';
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -18,6 +21,18 @@ const authStore = useAuthStore();
 const savedMessage = ref('');
 /** @type {Ref<'unsupported'|NotificationPermission>} ブラウザーの通知許可状態 */
 const notificationPermissionState = ref(notificationPermission());
+/** @type {Ref<boolean>} 写真共有の認証状態を確認中かどうか */
+const isCheckingPhotoAuth = ref(false);
+
+onMounted(async () => {
+  if (!authStore.isAuthenticated || !userStore.usePhotoSharing || authStore.isPhotoSharingAuthorized) return;
+  isCheckingPhotoAuth.value = true;
+  try {
+    await authStore.ensurePhotoToken();
+  } finally {
+    isCheckingPhotoAuth.value = false;
+  }
+});
 
 /** ブラウザーの通知許可を要求し、表示中の状態を再取得する */
 async function requestNotificationPermission() {
@@ -38,6 +53,38 @@ async function disablePhotoSharing() {
   if (!confirmed) return;
   userStore.setUsePhotoSharing(false);
   authStore.clearPhotoToken();
+}
+
+/** Google アカウントからログアウトする */
+async function handleLogout() {
+  const confirmed = await userStore.confirm({
+    title: 'ログアウト',
+    message: 'Google アカウントからログアウトします。カレンダーの同期は停止します。続行しますか？',
+  });
+  if (!confirmed) return;
+  userStore.setLoading(true, 'Logging out...');
+  try {
+    await authStore.logout();
+  } finally {
+    userStore.setLoading(false);
+  }
+}
+
+/** ログアウト後に Google 認証へリダイレクトして、別アカウントでログインし直す */
+async function switchAccount() {
+  const confirmed = await userStore.confirm({
+    title: 'アカウントを変更',
+    message: 'ログアウトして、別の Google アカウントでログインし直します。続行しますか？',
+  });
+  if (!confirmed) return;
+  userStore.setLoading(true, 'Switching account...');
+  try {
+    await authStore.logout();
+  } finally {
+    userStore.setLoading(false);
+  }
+  // BFF が prompt=select_account に対応していれば Google のアカウント選択画面が表示される
+  window.location.href = `${BFF_BASE_URL}/auth/login?prompt=select_account`;
 }
 
 const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -165,6 +212,21 @@ async function clearSettings() {
 
     <form class="config-form" @submit.prevent="save">
       <section class="config-section">
+        <h2>アカウント</h2>
+        <template v-if="authStore.isAuthenticated">
+          <p class="hint">Google アカウントでログイン中です.</p>
+          <div class="account-actions">
+            <button type="button" class="clear-cache-button" @click="switchAccount"><IconArrowsRotate />アカウントを変更</button>
+            <button type="button" class="clear-cache-button" @click="handleLogout"><IconArrowRightFromBracket />ログアウト</button>
+          </div>
+        </template>
+        <template v-else>
+          <p class="hint">カレンダーの同期や写真共有を利用するには、Google アカウントでログインしてください.</p>
+          <GoogleLogin />
+        </template>
+      </section>
+
+      <section class="config-section">
         <h2>表示</h2>
         <label
           >テーマ
@@ -254,13 +316,14 @@ async function clearSettings() {
         <h2>写真共有</h2>
         <p class="hint">イベントに写真の共有アルバムを紐づけます. 有効化にはGoogleアカウントでの追加認証が必要です.</p>
         <p v-if="!authStore.isAuthenticated" class="hint">利用するには Google アカウントでログインしてください.</p>
+        <p v-else-if="isCheckingPhotoAuth" class="hint">認証状態を確認しています...</p>
         <template v-else-if="userStore.usePhotoSharing && authStore.isPhotoSharingAuthorized">
           <p class="hint">写真共有は有効です. イベント詳細画面から写真を追加できます.</p>
           <button type="button" class="clear-cache-button" @click="disablePhotoSharing"><IconXMark />無効にする</button>
         </template>
         <template v-else>
           <p v-if="userStore.usePhotoSharing" class="hint">認証が切れています. 再度認証してください.</p>
-          <button type="button" class="clear-cache-button" @click="startPhotoSharingAuth"><IconImage />有効化</button>
+          <button type="button" class="clear-cache-button" @click="startPhotoSharingAuth"><IconImage />{{ userStore.usePhotoSharing ? '再認証' : '有効化' }}</button>
         </template>
       </section>
 
@@ -283,7 +346,7 @@ async function clearSettings() {
 
       <p v-if="savedMessage" class="saved">{{ savedMessage }}</p>
       <div class="actions">
-        <button data-app-button="secondary" type="button" @click="router.back">キャンセル</button>
+        <button data-app-button="secondary" type="button" @click="router.push({ name: 'Home' })">キャンセル</button>
         <button data-app-button="primary" type="submit"><IconFloppyDisk />保存</button>
       </div>
     </form>
@@ -383,6 +446,12 @@ label {
 .saved {
   color: var(--primary);
   font-size: var(--text-size-sm);
+}
+
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
 }
 
 .clear-cache-button {

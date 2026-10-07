@@ -1,9 +1,9 @@
 import { useAuthStore } from '@/stores/auth.js';
 
-/** @type {string} Google Photos Library API のベース URL */
-export const API_BASE_URL = import.meta.env.VITE_GOOGLE_PHOTOS_API_BASE_URL ?? 'https://photoslibrary.googleapis.com/v1';
-/** @type {string} Google Photos Picker API のベース URL */
-export const PICKER_API_BASE_URL = import.meta.env.VITE_GOOGLE_PHOTOS_PICKER_API_BASE_URL ?? 'https://photospicker.googleapis.com/v1';
+/** @type {string|undefined} Google Photos Library API のベース URL */
+export const API_BASE_URL = import.meta.env.VITE_GOOGLE_PHOTOS_LIBRARY_API_BASE_URL;
+/** @type {string|undefined} Google Photos Picker API のベース URL */
+export const PICKER_API_BASE_URL = import.meta.env.VITE_GOOGLE_PHOTOS_PICKER_API_BASE_URL;
 
 /**
  * ============================================================================
@@ -32,26 +32,10 @@ export function getAlbum(token, albumId) {
 }
 
 /**
- * アルバムを共有する。コラボレーションを有効にすると参加者も写真を追加できる。
- * @param {string} token アクセストークン
- * @param {string} albumId アルバム ID
- * @param {GooglePhotosSharedAlbumOptions} [options={}] 共有オプション
- * @returns {Promise<GooglePhotosShareInfo>} 共有情報（shareableUrl / shareToken を含む）
+ * 注: 2025-03-31 の Google Photos API 変更により、共有系メソッド
+ * （albums.share / sharedAlbums.join など）は廃止され 403 を返す。
+ * アルバムの共有は利用者が Google フォト側で行う運用とし、API では扱わない。
  */
-export async function shareAlbum(token, albumId, options = { isCollaborative: true, isCommentable: true }) {
-  const response = await fetchPhotosAPI(token, 'POST', '/albums/$albumId:share', { params: { albumId }, body: { sharedAlbumOptions: options } });
-  return /** @type {{shareInfo?: GooglePhotosShareInfo}} */ (response)?.shareInfo ?? /** @type {GooglePhotosShareInfo} */ (response);
-}
-
-/**
- * 共有トークンを使って共有アルバムに参加する（共有された側の操作用）
- * @param {string} token アクセストークン
- * @param {string} shareToken 共有トークン
- * @returns {Promise<GooglePhotosJoinSharedAlbumResponse>}
- */
-export function joinSharedAlbum(token, shareToken) {
-  return fetchPhotosAPI(token, 'POST', '/sharedAlbums:join', { body: { shareToken } });
-}
 
 /**
  * ============================================================================

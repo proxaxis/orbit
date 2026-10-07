@@ -1,6 +1,6 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import dayjs from '@/services/dayjs.js';
 import { useEventStore } from '@/stores/event.js';
 import { useAuthStore } from '@/stores/auth.js';
@@ -24,6 +24,7 @@ import IconCloudArrowDown from '@/components/icons/IconCloudArrowDown.vue';
 import IconArrowsRotate from '@/components/icons/IconArrowsRotate.vue';
 
 const router = useRouter();
+const route = useRoute();
 const eventStore = useEventStore();
 const userStore = useUserStore();
 const authStore = useAuthStore();
@@ -34,7 +35,7 @@ const event = ref(null);
 /** @type {Ref<boolean>} 参加ステータス更新中かどうか */
 const isUpdatingAttendance = ref(false);
 
-/** @type {ComputedRef<OrbitEventPhotoAlbum|null>} イベントに紐づく共有アルバム */
+/** @type {ComputedRef<OrbitEventPhotoAlbum|null>} イベントに紐づくアルバム */
 const albumBinding = computed(() => photosStore.bindingOf(event.value));
 /** @type {Ref<GooglePhotosAlbum|null>} 取得したアルバム情報 */
 const album = ref(null);
@@ -54,7 +55,12 @@ const photoApiReady = computed(() => photosStore.canUsePhotoSharing());
 /** イベントに本人以外の参加者がいるか */
 const hasOtherAttendees = computed(() => (event.value?.raw?.attendees ?? []).some((attendee) => !attendee.self));
 
-/** アルバムの写真一覧を読み込む（未参加なら shareToken で参加する） */
+// 写真トークンの復元がマウント後に完了した場合にアルバムを読み込み直す
+watch(photoApiReady, (ready) => {
+  if (ready) loadAlbumPhotos();
+});
+
+/** アルバムの写真一覧を読み込む */
 async function loadAlbumPhotos() {
   const binding = albumBinding.value;
   if (!binding || !photoApiReady.value) return;
@@ -188,20 +194,38 @@ async function remove() {
   }
 }
 
-onMounted(async () => {
+/** 選択中のイベントを読み込む。URL クエリ（通知タップからの遷移など）から選択状態を復元する。 */
+async function loadEvent() {
+  if (!userStore.nowSelectedEvent && typeof route.query.eid === 'string' && typeof route.query.cid === 'string') {
+    userStore.setNowSelectedEvent({ eid: route.query.eid, cid: route.query.cid });
+  }
   userStore.setLoading(true, 'Loading the event...');
   try {
     if (!userStore.nowSelectedEvent) throw new Error('You do not have an event selected. You must select an event to view its details.');
     const result = await eventStore.getEventById(userStore.nowSelectedEvent.eid, userStore.nowSelectedEvent.cid);
     if (!result) throw new Error('The event could not be found. Go back to the calendar and select a different event.');
     event.value = result;
+    album.value = null;
+    albumPhotos.value = [];
+    if (userStore.usePhotoSharing) authStore.ensurePhotoToken();
     loadAlbumPhotos();
   } catch (err) {
     userStore.setError(true, err);
   } finally {
     userStore.setLoading(false);
   }
-});
+}
+
+onMounted(loadEvent);
+
+// 通知タップなどで表示中に別のイベントが選択された場合は読み込み直す
+watch(
+  () => userStore.nowSelectedEvent,
+  async (next, previous) => {
+    if (!next || (next.eid === previous?.eid && next.cid === previous?.cid)) return;
+    await loadEvent();
+  },
+);
 </script>
 
 <template>
@@ -303,11 +327,11 @@ onMounted(async () => {
           </li>
         </ul>
       </details>
-      <!-- 共有アルバム -->
+      <!-- 写真アルバム -->
       <section v-if="photoSectionVisible" class="photos-section">
-        <h3><IconImage size="1rem" /> 共有アルバム</h3>
+        <h3><IconImage size="1rem" /> 写真アルバム</h3>
         <template v-if="albumBinding">
-          <p v-if="hasOtherAttendees" class="hint">このアルバムは参加者と共有されています。</p>
+          <p v-if="hasOtherAttendees" class="hint">参加者と共有するには、作成者が Google フォトでアルバムの共有設定を行う必要があります。</p>
           <p v-if="isPhotosLoading" class="hint">写真を読み込んでいます...</p>
           <div v-if="albumPhotos.length" class="photo-grid">
             <a v-for="photo in albumPhotos" :key="photo.id" :href="`${photo.baseUrl}=d`" :title="`${photo.filename ?? '写真'} をダウンロード`" target="_blank" rel="noopener noreferrer" class="photo-cell">
@@ -317,30 +341,22 @@ onMounted(async () => {
           </div>
           <p v-else-if="!isPhotosLoading && photoApiReady" class="hint">まだ写真がありません。</p>
           <div class="photo-actions">
-            <a v-if="albumBinding.shareUrl || album?.productUrl" :href="albumBinding.shareUrl || album?.productUrl" target="_blank" rel="noopener noreferrer" class="album-link">
-              <IconArrowUpRightFromSquare size="0.85rem" /> アルバムを開く
-            </a>
-            <button v-if="photoApiReady" type="button" :disabled="isPhotosLoading || photosStore.isPhotoBusy" @click="loadAlbumPhotos">
-              <IconArrowsRotate size="0.85rem" /> 再読み込み
-            </button>
+            <a v-if="albumBinding.productUrl || album?.productUrl" :href="albumBinding.productUrl || album?.productUrl" target="_blank" rel="noopener noreferrer" class="album-link"> <IconArrowUpRightFromSquare size="0.85rem" /> アルバムを開く </a>
+            <button v-if="photoApiReady" type="button" :disabled="isPhotosLoading || photosStore.isPhotoBusy" @click="loadAlbumPhotos"><IconArrowsRotate size="0.85rem" /> 再読み込み</button>
           </div>
         </template>
         <template v-else-if="photoApiReady">
-          <p class="hint">写真を選択してアップロードすると、このイベント専用の共有アルバムが作成されます。{{ hasOtherAttendees ? '参加者がいるため、作成後は参加者と共有されます。' : '' }}</p>
+          <p class="hint">写真を選択してアップロードすると、このイベント専用のアルバムが Google フォトに作成されます。{{ hasOtherAttendees ? '参加者と共有するには、作成後に Google フォトで共有設定を行ってください。' : '' }}</p>
         </template>
         <template v-else-if="!userStore.usePhotoSharing">
-          <p class="hint">写真共有は無効です。共有されたアルバムを利用するには、ユーザー設定で有効化してください。</p>
+          <p class="hint">写真共有は無効です。アルバムを利用するには、ユーザー設定で有効化してください。</p>
         </template>
         <p v-else class="hint">Google アカウントの認証が必要です。ユーザー設定から認証してください。</p>
 
         <div v-if="photoApiReady" class="photo-actions">
           <input ref="rfFileInput" type="file" accept="image/*,video/*" multiple hidden @change="onSelectLocalFiles" />
-          <button type="button" :disabled="photosStore.isPhotoBusy" @click="rfFileInput?.click()">
-            <IconCloudArrowDown size="0.85rem" /> ファイルをアップロード
-          </button>
-          <button type="button" :disabled="photosStore.isPhotoBusy" @click="pickFromGooglePhotos">
-            <IconImage size="0.85rem" /> Google フォトから選択
-          </button>
+          <button type="button" :disabled="photosStore.isPhotoBusy" @click="rfFileInput?.click()"><IconCloudArrowDown size="0.85rem" /> ファイルをアップロード</button>
+          <button type="button" :disabled="photosStore.isPhotoBusy" @click="pickFromGooglePhotos"><IconImage size="0.85rem" /> Google フォトから選択</button>
         </div>
         <p v-if="photosStore.isPhotoBusy" class="hint">{{ photosStore.photoStatus }}</p>
         <p v-if="photoError" class="photo-error">{{ photoError }}</p>

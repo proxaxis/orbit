@@ -6,8 +6,6 @@ const mocks = vi.hoisted(() => ({
   patchEvent: vi.fn(async () => ({})),
   createAlbum: vi.fn(async () => ({ id: 'album-1', productUrl: 'https://photos.google.com/album/1' })),
   getAlbum: vi.fn(async () => ({ id: 'album-1' })),
-  shareAlbum: vi.fn(async () => ({ shareableUrl: 'https://photos.app.goo.gl/xyz', shareToken: 'token-1' })),
-  joinSharedAlbum: vi.fn(async () => ({ album: { id: 'album-1' } })),
   uploadMediaBytes: vi.fn(async () => 'upload-token-1'),
   batchCreateMediaItems: vi.fn(async () => ({})),
   listAlbumMediaItems: vi.fn(async () => [{ id: 'm1' }]),
@@ -65,14 +63,49 @@ describe('usePhotosStore', () => {
   describe('bindingOf', () => {
     it('extendedProperties.shared からアルバム情報を読む', () => {
       const evt = handyEvent({
-        raw: { extendedProperties: { shared: { photoAlbumId: 'a1', photoAlbumShareUrl: 'u', photoAlbumShareToken: 't' } } },
+        raw: { extendedProperties: { shared: { photoAlbumId: 'a1', photoAlbumProductUrl: 'u' } } },
       });
-      expect(store.bindingOf(evt)).toEqual({ albumId: 'a1', shareUrl: 'u', shareToken: 't' });
+      expect(store.bindingOf(evt)).toEqual({ albumId: 'a1', productUrl: 'u' });
     });
 
     it('紐づけなしは null', () => {
       expect(store.bindingOf(handyEvent())).toBeNull();
       expect(store.bindingOf(null)).toBeNull();
+    });
+  });
+
+  describe('applySubmitBody', () => {
+    it('送信ボディのタイトル・日付・参加者を反映する', () => {
+      const evt = handyEvent();
+      const merged = store.applySubmitBody(evt, {
+        summary: '新しいタイトル',
+        start: { dateTime: '2026-11-20T14:00:00' },
+        attendees: [{ email: 'other@x.com' }],
+        extendedProperties: { shared: { icon: '🎉' } },
+      });
+
+      expect(merged.summary).toBe('新しいタイトル');
+      expect(merged.startDateTime.format('YYYY-MM-DD')).toBe('2026-11-20');
+      expect(merged.raw.attendees).toEqual([{ email: 'other@x.com' }]);
+      expect(merged.raw.extendedProperties.shared).toEqual({ otherKey: 'keep', icon: '🎉' });
+      // 元のイベントは変更されない
+      expect(evt.summary).toBe('旅行');
+    });
+
+    it('既存のアルバム紐づけを保持する', () => {
+      const evt = handyEvent({
+        raw: { extendedProperties: { shared: { photoAlbumId: 'a9', photoAlbumProductUrl: 'u' } } },
+      });
+      const merged = store.applySubmitBody(evt, { extendedProperties: { shared: { icon: '🎉' } } });
+      expect(store.bindingOf(merged).albumId).toBe('a9');
+    });
+
+    it('空のボディでは元の値を維持する', () => {
+      const evt = handyEvent();
+      const merged = store.applySubmitBody(evt, {});
+      expect(merged.summary).toBe('旅行');
+      expect(merged.startDateTime.format('YYYY-MM-DD')).toBe('2026-10-05');
+      expect(store.applySubmitBody(null)).toBeNull();
     });
   });
 
@@ -106,21 +139,14 @@ describe('usePhotosStore', () => {
       const binding = await store.ensureEventAlbum(evt);
 
       expect(mocks.createAlbum).toHaveBeenCalledWith('photo-token', '旅行 (2026-10-05)');
-      expect(mocks.shareAlbum).toHaveBeenCalledWith('photo-token', 'album-1', { isCollaborative: false, isCommentable: false });
       expect(mocks.patchEvent).toHaveBeenCalledWith('cal-token', 'cal-1', 'evt-1', {
         extendedProperties: {
-          shared: { otherKey: 'keep', photoAlbumId: 'album-1', photoAlbumShareUrl: 'https://photos.app.goo.gl/xyz', photoAlbumShareToken: 'token-1' },
+          shared: { otherKey: 'keep', photoAlbumId: 'album-1', photoAlbumProductUrl: 'https://photos.google.com/album/1' },
         },
       });
-      expect(binding).toEqual({ albumId: 'album-1', shareUrl: 'https://photos.app.goo.gl/xyz', shareToken: 'token-1' });
+      expect(binding).toEqual({ albumId: 'album-1', productUrl: 'https://photos.google.com/album/1' });
       // ローカルのイベントにも反映される
       expect(evt.raw.extendedProperties.shared.photoAlbumId).toBe('album-1');
-    });
-
-    it('他の参加者がいる場合はコラボレーション共有にする', async () => {
-      const evt = handyEvent({ raw: { attendees: [{ email: 'me@x.com', self: true }, { email: 'other@x.com' }] } });
-      await store.ensureEventAlbum(evt);
-      expect(mocks.shareAlbum).toHaveBeenCalledWith('photo-token', 'album-1', { isCollaborative: true, isCommentable: true });
     });
 
     it('機能未使用状態ではエラー', async () => {
@@ -153,22 +179,19 @@ describe('usePhotosStore', () => {
   });
 
   describe('openAlbum', () => {
-    const binding = { albumId: 'album-1', shareUrl: 'u', shareToken: 'st-1' };
+    const binding = { albumId: 'album-1', productUrl: 'u' };
 
-    it('参加済みなら getAlbum の結果を返す', async () => {
+    it('自分のアプリ作成アルバムなら getAlbum の結果を返す', async () => {
       mocks.getAlbum.mockResolvedValue({ id: 'album-1' });
       const album = await store.openAlbum(binding);
       expect(album.id).toBe('album-1');
-      expect(mocks.joinSharedAlbum).not.toHaveBeenCalled();
     });
 
-    it('403/404 なら shareToken で参加する', async () => {
+    it('他人のアルバム（403/404）は分かりやすいメッセージのエラーになる', async () => {
       const err = new Error('forbidden');
       err.status = 403;
       mocks.getAlbum.mockRejectedValue(err);
-      const album = await store.openAlbum(binding);
-      expect(mocks.joinSharedAlbum).toHaveBeenCalledWith('photo-token', 'st-1');
-      expect(album.id).toBe('album-1');
+      await expect(store.openAlbum(binding)).rejects.toThrow('作成者の Google フォト');
     });
   });
 

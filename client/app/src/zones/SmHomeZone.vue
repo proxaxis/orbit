@@ -72,8 +72,7 @@ function setMobileSubContent(element) {
       </div>
     </main>
 
-    <aside class="sub-pane" :class="{ 'is-collapsing': props.isCollapsingMobileSub }" :style="{ flexBasis: `${props.mobileSubPaneHeight}px` }"
-      @touchstart="onSubTouchStart" @touchmove="onSubTouchMove" @touchend="onSubTouchEnd" @touchcancel="onSubTouchEnd">
+    <aside class="sub-pane" :class="{ 'is-collapsing': props.isCollapsingMobileSub }" :style="{ flexBasis: `${props.mobileSubPaneHeight}px` }" @touchstart="onSubTouchStart" @touchmove="onSubTouchMove" @touchend="onSubTouchEnd" @touchcancel="onSubTouchEnd">
       <div :ref="setMobileSubContent" class="aside-content sub-pane-content" @touchstart="onContentTouchStart">
         <router-view name="sub" v-slot="{ Component }">
           <component :is="Component" :select-pane="props.selectPane" :collapse-mobile-sub-pane="props.collapseMobileSubPane" />
@@ -110,6 +109,7 @@ function setMobileSubContent(element) {
   .sub-pane {
     display: flex;
     flex: 0 0 auto;
+    min-height: 0;
     width: 100%;
     height: auto;
   }
@@ -126,5 +126,4 @@ function setMobileSubContent(element) {
     margin-top: var(--space-xs);
   }
 }
-
 </style>

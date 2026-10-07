@@ -169,7 +169,7 @@ function hideAllCalendars() {
           <template #menu>
             <DropdownMenu>
               <template #button>
-                <button class="icon-ellipsis-vertical-wrapper" title="カレンダーの操作">
+                <button class="cal-list-menu-open" title="カレンダーの操作">
                   <IconEllipsisVertical />
                 </button>
               </template>
@@ -197,21 +197,27 @@ function hideAllCalendars() {
                 <input type="checkbox" :id="`iptbx-${c.id}`" :checked="!userStore.hiddenCalendarIds.includes(c.id)" :style="{ accentColor: c.backgroundColor, borderColor: c.backgroundColor }" @change="userStore.setCalendarVisibility(c.id, /** @type {HTMLInputElement} */ ($event.target).checked)" />
                 <div class="list-item">
                   <label :for="`iptbx-${c.id}`" :title="c.description">
-                    <CalendarRibbon :cid="c.id" />
-                    <small v-if="isSessionCalendar(c)" class="session-badge">SESSION</small>
-                    <IconCrown v-if="userStore.defaultCalendarId === c.id" size="0.85rem" title="デフォルトカレンダー" />
-                    <IconUserLock v-if="isPrivateCalendar(c)" class="privacy-icon" size="0.85rem" title="非公開カレンダー" />
+                    <CalendarRibbon :cid="c.id" :useMenuSlot="true">
+                      <template #menu>
+                        <div class="cal-list-ribbon-icons">
+                          <IconCrown v-if="userStore.defaultCalendarId === c.id" size="1.5rem" title="デフォルトカレンダー" />
+                          <IconUserLock v-if="isPrivateCalendar(c)" class="privacy-icon" size="1.3rem" title="非公開カレンダー" />
+                        </div>
+                        <DropdownMenu>
+                          <template #button>
+                            <button class="cal-list-dm-open" title="カレンダーの操作">
+                              <IconEllipsisVertical />
+                            </button>
+                          </template>
+                          <button @click="userStore.setCalendarVisibility(c.id, false)"><IconEyeSlash />非表示</button>
+                          <button @click="router.push({ name: 'CalendarDetail', query: { cid: c.id } })"><IconCircleInfo />カレンダーの詳細</button>
+                          <button @click="router.push({ name: 'SharingConfig', query: { cid: c.id } })"><IconUserGroup />共有設定</button>
+                          <button @click="router.push({ name: 'ShareManage', query: { cid: c.id } })"><IconUserPlus />期間を指定して共有</button>
+                          <button @click="userStore.setDefaultCalendar(c.id)"><IconCrown />デフォルトにする</button>
+                        </DropdownMenu>
+                      </template>
+                    </CalendarRibbon>
                   </label>
-                  <DropdownMenu>
-                    <template #button>
-                      <IconEllipsisVertical />
-                    </template>
-                    <button @click="userStore.setCalendarVisibility(c.id, false)"><IconEyeSlash />非表示</button>
-                    <button @click="router.push({ name: 'CalendarDetail', query: { cid: c.id } })"><IconCircleInfo />カレンダーの詳細</button>
-                    <button @click="router.push({ name: 'SharingConfig', query: { cid: c.id } })"><IconUserGroup />共有設定</button>
-                    <button @click="router.push({ name: 'ShareManage', query: { cid: c.id } })"><IconUserPlus />期間を指定して共有</button>
-                    <button @click="userStore.setDefaultCalendar(c.id)"><IconCrown />デフォルトにする</button>
-                  </DropdownMenu>
                 </div>
               </li>
             </ul>
@@ -227,12 +233,12 @@ function hideAllCalendars() {
           <template #menu>
             <DropdownMenu>
               <template #button>
-                <button class="icon-ellipsis-vertical-wrapper" title="カレンダーの操作">
+                <button class="cal-list-menu-open" title="セッションカレンダーの操作">
                   <IconEllipsisVertical />
                 </button>
               </template>
-              <button><IconEye />全てを表示</button>
-              <button><IconEyeSlash />全てを非表示</button>
+              <!-- <button><IconEye />全てを表示</button> -->
+              <!-- <button><IconEyeSlash />全てを非表示</button> -->
               <button :disabled="!calendarStore.sessionCalendars.length" @click="calendarStore.clearSessionCalendars"><IconTrash />全て削除</button>
             </DropdownMenu>
           </template>
@@ -262,16 +268,21 @@ function hideAllCalendars() {
               <li v-for="c in calendarStore.sessionCalendars" :key="c.id" :title="c.description">
                 <div class="list-item">
                   <label :title="c.description">
-                    <CalendarRibbon :cid="c.id" />
+                    <CalendarRibbon :cid="c.id" :useMenuSlot="true">
+                      <template #menu>
+                        <DropdownMenu>
+                          <template #button>
+                            <button class="cal-list-dm-open" title="カレンダーの操作">
+                              <IconEllipsisVertical />
+                            </button>
+                          </template>
+                          <button @click="userStore.setCalendarVisibility(c.id, false)"><IconEyeSlash />非表示</button>
+                          <button @click="calendarStore.removeSessionCalendar(c.id)">セッションから削除</button>
+                        </DropdownMenu>
+                      </template>
+                    </CalendarRibbon>
                     <small class="session-badge">SESSION</small>
                   </label>
-                  <DropdownMenu>
-                    <template #button>
-                      <IconEllipsisVertical />
-                    </template>
-                    <button @click="userStore.setCalendarVisibility(c.id, false)"><IconEyeSlash />非表示</button>
-                    <button @click="calendarStore.removeSessionCalendar(c.id)">セッションから削除</button>
-                  </DropdownMenu>
                 </div>
               </li>
             </ul>
@@ -325,7 +336,7 @@ ul {
   li {
     display: flex;
     border-radius: var(--border-radius);
-    padding: var(--space-xs) var(--space-sm) var(--space-xs) var(--space-sm);
+    padding: var(--space-xs) 0 var(--space-xs) var(--space-sm);
     gap: var(--space-sm);
 
     &:hover {
@@ -362,12 +373,27 @@ ul {
   }
 }
 
-.icon-ellipsis-vertical-wrapper {
+.cal-list-menu-open {
   padding: var(--space-sm);
   background-color: var(--bg-1);
 
   &:hover {
     background-color: var(--bg-2);
+  }
+}
+
+.cal-list-dm-open {
+  padding: var(--space-sm);
+  background-color: transparent;
+}
+
+.cal-list-ribbon-icons {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+
+  * {
+    fill: var(--text-light);
   }
 }
 

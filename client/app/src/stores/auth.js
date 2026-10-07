@@ -81,9 +81,44 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /** @type {Promise<string|null>|null} @description 写真共有用トークン取得中のリクエスト（重複防止用） */
+  let photoTokenRequest = null;
+
+  /**
+   * 写真共有用トークンを必要に応じて取得する。未取得のときだけ BFF へ問い合わせ、取得中のリクエストは共有する。
+   * @returns {Promise<string|null>} 取得したアクセストークン（未認証なら null）
+   */
+  function ensurePhotoToken() {
+    if (_gPhotoAccessToken.value) return Promise.resolve(_gPhotoAccessToken.value);
+    if (!photoTokenRequest) {
+      photoTokenRequest = fetchPhotoToken().finally(() => {
+        photoTokenRequest = null;
+      });
+    }
+    return photoTokenRequest;
+  }
+
   /** 写真共有用トークンを破棄する（機能の無効化時に使用） */
   function clearPhotoToken() {
     _gPhotoAccessToken.value = null;
+  }
+
+  /**
+   * BFF サーバのセッションを破棄してログアウトし、保持しているアクセストークンを全て破棄する
+   * @returns {Promise<boolean>} サーバ側のログアウトに成功した場合は true
+   */
+  async function logout() {
+    try {
+      const res = await fetch(`${BFF_BASE_URL}/auth/logout`, { method: 'POST', credentials: 'include' });
+      if (!res.ok) throw new Error(`Logout failed: ${res.status}`);
+      return true;
+    } catch (err) {
+      userStore.setError(true, err instanceof Error ? err : new Error(String(err)));
+      return false;
+    } finally {
+      _gAccessToken.value = null;
+      _gPhotoAccessToken.value = null;
+    }
   }
 
   return {
@@ -93,6 +128,8 @@ export const useAuthStore = defineStore('auth', () => {
     photoToken,
     isPhotoSharingAuthorized,
     fetchPhotoToken,
+    ensurePhotoToken,
     clearPhotoToken,
+    logout,
   };
 });

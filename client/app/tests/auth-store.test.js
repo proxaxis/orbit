@@ -62,6 +62,52 @@ describe('useAuthStore', () => {
     expect(authStore.isPhotoSharingAuthorized).toBe(false);
   });
 
+  it('ensurePhotoToken は未取得時だけ取得し、重複リクエストを共有する', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ gAccessToken: 'photo-token' }));
+    const authStore = useAuthStore();
+    const [a, b] = await Promise.all([authStore.ensurePhotoToken(), authStore.ensurePhotoToken()]);
+    expect(a).toBe('photo-token');
+    expect(b).toBe('photo-token');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // 既にトークンがある場合は再取得しない
+    await authStore.ensurePhotoToken();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('logout はサーバのセッションを破棄し、ローカルのトークンを全て消す', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ gAccessToken: 'main-token' }));
+    const authStore = useAuthStore();
+    await authStore.fetchToken();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ gAccessToken: 'photo-token' }));
+    await authStore.fetchPhotoToken();
+
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
+    const result = await authStore.logout();
+
+    expect(result).toBe(true);
+    expect(authStore.isAuthenticated).toBe(false);
+    expect(authStore.token).toBe('');
+    expect(authStore.photoToken).toBe('');
+    const [url, init] = fetchMock.mock.calls[2];
+    expect(String(url)).toBe(`${BFF_BASE_URL}/auth/logout`);
+    expect(init.method).toBe('POST');
+  });
+
+  it('logout はサーバ側の失敗時もローカルトークンを破棄してエラーを記録する', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ gAccessToken: 'main-token' }));
+    const authStore = useAuthStore();
+    const userStore = useUserStore();
+    await authStore.fetchToken();
+
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 500 }));
+    const result = await authStore.logout();
+
+    expect(result).toBe(false);
+    expect(authStore.isAuthenticated).toBe(false);
+    expect(userStore.hasError).toBe(true);
+  });
+
   it('clearPhotoToken で写真トークンのみ破棄される', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ gAccessToken: 'main-token' }));
     const authStore = useAuthStore();

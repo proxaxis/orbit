@@ -4,6 +4,10 @@ import { rrulestr } from 'rrule';
 
 /** 通知済みイベントを記録するオフラインストレージのキー */
 const NOTIFIED_KEY = 'notified-events';
+/** Service Worker 側が参照する今後の通知スケジュールのキー */
+const SCHEDULE_KEY = 'notification-schedule';
+/** スケジュールに保存する通知エントリの上限 */
+const MAX_SCHEDULE_ENTRIES = 200;
 /** 発火済みかどうかの再スキャン間隔 */
 const RESCAN_INTERVAL_MS = 60_000;
 /** setTimeout の最大遅延（32bit 上限を少し下回る値） */
@@ -148,6 +152,12 @@ async function deliverNotification(evt, start, minutes, key) {
     tag: `orbit-event-${key}`,
     icon: '/icon-192.png',
     badge: '/icon-192.png',
+    // 通知タップ時にイベント詳細ページを開くための情報
+    data: {
+      eid: evt?.id ?? null,
+      cid: evt?.calendarId ?? null,
+      url: `${import.meta.env.BASE_URL}evt/detail?eid=${encodeURIComponent(evt?.id ?? '')}&cid=${encodeURIComponent(evt?.calendarId ?? '')}`,
+    },
   };
 
   try {
@@ -182,8 +192,12 @@ export async function rescheduleNotifications() {
   const windowEnd = now.add(SCAN_WINDOW_DAYS, 'day');
   /** @type {number|null} 次に発火する通知までの遅延（ms） */
   let nextDelay = null;
+  /** @type {Array<{key: string, fireAt: number, start: number, eid: string, cid: string, summary: string, icon: string|null, minutes: number}>} Service Worker のバックグラウンド配信が参照するスケジュール */
+  const scheduleEntries = [];
 
-  const [storedEvents, storedCalendars] = await Promise.all([readOffline('events', []), readOffline('calendars', [])]);
+  const [storedEvents, storedCalendars, storedNotified] = await Promise.all([readOffline('events', []), readOffline('calendars', []), readOffline(NOTIFIED_KEY, [])]);
+  // Service Worker 側で配信済みの通知を取り込んで二重通知を防ぐ
+  notifiedKeys = new Set([...notifiedKeys, ...(Array.isArray(storedNotified) ? storedNotified : [])]);
   const calendarMap = new Map((Array.isArray(storedCalendars) ? storedCalendars : []).map((/** @type {any} */ cal) => [cal.id, cal]));
 
   for (const evt of Array.isArray(storedEvents) ? storedEvents : []) {
@@ -199,6 +213,16 @@ export async function rescheduleNotifications() {
         if (notifyAt.isAfter(now)) {
           const delay = notifyAt.diff(now);
           if (nextDelay === null || delay < nextDelay) nextDelay = delay;
+          scheduleEntries.push({
+            key,
+            fireAt: notifyAt.valueOf(),
+            start: start.valueOf(),
+            eid: evt.id,
+            cid: evt.calendarId,
+            summary: evt.summary ?? evt.raw?.summary ?? '',
+            icon: evt.icon ?? null,
+            minutes,
+          });
         } else if (start.isAfter(now)) {
           // アプリを閉じている間に通知時刻を過ぎたが、イベントはまだ始まっていない
           await deliverNotification(evt, start, minutes, key);
@@ -207,11 +231,37 @@ export async function rescheduleNotifications() {
     }
   }
 
+  scheduleEntries.sort((a, b) => a.fireAt - b.fireAt);
+  await writeOffline(SCHEDULE_KEY, scheduleEntries.slice(0, MAX_SCHEDULE_ENTRIES));
+
   if (nextDelay !== null) {
-    scanTimer = window.setTimeout(() => {
-      scanTimer = null;
-      rescheduleNotifications();
-    }, Math.min(nextDelay, MAX_TIMER_DELAY_MS));
+    scanTimer = window.setTimeout(
+      () => {
+        scanTimer = null;
+        rescheduleNotifications();
+      },
+      Math.min(nextDelay, MAX_TIMER_DELAY_MS),
+    );
+  }
+}
+
+/**
+ * Service Worker がアプリ未起動時に通知を配信できるよう、Background Sync / Periodic Background Sync を登録する。
+ * 非対応ブラウザでは無視される（ページ側のタイマーが引き続き通知を担当する）。
+ * @returns {Promise<void>}
+ */
+async function registerBackgroundSync() {
+  try {
+    const registration = await navigator.serviceWorker?.ready;
+    if (registration?.sync) await registration.sync.register('orbit-notifications').catch(() => null);
+    if (registration?.periodicSync) {
+      const status = await navigator.permissions?.query?.({ name: /** @type {any} */ ('periodic-background-sync') }).catch(() => null);
+      if (!status || status.state === 'granted') {
+        await registration.periodicSync.register('orbit-notifications', { minInterval: 15 * 60 * 1000 }).catch(() => null);
+      }
+    }
+  } catch {
+    // 非対応環境ではバックグラウンド通知なし
   }
 }
 
@@ -223,6 +273,7 @@ export function initEventNotifications() {
     notifiedKeys = new Set(Array.isArray(keys) ? keys : []);
     rescheduleNotifications();
   });
+  registerBackgroundSync();
   window.setInterval(rescheduleNotifications, RESCAN_INTERVAL_MS);
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) rescheduleNotifications();

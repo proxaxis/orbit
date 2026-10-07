@@ -5,25 +5,38 @@ import EventForm from '@/components/EventForm.vue';
 import { useEventStore } from '@/stores/event.js';
 import { useUserStore } from '@/stores/user.js';
 import { usePeopleStore } from '@/stores/people.js';
+import { usePhotosStore } from '@/stores/photos.js';
 import IconXMark from '@/components/icons/IconXMark.vue';
 
 const router = useRouter();
 const eventStore = useEventStore();
 const userStore = useUserStore();
 const peopleStore = usePeopleStore();
+const photosStore = usePhotosStore();
 
 /**
  * イベントを作成する
  * @param {object} param
  * @param {object} param.body イベント作成のリクエストボディ
  * @param {string} param.calendarId イベントを作成するカレンダー
+ * @param {string[]} [param.peopleToCreate] People 登録対象のメールアドレス
+ * @param {GoogleCalendarAttendee[]} [param.attendees] フォームで指定された参加者
+ * @param {boolean} [param.createPhotoAlbum] 写真共有アルバムを作成するか
  */
-async function submit({ body, calendarId, peopleToCreate = [] }) {
+async function submit({ body, calendarId, peopleToCreate = [], attendees = [], createPhotoAlbum = false }) {
   userStore.setLoading(true, 'Creating event...');
   try {
     const event = await eventStore.createEvent(body, calendarId);
     if (!event) throw new Error('Failed to create event. No event returned.');
     userStore.rememberEventTitle(body.summary);
+    if (createPhotoAlbum) {
+      // イベントの作成自体は成功しているため、アルバム作成の失敗はエラー表示だけに留める
+      try {
+        await photosStore.ensureEventAlbum(photosStore.applySubmitBody(event, { ...body, attendees }));
+      } catch (albumError) {
+        userStore.setError(true, albumError);
+      }
+    }
     if (peopleToCreate.length) {
       peopleStore.setPendingRegistrationEmails(peopleToCreate);
       router.push({ name: 'PeopleEditor' });

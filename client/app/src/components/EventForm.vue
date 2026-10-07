@@ -5,6 +5,8 @@ import { useUserStore } from '@/stores/user.js';
 import { useCalendarStore } from '@/stores/calendar.js';
 import { useEventStore } from '@/stores/event.js';
 import { usePeopleStore } from '@/stores/people.js';
+import { useAuthStore } from '@/stores/auth.js';
+import { usePhotosStore } from '@/stores/photos.js';
 import TimezoneSelecter from '@/components/TimezoneSelecter.vue';
 import CalendarRibbon from '@/components/CalendarRibbon.vue';
 import EmojiSelecter from '@/components/EmojiSelecter.vue';
@@ -17,6 +19,8 @@ import IconBell from '@/components/icons/IconBell.vue';
 import DatePicker from '@/components/DatePicker.vue';
 import AccordionMenu from '@/components/AccordionMenu.vue';
 import IconPlus from '@/components/icons/IconPlus.vue';
+import IconImage from '@/components/icons/IconImage.vue';
+import IconArrowUpRightFromSquare from '@/components/icons/IconArrowUpRightFromSquare.vue';
 
 const props = defineProps({
   submitLabel: { type: String, default: '保存' },
@@ -28,6 +32,8 @@ const userStore = useUserStore();
 const calendarStore = useCalendarStore();
 const eventStore = useEventStore();
 const peopleStore = usePeopleStore();
+const authStore = useAuthStore();
+const photosStore = usePhotosStore();
 
 // #region State
 /** @type {Ref<boolean>} カレンダーセレクターが開いているかどうか */
@@ -56,6 +62,12 @@ let peopleSearchGeneration = 0;
 const dateFields = reactive({ startDate: '', endDate: '', startTime: '', endTime: '' });
 /** @type {Ref<{value: number, unit: 'minute'|'hour'|'day'}[]>} イベント開始前に送る通知の一覧 */
 const reminders = ref([]);
+/** @type {Ref<boolean>} 保存時に写真共有アルバムを作成するか */
+const createPhotoAlbum = ref(false);
+/** 写真共有機能が利用可能かどうか（設定で有効化済み + OAuth 認証済み + オンライン） */
+const photoAlbumAvailable = computed(() => photosStore.canUsePhotoSharing());
+/** @type {ComputedRef<OrbitEventPhotoAlbum|null>} 編集中のイベントに紐づく既存の共有アルバム */
+const existingPhotoAlbum = computed(() => photosStore.bindingOf(originalEvent.value));
 /** 通知設定の初期値スナップショット（変更検知用） */
 let initialReminderKey = '[]';
 /** popup 以外（email など）の既存リマインダー（編集 UI 対象外のため送信時にそのまま保持する） */
@@ -416,7 +428,13 @@ function submitForm() {
       rescheduleNotifications();
     }
   }
-  emit('submit', { body, calendarId: formData.calendarId, peopleToCreate: peopleRegistrationEmails.value });
+  emit('submit', {
+    body,
+    calendarId: formData.calendarId,
+    peopleToCreate: peopleRegistrationEmails.value,
+    attendees: attendees.value,
+    createPhotoAlbum: createPhotoAlbum.value && !existingPhotoAlbum.value,
+  });
 }
 
 /** @param {KeyboardEvent} keyboardEvent 招待先入力の Enter 処理 */
@@ -501,6 +519,8 @@ onMounted(async () => {
   userStore.setLoading(true, 'Loading the event...');
   try {
     await userStore.settingsReady;
+    // 写真共有が有効ならトークンを復元してアルバム作成セクションを表示できるようにする
+    if (userStore.usePhotoSharing) authStore.ensurePhotoToken().catch(() => null);
     // 編集対象のイベントが選択されていない場合は新規作成
     if (!userStore.nowSelectedEvent) {
       originalEvent.value = null;
@@ -781,6 +801,19 @@ watch(() => formData.summary, updateTitleSuggestions);
             <button v-if="reminders.length < 5" type="button" @click="addReminderRow"><IconPlus /> 通知を追加</button>
             <p v-if="notificationPermission() === 'denied'" class="notification-warning">ブラウザの通知が拒否されています. ブラウザの設定でこのアプリからの通知を許可してください.</p>
           </div>
+        </section>
+
+        <!-- 写真アルバム -->
+        <section v-if="photoAlbumAvailable">
+          <span><IconImage size="0.8rem" /> 写真アルバム</span>
+          <template v-if="existingPhotoAlbum">
+            <p class="photo-album-hint">この予定にはアルバムが作成されています.</p>
+            <a v-if="existingPhotoAlbum.productUrl" :href="existingPhotoAlbum.productUrl" target="_blank" rel="noopener noreferrer" class="photo-album-link"><IconArrowUpRightFromSquare /> アルバムを開く</a>
+          </template>
+          <template v-else>
+            <label class="photo-album-check"><input v-model="createPhotoAlbum" type="checkbox" />保存時に写真アルバムを作成する</label>
+            <p class="photo-album-hint">この予定の写真をまとめるアルバムを Google フォトに作成します.{{ attendees.length ? ' 参加者と共有するには、作成後に Google フォトで共有設定を行ってください.' : '' }}</p>
+          </template>
         </section>
       </div>
     </AccordionMenu>
@@ -1228,6 +1261,42 @@ form .accordion-content {
       .notification-warning {
         font-size: var(--font-size-xxs);
         color: var(--danger);
+      }
+    }
+  }
+
+  // 写真共有アルバム
+  > section:nth-child(5) {
+    gap: var(--space-xs);
+
+    > span {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-xs);
+    }
+
+    .photo-album-check {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+    }
+
+    .photo-album-hint {
+      margin: 0;
+      color: var(--text-light);
+      font-size: var(--text-size-xs);
+    }
+
+    .photo-album-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-xxs);
+      width: fit-content;
+      font-size: var(--text-size-xs);
+
+      svg {
+        width: 0.8rem;
+        height: 0.8rem;
       }
     }
   }

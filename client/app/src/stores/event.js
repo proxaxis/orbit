@@ -272,7 +272,7 @@ export const useEventStore = defineStore('event', () => {
    * イベントを作成
    * @param {any} body イベントのペイロード
    * @param {string} gCalendarId カレンダー ID
-   * @returns {Promise<boolean>} 作成に成功したかどうか
+   * @returns {Promise<HandyCalendarEvent>} 作成されたイベント（オフライン等で同期保留になった場合はローカルイベント）
    */
   async function createEvent(body, gCalendarId) {
     const localId = `offline-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
@@ -280,37 +280,53 @@ export const useEventStore = defineStore('event', () => {
     await upsertStoredEvent(localEvent);
     _cache.value = new Map();
     notifyEventDataChanged();
+    const calendarColor = calendarStore.getCalendarColor(gCalendarId);
+    const localHandyEvent = {
+      id: localId,
+      calendarId: gCalendarId,
+      summary: body.summary ?? 'Unknown Event',
+      startDateTime: toDayjs(body.start?.dateTime ?? body.start?.date),
+      endDateTime: toDayjs(body.end?.dateTime ?? body.end?.date),
+      timeZone: body.start?.timeZone ?? undefined,
+      description: body.description,
+      location: body.location,
+      isAllDay: !!body.start?.date,
+      icon: body.extendedProperties?.shared?.icon ?? undefined,
+      calendarColorId: calendarColor.colorId,
+      calendarBackgroundColor: calendarColor.backgroundColor,
+      calendarForegroundColor: calendarColor.foregroundColor,
+      raw: localEvent,
+    };
     if (userStore.isOffline || !authStore.isAuthenticated) {
       queueOperation({ type: 'create', calendarId: gCalendarId, localId, body });
-      return true;
+      return localHandyEvent;
     }
     try {
       const event = await gCalAPI.insertEvent(authStore.token, gCalendarId, body);
       await removeStoredEvent(localId, gCalendarId);
-      if (event) {
-        const calendarColor = calendarStore.getCalendarColor(gCalendarId);
-        await upsertStoredEvent({
-          id: event.id ?? 'unknown',
-          calendarId: gCalendarId ?? 'unknown',
-          summary: event.summary ?? 'Unknown Event',
-          startDateTime: dayjs(event.start?.dateTime ?? event.start?.date),
-          endDateTime: dayjs(event.end?.dateTime ?? event.end?.date),
-          timeZone: event.start?.timeZone ?? undefined,
-          description: event.description,
-          location: event.locatio,
-          isAllDay: event.fullDay ?? false,
-          icon: event.extendedProperties?.shared?.icon ?? undefined,
-          eventColorId: event.colorId,
-          calendarColorId: calendarColor.colorId,
-          calendarBackgroundColor: calendarColor.backgroundColor,
-          calendarForegroundColor: calendarColor.foregroundColor,
-          raw: event,
-        });
-      }
-      return true;
+      if (!event) return localHandyEvent;
+      const created = {
+        id: event.id ?? 'unknown',
+        calendarId: gCalendarId ?? 'unknown',
+        summary: event.summary ?? 'Unknown Event',
+        startDateTime: dayjs(event.start?.dateTime ?? event.start?.date),
+        endDateTime: dayjs(event.end?.dateTime ?? event.end?.date),
+        timeZone: event.start?.timeZone ?? undefined,
+        description: event.description,
+        location: event.location,
+        isAllDay: event.fullDay ?? false,
+        icon: event.extendedProperties?.shared?.icon ?? undefined,
+        eventColorId: event.colorId,
+        calendarColorId: calendarColor.colorId,
+        calendarBackgroundColor: calendarColor.backgroundColor,
+        calendarForegroundColor: calendarColor.foregroundColor,
+        raw: event,
+      };
+      await upsertStoredEvent(created);
+      return created;
     } catch (error) {
       queueOperation({ type: 'create', calendarId: gCalendarId, localId, body });
-      return true;
+      return localHandyEvent;
     }
   }
 

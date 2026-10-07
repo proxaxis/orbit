@@ -179,6 +179,39 @@ describe('rescheduleNotifications', () => {
     expect(showNotification).not.toHaveBeenCalled();
   });
 
+  it('発火した通知にイベント詳細への data が付く', async () => {
+    mockStorage([storedEvent({ id: 'evt-data', raw: { start: { dateTime: '2026-10-06T10:10:00' }, reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: 90 }] } } })]);
+    await rescheduleNotifications();
+    const options = showNotification.mock.calls[0][1];
+    expect(options.data).toEqual({ eid: 'evt-data', cid: 'cal-1', url: '/evt/detail?eid=evt-data&cid=cal-1' });
+  });
+
+  it('未来の通知は Service Worker 用スケジュールとして保存される', async () => {
+    mockStorage([storedEvent({ id: 'evt-sched', raw: { start: { dateTime: '2026-10-06T12:00:00' }, reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: 30 }] } } })]);
+    await rescheduleNotifications();
+    const scheduleCall = writeOfflineMock.mock.calls.find(([key]) => key === 'notification-schedule');
+    expect(scheduleCall).toBeDefined();
+    const entries = scheduleCall[1];
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ eid: 'evt-sched', cid: 'cal-1', summary: '朝会', minutes: 30 });
+    // 12:00 開始・30分前 → 11:30 (JST)
+    expect(entries[0].fireAt).toBe(dayjs('2026-10-06T11:30:00').valueOf());
+    expect(entries[0].start).toBe(dayjs('2026-10-06T12:00:00').valueOf());
+  });
+
+  it('ストレージ上の通知済みキー（SW が配信したもの）を拾って二重送信しない', async () => {
+    const evt = storedEvent({ id: 'evt-sw', raw: { start: { dateTime: '2026-10-06T10:00:00' }, reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: 90 }] } } });
+    const key = `cal-1|evt-sw|${dayjs('2026-10-06T10:00:00').unix()}|90`;
+    readOfflineMock.mockImplementation(async (name, fallback) => {
+      if (name === 'events') return [evt];
+      if (name === 'calendars') return [];
+      if (name === 'notified-events') return [key];
+      return fallback;
+    });
+    await rescheduleNotifications();
+    expect(showNotification).not.toHaveBeenCalled();
+  });
+
   it('繰り返し予定の各回が通知対象になる', async () => {
     mockStorage([
       {

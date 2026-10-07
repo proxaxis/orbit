@@ -213,7 +213,6 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
-
 .home-zone aside {
   flex: 0 0 auto;
   flex-direction: column;
@@ -304,6 +303,4 @@ onUnmounted(() => {
     background-color: var(--primary);
   }
 }
-
-
 </style>

@@ -1,10 +1,11 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import dayjs, { toDayjs } from '@/services/dayjs.js';
 import { useEventStore } from '@/stores/event.js';
 import { useUserStore } from '@/stores/user.js';
 import { useCalendarStore } from '@/stores/calendar.js';
+import { useCalendarToolbar } from '@/composables/useCalendarToolbar.js';
 import IconCaretLeft from '@/components/icons/IconCaretLeft.vue';
 import IconCaretRight from '@/components/icons/IconCaretRight.vue';
 import IconBars from '@/components/icons/IconBars.vue';
@@ -43,33 +44,15 @@ const lastWheelNavigationAt = ref(0);
 const weekTransition = ref('next');
 /** @type {Ref<HTMLElement|null>} ツールバー */
 const rfToolbar = ref(null);
-/** @type {Ref<boolean>} ツールバーが収まらず右ボタン群をメニューに畳む状態か */
-const isCompactToolbar = ref(false);
+/** ツールバーのコンパクト表示状態・週/月タイトルは月表示ビューと共有ロジック */
+const { isCompactToolbar, weekStart, weekTitle } = useCalendarToolbar(rfToolbar);
 let nowTimer = null;
-/** 展開時の右ボタン群の自然幅（コンパクト表示中も判定基準として保持する） */
-let expandedRightToolbarWidth = 0;
-let toolbarObserver = null;
-
-/** @type {ComputedRef<Dayjs>} 表示中の週の開始日（週の開始曜日設定を考慮） */
-const weekStart = computed(() => {
-  const base = userStore.nowUsingDate.startOf('day');
-  return base.subtract((base.day() - userStore.firstDayOfWeek + 7) % 7, 'day');
-});
 
 /** @type {ComputedRef<Dayjs[]>} 表示中の週の7日分 */
 const weekDays = computed(() => Array.from({ length: 7 }, (_, i) => weekStart.value.add(i, 'day')));
 
-/** @type {ComputedRef<string>} ツールバーに表示する週の範囲テキスト */
-const weekTitle = computed(() => {
-  const start = weekStart.value;
-  const end = weekStart.value.add(6, 'day');
-  if (start.isSame(end, 'month')) return `${start.format('YYYY年 M月 D日')} – ${end.format('D日')}`;
-  if (start.isSame(end, 'year')) return `${start.format('YYYY年 M月 D日')} – ${end.format('M月 D日')}`;
-  return `${start.format('YYYY年 M月 D日')} – ${end.format('YYYY年 M月 D日')}`;
-});
-
 /** 現在時刻ラインの位置（上端からの割合） */
-const nowLineTop = computed(() => `${(now.value.hour() * 60 + now.value.minute()) / MINUTES_PER_DAY * 100}%`);
+const nowLineTop = computed(() => `${((now.value.hour() * 60 + now.value.minute()) / MINUTES_PER_DAY) * 100}%`);
 
 /** @param {Dayjs} date @returns {boolean} 今日かどうか */
 function isToday(date) {
@@ -239,29 +222,6 @@ function handleWeekWheel(evt) {
   else goNextWeek();
 }
 
-/**
- * ツールバーの内容が表示幅に収まるかを実測し、収まらない場合はコンパクト表示に切り替える。
- * 展開時は3等分グリッドのため、合計幅に加えてタイトルが中央列に収まることも条件にする
- */
-function updateToolbarLayout() {
-  const toolbar = rfToolbar.value;
-  if (!toolbar || toolbar.clientWidth === 0) return;
-  const left = toolbar.querySelector('.toolbar-left');
-  const title = toolbar.querySelector('h1');
-  const right = toolbar.querySelector('.toolbar-right');
-  if (!left || !title || !right) return;
-  if (!isCompactToolbar.value) expandedRightToolbarWidth = right.scrollWidth;
-  // scrollWidth はセル幅に引きずられるため、Range でテキストの自然幅を測る
-  const range = document.createRange();
-  range.selectNodeContents(title);
-  const titleWidth = range.getBoundingClientRect().width;
-  const style = getComputedStyle(toolbar);
-  const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
-  const needed = left.scrollWidth + titleWidth + expandedRightToolbarWidth + padding + 8;
-  const thirdWidth = (toolbar.clientWidth - padding) / 3;
-  isCompactToolbar.value = needed > toolbar.clientWidth || titleWidth > thirdWidth + 1;
-}
-
 /** グリッドのスクロール位置を現在時刻（または朝）へ合わせる */
 function scrollToNow() {
   const container = rfWeekScroll.value;
@@ -287,12 +247,6 @@ watch(
   { immediate: true },
 );
 
-// 週タイトルの文字数が変わると必要幅が変わるため再計測する
-watch(weekStart, async () => {
-  await nextTick();
-  updateToolbarLayout();
-});
-
 onMounted(() => {
   nowTimer = window.setInterval(() => {
     now.value = dayjs();
@@ -300,17 +254,11 @@ onMounted(() => {
   scrollToNow();
   // Ctrl+ホイールでブラウザズームを抑止して週移動するため passive ではないリスナーを登録する
   rfRoot.value?.addEventListener('wheel', handleWeekWheel, { passive: false });
-  if (typeof ResizeObserver !== 'undefined' && rfToolbar.value) {
-    toolbarObserver = new ResizeObserver(() => updateToolbarLayout());
-    toolbarObserver.observe(rfToolbar.value);
-  }
-  updateToolbarLayout();
 });
 
 onUnmounted(() => {
   if (nowTimer !== null) window.clearInterval(nowTimer);
   rfRoot.value?.removeEventListener('wheel', handleWeekWheel);
-  toolbarObserver?.disconnect();
 });
 </script>
 
@@ -334,7 +282,7 @@ onUnmounted(() => {
           <button type="button" title="今週に戻る" aria-label="今週に戻る" @click.prevent="goToday">
             <IconArrowRotateLeft size="1.25rem" />
           </button>
-          <button type="button" title="月表示に切り替え" aria-label="月表示に切り替え" @click="userStore.setMainCalendarView('MONTH')">
+          <button type="button" title="月表示にする" aria-label="月表示にする" @click="userStore.setMainCalendarView('MONTH')">
             <IconCalendar size="1.25rem" />
           </button>
           <button type="button" title="ユーザー設定" aria-label="ユーザー設定" @click="router.push({ name: 'UserConfig' })">
@@ -348,7 +296,7 @@ onUnmounted(() => {
             </button>
           </template>
           <button type="button" @click="goToday"><IconArrowRotateLeft size="1rem" />今週に戻る</button>
-          <button type="button" @click="userStore.setMainCalendarView('MONTH')"><IconCalendar size="1rem" />月表示に切り替え</button>
+          <button type="button" @click="userStore.setMainCalendarView('MONTH')"><IconCalendar size="1rem" />月表示にする</button>
           <button type="button" @click="router.push({ name: 'UserConfig' })"><IconGear size="1rem" />ユーザー設定</button>
         </DropdownMenu>
       </div>
@@ -356,49 +304,47 @@ onUnmounted(() => {
 
     <Transition :name="`week-slide-${weekTransition}`" mode="out-in" @after-enter="scrollToNow">
       <div ref="rfWeekScroll" :key="weekStart.format('YYYY-MM-DD')" class="week-scroll">
-      <div class="week-grid">
-        <!-- 曜日ヘッダー -->
-        <div class="week-head">
-          <div class="head-spacer"></div>
-          <div v-for="(day, i) in weekDays" :key="day.format('YYYY-MM-DD')" class="day-head" :class="{ 'is-today': isToday(day), 'is-selected': isSelected(day) }" @click="selectDateCell(day)">
-            <span class="weekday" :style="{ color: userStore.getWeekendColor(day.day()) ?? undefined }">{{ userStore.daysMap[i]?.label }}</span>
-            <span class="daynum">{{ day.date() }}</span>
-          </div>
-        </div>
-
-        <!-- 終日・複数日イベント -->
-        <div class="week-allday">
-          <div class="allday-label">終日</div>
-          <div v-for="day in weekDays" :key="day.format('YYYY-MM-DD')" class="allday-cell" @click="selectDateCell(day)">
-            <button v-for="evt in allDayEventsFor(day)" :key="`${evt.calendarId}:${evt.id}`" type="button" class="allday-chip" :style="{ backgroundColor: getEventColor(evt) }" @click="(e) => handleEventClick(e, evt, day)">
-              {{ evt.icon ?? '📌' }}{{ evt.summary }}
-            </button>
-          </div>
-        </div>
-
-        <!-- タイムライン本体 -->
-        <div class="week-main">
-          <div class="time-gutter">
-            <div v-for="hour in 24" :key="hour" class="hour-cell">
-              <span>{{ hour - 1 }}:00</span>
+        <div class="week-grid">
+          <!-- 曜日ヘッダー -->
+          <div class="week-head">
+            <div class="head-spacer"></div>
+            <div v-for="(day, i) in weekDays" :key="day.format('YYYY-MM-DD')" class="day-head" :class="{ 'is-today': isToday(day), 'is-selected': isSelected(day) }" @click="selectDateCell(day)">
+              <span class="weekday" :style="{ color: userStore.getWeekendColor(day.day()) ?? undefined }">{{ userStore.daysMap[i]?.label }}</span>
+              <span class="daynum">{{ day.date() }}</span>
             </div>
           </div>
-          <div v-for="day in weekDays" :key="day.format('YYYY-MM-DD')" class="day-col" :class="{ 'is-today': isToday(day), 'is-selected': isSelected(day) }" @click="selectDateCell(day)">
-            <button
-              v-for="block in timedEventsFor(day)"
-              :key="`${block.event.calendarId}:${block.event.id}`"
-              type="button"
-              class="event-block"
-              :style="{ top: `${block.top}%`, height: `${block.height}%`, left: `calc(${block.left}% + 1px)`, width: `calc(${block.width}% - 2px)`, backgroundColor: getEventColor(block.event) }"
-              @click="(e) => handleEventClick(e, block.event, day)">
-              <span class="event-time">{{ getEventTimeText(block.event, day) }}</span>
-              <span class="event-title">{{ block.event.icon ?? '📌' }}{{ block.event.summary }}</span>
-            </button>
-            <div v-if="isToday(day)" class="now-line" :style="{ top: nowLineTop }"></div>
+
+          <!-- 終日・複数日イベント -->
+          <div class="week-allday">
+            <div class="allday-label">終日</div>
+            <div v-for="day in weekDays" :key="day.format('YYYY-MM-DD')" class="allday-cell" @click="selectDateCell(day)">
+              <button v-for="evt in allDayEventsFor(day)" :key="`${evt.calendarId}:${evt.id}`" type="button" class="allday-chip" :style="{ backgroundColor: getEventColor(evt) }" @click="(e) => handleEventClick(e, evt, day)">{{ evt.icon ?? '📌' }}{{ evt.summary }}</button>
+            </div>
+          </div>
+
+          <!-- タイムライン本体 -->
+          <div class="week-main">
+            <div class="time-gutter">
+              <div v-for="hour in 24" :key="hour" class="hour-cell">
+                <span>{{ hour - 1 }}:00</span>
+              </div>
+            </div>
+            <div v-for="day in weekDays" :key="day.format('YYYY-MM-DD')" class="day-col" :class="{ 'is-today': isToday(day), 'is-selected': isSelected(day) }" @click="selectDateCell(day)">
+              <button
+                v-for="block in timedEventsFor(day)"
+                :key="`${block.event.calendarId}:${block.event.id}`"
+                type="button"
+                class="event-block"
+                :style="{ top: `${block.top}%`, height: `${block.height}%`, left: `calc(${block.left}% + 1px)`, width: `calc(${block.width}% - 2px)`, backgroundColor: getEventColor(block.event) }"
+                @click="(e) => handleEventClick(e, block.event, day)">
+                <span class="event-time">{{ getEventTimeText(block.event, day) }}</span>
+                <span class="event-title">{{ block.event.icon ?? '📌' }}{{ block.event.summary }}</span>
+              </button>
+              <div v-if="isToday(day)" class="now-line" :style="{ top: nowLineTop }"></div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
     </Transition>
   </div>
 </template>

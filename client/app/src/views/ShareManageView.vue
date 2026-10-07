@@ -188,11 +188,10 @@ async function revokeShare(spec) {
           <fieldset>
             <legend>共有するカレンダー</legend>
             <label v-for="cal in calendarStore.listWritableCalendars" :key="cal.id" class="switch-row">
-              <input type="checkbox" :checked="formCalendarIds.has(cal.id)"
-                @change="($event.target.checked ? form.calendarIds.push(cal.id) : (form.calendarIds = form.calendarIds.filter((id) => id !== cal.id)))" />
+              <input type="checkbox" :checked="formCalendarIds.has(cal.id)" @change="$event.target.checked ? form.calendarIds.push(cal.id) : (form.calendarIds = form.calendarIds.filter((id) => id !== cal.id))" />
               {{ cal.summary }}
             </label>
-            <p v-if="!calendarStore.listWritableCalendars.length" class="hint">共有できるカレンダーがありません. </p>
+            <p v-if="!calendarStore.listWritableCalendars.length" class="hint">共有できるカレンダーがありません.</p>
           </fieldset>
           <div class="date-row">
             <label
@@ -222,7 +221,7 @@ async function revokeShare(spec) {
               </select>
             </label>
           </div>
-          <p class="hint">期限が来ると共有は自動で解除されます. 範囲内の予定が追加、変更、削除されると相手にも反映されます. </p>
+          <p class="hint">期限が来ると共有は自動で解除されます. 範囲内の予定が追加、変更、削除されると相手にも反映されます.</p>
           <p v-if="formError" class="error">{{ formError }}</p>
           <p v-if="successMessage" class="success">{{ successMessage }}</p>
           <div class="actions">
@@ -236,7 +235,7 @@ async function revokeShare(spec) {
           <h2>共有中のカレンダー</h2>
           <span>{{ shareStore.specs.length }}件</span>
         </div>
-        <p v-if="!shareStore.specs.length" class="hint">現在、期間を指定した共有はありません. </p>
+        <p v-if="!shareStore.specs.length" class="hint">現在、期間を指定した共有はありません.</p>
         <ul>
           <li v-for="spec in shareStore.specs" :key="spec.id" :class="{ 'is-expired': shareStore.isExpired(spec) }">
             <div class="spec-info">
@@ -248,9 +247,7 @@ async function revokeShare(spec) {
             </div>
             <div v-if="spec.copyCalendarId" class="spec-id">
               <code>{{ spec.copyCalendarId }}</code>
-              <button type="button" title="カレンダー ID をコピー" @click="copyCalendarId(spec.copyCalendarId)">
-                <IconClipboard />{{ copiedCalendarId === spec.copyCalendarId ? 'コピーしました' : 'ID をコピー' }}
-              </button>
+              <button type="button" title="カレンダー ID をコピー" @click="copyCalendarId(spec.copyCalendarId)"><IconClipboard />{{ copiedCalendarId === spec.copyCalendarId ? 'コピーしました' : 'ID をコピー' }}</button>
             </div>
             <div class="spec-actions">
               <button type="button" :disabled="processingSpecId === spec.id" @click="syncNow(spec)"><IconArrowRotateLeft />今すぐ同期</button>

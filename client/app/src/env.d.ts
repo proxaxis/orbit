@@ -25,6 +25,8 @@ declare global {
     readonly VITE_BFF_BASE_URL?: string;
     readonly VITE_GOOGLE_CALENDAR_API_BASE_URL?: string;
     readonly VITE_GOOGLE_PEOPLE_API_BASE_URL?: string;
+    readonly VITE_GOOGLE_PHOTOS_LIBRARY_API_BASE_URL?: string;
+    readonly VITE_GOOGLE_PHOTOS_PICKER_API_BASE_URL?: string;
     [key: string]: any;
   }
 
@@ -758,14 +760,6 @@ declare global {
     readonly isJoinable?: boolean;
   }
 
-  /** 共有アルバムのオプション */
-  interface GooglePhotosSharedAlbumOptions {
-    /** 参加者がメディアを追加できるか */
-    isCollaborative?: boolean;
-    /** 参加者がコメントできるか */
-    isCommentable?: boolean;
-  }
-
   /** Google Photos アルバム */
   interface GooglePhotosAlbum {
     /** アルバム ID */
@@ -850,11 +844,6 @@ declare global {
     nextPageToken?: string;
   }
 
-  /** sharedAlbums:join レスポンス */
-  interface GooglePhotosJoinSharedAlbumResponse {
-    album?: GooglePhotosAlbum;
-  }
-
   /** Picker API のセッション */
   interface GooglePhotosPickerSession {
     /** セッション ID */
@@ -901,13 +890,11 @@ declare global {
     nextPageToken?: string;
   }
 
-  /** イベントに紐づいた共有アルバムの情報（extendedProperties.shared に保存） */
+  /** イベントに紐づいたアルバムの情報（extendedProperties.shared に保存） */
   interface OrbitEventPhotoAlbum {
-    /** 共有アルバム ID */
+    /** アルバム ID（API で読めるのは作成者のみ） */
     albumId: string;
-    /** 共有 URL（参加者がアルバムを開くためのリンク） */
-    shareUrl: string;
-    /** 共有トークン（API 経由でアルバムに参加するために必要） */
-    shareToken: string;
+    /** Google フォトでアルバムを開く URL（作成者のみ有効。共有するには Google フォト側で共有設定が必要） */
+    productUrl: string;
   }
 }

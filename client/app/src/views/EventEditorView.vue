@@ -7,11 +7,13 @@ import { useEventStore } from '@/stores/event.js';
 import { useUserStore } from '@/stores/user.js';
 import IconXMark from '@/components/icons/IconXMark.vue';
 import { usePeopleStore } from '@/stores/people.js';
+import { usePhotosStore } from '@/stores/photos.js';
 
 const router = useRouter();
 const eventStore = useEventStore();
 const userStore = useUserStore();
 const peopleStore = usePeopleStore();
+const photosStore = usePhotosStore();
 
 /** @type {Ref<HandyCalendarEvent|null>} */
 const event = ref(null);
@@ -30,14 +32,22 @@ onMounted(async () => {
   }
 });
 
-/** @param {{ body: Record<string, unknown>, peopleToCreate?: string[] }} payload */
+/** @param {{ body: Record<string, any>, peopleToCreate?: string[], attendees?: GoogleCalendarAttendee[], createPhotoAlbum?: boolean }} payload */
 async function update(payload) {
-  const { body, peopleToCreate = [] } = payload;
+  const { body, peopleToCreate = [], attendees = [], createPhotoAlbum = false } = payload;
   try {
     if (!userStore.nowSelectedEvent) throw new Error('You do not have an event selected. You must select an event to update it.');
     userStore.setLoading(true, 'Updating the event...');
     await eventStore.updateEvent(userStore.nowSelectedEvent.eid, userStore.nowSelectedEvent.cid, body);
     userStore.rememberEventTitle(body.summary);
+    if (createPhotoAlbum && event.value) {
+      // イベントの更新自体は成功しているため、アルバム作成の失敗はエラー表示だけに留める
+      try {
+        await photosStore.ensureEventAlbum(photosStore.applySubmitBody(event.value, { ...body, attendees }));
+      } catch (albumError) {
+        userStore.setError(true, albumError);
+      }
+    }
     if (peopleToCreate.length) {
       peopleStore.setPendingRegistrationEmails(peopleToCreate);
       router.replace({ name: 'PeopleEditor' });

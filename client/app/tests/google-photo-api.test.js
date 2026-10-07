@@ -47,26 +47,6 @@ describe('google-photo-api', () => {
     expect(init.method).toBe('GET');
   });
 
-  it('shareAlbum は sharedAlbumOptions を送り shareInfo を展開して返す', async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse({ shareInfo: { shareableUrl: 'https://photos.app.goo.gl/x', shareToken: 'st' } }),
-    );
-    const info = await photosAPI.shareAlbum('tok', 'a1', { isCollaborative: true, isCommentable: false });
-    const { url, init } = lastCall();
-    expect(url).toBe('https://photoslibrary.googleapis.com/v1/albums/a1:share');
-    expect(JSON.parse(init.body)).toEqual({ sharedAlbumOptions: { isCollaborative: true, isCommentable: false } });
-    expect(info.shareToken).toBe('st');
-  });
-
-  it('joinSharedAlbum は shareToken を送る', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ album: { id: 'a1' } }));
-    const res = await photosAPI.joinSharedAlbum('tok', 'ST1');
-    const { url, init } = lastCall();
-    expect(url).toBe('https://photoslibrary.googleapis.com/v1/sharedAlbums:join');
-    expect(JSON.parse(init.body)).toEqual({ shareToken: 'ST1' });
-    expect(res.album.id).toBe('a1');
-  });
-
   it('uploadMediaBytes は raw プロトコルヘッダでバイト列を送る', async () => {
     fetchMock.mockResolvedValue(new Response('upload-token-abc', { status: 200 }));
     const token = await photosAPI.uploadMediaBytes('tok', new Blob(['x']), 'photo.jpg', 'image/jpeg');

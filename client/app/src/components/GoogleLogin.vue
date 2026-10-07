@@ -10,7 +10,7 @@ function handleLogin() {
 </script>
 
 <template>
-  <button class="google-login" v-if="!authStore.isAuthenticated" @click="handleLogin">
+  <button class="google-login" v-if="!authStore.isAuthenticated" type="button" @click="handleLogin">
     <IconGoogle />
     <slot>Googleでログイン</slot>
   </button>

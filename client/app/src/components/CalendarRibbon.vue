@@ -25,6 +25,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  useMenuSlot: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits(['select']);
@@ -40,6 +44,9 @@ const calendar = computed(() => calendarStore.list.find((cal) => cal.id === (pro
   <div v-else class="calendar-ribbon">
     <span class="color" :style="{ backgroundColor: calendar.backgroundColor }"></span>
     <span class="name" v-if="props.useLabel">{{ calendar.summary }}</span>
+  </div>
+  <div class="menu-area" v-if="props.useMenuSlot">
+    <slot name="menu"></slot>
   </div>
 </template>
 
@@ -57,6 +64,7 @@ const calendar = computed(() => calendarStore.list.find((cal) => cal.id === (pro
 .calendar-ribbon.selectable {
   width: calc(100% - var(--space-sm) * 2);
   padding: var(--space-xs) var(--space-sm);
+  // padding: var(--space-sm) var(--space-sm);
   border: 1px solid transparent;
   border-radius: var(--border-radius);
   background: transparent;
@@ -84,5 +92,12 @@ const calendar = computed(() => calendarStore.list.find((cal) => cal.id === (pro
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1;
+}
+
+.menu-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 </style>

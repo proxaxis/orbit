@@ -87,7 +87,7 @@ fieldset {
   border-radius: var(--border-radius);
   min-width: 0;
   padding: 0 var(--space-sm) var(--space-sm) var(--space-sm);
-  
+
   legend {
     padding: 0 var(--space-xs);
     font-weight: bold;

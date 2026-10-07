@@ -65,7 +65,10 @@ onMounted(async () => {
 
   // Google ログイン状態の確認とトークンの取得
   const token = await authStore.fetchToken();
-  if (token) await calendarStore.loadCalendars();
+  if (token) {
+    if (userStore.usePhotoSharing) authStore.ensurePhotoToken();
+    await calendarStore.loadCalendars();
+  }
   if (!token && !authStore.isAuthenticated) {
     userStore.openUserDialog({
       title: 'Login Required',
@@ -122,7 +125,7 @@ html {
 
 /* Chrome, Safari, Edge用 */
 ::-webkit-scrollbar {
-  width: 6px;  /* 縦スクロールバーの太さ */
+  width: 6px; /* 縦スクロールバーの太さ */
   height: 6px; /* 横スクロールバーの太さ */
 }
 
@@ -249,6 +252,4 @@ textarea[readonly] {
 .icons {
   fill: var(--text);
 }
-
-
 </style>

@@ -4,11 +4,11 @@ import { useAuthStore } from '@/stores/auth.js';
 import { useUserStore } from '@/stores/user.js';
 import * as gCalAPI from '@/services/google-calendar-api.js';
 import * as photosAPI from '@/services/google-photo-api.js';
+import { toDayjs } from '@/services/dayjs.js';
 
 /** イベントの shared 拡張プロパティに保存するキー */
 const ALBUM_ID_PROP = 'photoAlbumId';
-const ALBUM_URL_PROP = 'photoAlbumShareUrl';
-const ALBUM_TOKEN_PROP = 'photoAlbumShareToken';
+const ALBUM_URL_PROP = 'photoAlbumProductUrl';
 /** Picker セッションの最大待ち時間（安全側の上限） */
 const PICKER_TIMEOUT_MS = 10 * 60_000;
 /** Picker セッションのポーリング最小間隔 */
@@ -42,19 +42,17 @@ export const usePhotosStore = defineStore('photos', () => {
   }
 
   /**
-   * イベントに紐づいた共有アルバム情報を返す
+   * イベントに紐づいたアルバム情報を返す
    * @param {HandyCalendarEvent|null} evt
    * @returns {OrbitEventPhotoAlbum|null}
    */
   function bindingOf(evt) {
     const shared = evt?.raw?.extendedProperties?.shared ?? {};
     const albumId = shared[ALBUM_ID_PROP];
-    const shareToken = shared[ALBUM_TOKEN_PROP];
     if (typeof albumId !== 'string' || !albumId) return null;
     return {
       albumId,
-      shareUrl: typeof shared[ALBUM_URL_PROP] === 'string' ? shared[ALBUM_URL_PROP] : '',
-      shareToken: typeof shareToken === 'string' ? shareToken : '',
+      productUrl: typeof shared[ALBUM_URL_PROP] === 'string' ? shared[ALBUM_URL_PROP] : '',
     };
   }
 
@@ -70,8 +68,7 @@ export const usePhotosStore = defineStore('photos', () => {
       shared: {
         ...(evt.raw?.extendedProperties?.shared ?? {}),
         [ALBUM_ID_PROP]: binding.albumId,
-        [ALBUM_URL_PROP]: binding.shareUrl,
-        [ALBUM_TOKEN_PROP]: binding.shareToken,
+        [ALBUM_URL_PROP]: binding.productUrl,
       },
     };
     await gCalAPI.patchEvent(authStore.token, evt.calendarId, evt.id, { extendedProperties });
@@ -79,8 +76,8 @@ export const usePhotosStore = defineStore('photos', () => {
   }
 
   /**
-   * イベントに共有アルバムを紐づける。未作成ならアルバムを作成して共有する。
-   * 参加者がいるイベントでは、shared プロパティ経由で参加者がリンクを入手できる。
+   * イベントにアルバムを紐づける。未作成ならアルバムを作成する。
+   * アルバムは作成者の Google フォトに保存され、共有は Google フォト側で行う。
    * @param {HandyCalendarEvent} evt
    * @returns {Promise<OrbitEventPhotoAlbum>} 紐づけ情報
    */
@@ -93,21 +90,42 @@ export const usePhotosStore = defineStore('photos', () => {
     const album = await photosAPI.createAlbum(authStore.photoToken, `${evt.summary ?? '予定'} (${evt.startDateTime?.format?.('YYYY-MM-DD') ?? ''})`);
     if (!album?.id) throw new Error('アルバムを作成できませんでした。');
 
-    // 他の参加者がいる場合はコラボレーション可能な共有アルバムにして公開する
-    const hasAttendees = (evt.raw?.attendees ?? []).some((attendee) => !attendee.self);
-    photoStatus.value = 'アルバムを共有しています...';
-    const shareInfo = await photosAPI.shareAlbum(authStore.photoToken, album.id, { isCollaborative: hasAttendees, isCommentable: hasAttendees });
     const binding = {
       albumId: album.id,
-      shareUrl: shareInfo?.shareableUrl ?? album.productUrl ?? '',
-      shareToken: shareInfo?.shareToken ?? '',
+      productUrl: album.productUrl ?? '',
     };
     await persistBinding(evt, binding);
     return binding;
   }
 
   /**
-   * 共有された側としてアルバムに参加する（未参加の場合）
+   * フォームの送信ペイロードを既存イベントへ反映したイベントオブジェクトを組み立てる。
+   * ensureEventAlbum のアルバム名（summary / 日付）に保存した最新の入力を使うためのヘルパー。
+   * @param {HandyCalendarEvent|null} evt
+   * @param {Record<string, any>} body 送信したイベントペイロード
+   * @returns {HandyCalendarEvent|null}
+   */
+  function applySubmitBody(evt, body = {}) {
+    if (!evt) return evt;
+    const start = body.start?.dateTime ?? body.start?.date;
+    return {
+      ...evt,
+      summary: typeof body.summary === 'string' && body.summary ? body.summary : evt.summary,
+      startDateTime: start ? toDayjs(start) : evt.startDateTime,
+      raw: {
+        ...(evt.raw ?? {}),
+        ...(body.attendees ? { attendees: body.attendees } : {}),
+        extendedProperties: {
+          private: { ...(evt.raw?.extendedProperties?.private ?? {}), ...(body.extendedProperties?.private ?? {}) },
+          shared: { ...(evt.raw?.extendedProperties?.shared ?? {}), ...(body.extendedProperties?.shared ?? {}) },
+        },
+      },
+    };
+  }
+
+  /**
+   * アルバム情報を取得する。API で読めるのは自分のアプリ作成アルバムのみのため、
+   * 他の参加者が開く場合は 403/404 を分かりやすいメッセージに変換する。
    * @param {OrbitEventPhotoAlbum} binding
    * @returns {Promise<GooglePhotosAlbum>}
    */
@@ -115,10 +133,10 @@ export const usePhotosStore = defineStore('photos', () => {
     try {
       return await photosAPI.getAlbum(authStore.photoToken, binding.albumId);
     } catch (error) {
-      if (!binding.shareToken || (error?.status !== 403 && error?.status !== 404)) throw error;
-      const joined = await photosAPI.joinSharedAlbum(authStore.photoToken, binding.shareToken);
-      if (joined?.album) return joined.album;
-      return photosAPI.getAlbum(authStore.photoToken, binding.albumId);
+      if (error?.status === 403 || error?.status === 404) {
+        throw new Error('このアルバムは作成者の Google フォトにあります。開くには作成者から共有してもらってください。');
+      }
+      throw error;
     }
   }
 
@@ -210,6 +228,7 @@ export const usePhotosStore = defineStore('photos', () => {
     canUsePhotoSharing,
     bindingOf,
     ensureEventAlbum,
+    applySubmitBody,
     openAlbum,
     listAlbumPhotos,
     uploadFiles,

@@ -47,6 +47,6 @@ function handleResizeSub(evt) {
           <component :is="Component" :select-pane="props.selectPane" :collapse-mobile-sub-pane="props.collapseMobileSubPane" />
         </router-view>
       </div>
-      </aside>
+    </aside>
   </div>
 </template>

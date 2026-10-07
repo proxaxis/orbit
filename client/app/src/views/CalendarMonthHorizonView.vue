@@ -1,12 +1,13 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import dayjs, { toDayjs } from '@/services/dayjs.js';
+import { toDayjs } from '@/services/dayjs.js';
 import { useEventStore } from '@/stores/event.js';
 import { useUserStore } from '@/stores/user.js';
 import { useCalendarStore } from '@/stores/calendar.js';
 import { useAuthStore } from '@/stores/auth.js';
 import { USER_TEXT_SIZE_VALUES } from '@/stores/user.js';
+import { useCalendarToolbar } from '@/composables/useCalendarToolbar.js';
 import DropdownMenu from '@/components/DropdownMenu.vue';
 import IconCaretLeft from '@/components/icons/IconCaretLeft.vue';
 import IconCaretRight from '@/components/icons/IconCaretRight.vue';
@@ -49,28 +50,14 @@ const events = ref([]);
 
 /** @type {Ref<HTMLElement|null>} ツールバー */
 const rfToolbar = ref(null);
-/** @type {Ref<boolean>} ツールバーが収まらず右ボタン群をメニューに畳む状態か */
-const isCompactToolbar = ref(false);
-/** 展開時の右ボタン群の自然幅（コンパクト表示中も判定基準として保持する） */
-let expandedRightToolbarWidth = 0;
-let toolbarObserver = null;
+/** ツールバーのコンパクト表示状態・週/月タイトルは週表示ビューと共有ロジック */
+const { isCompactToolbar, monthTitle } = useCalendarToolbar(rfToolbar);
 
 /** @param {HandyCalendarEvent} evt @returns {string} イベント設定またはカレンダー設定に基づくイベントバーの色 */
 function getEventBarColor(evt) {
   if (!!evt.calendarBackgroundColor && evt.calendarBackgroundColor.startsWith('#')) return evt.calendarBackgroundColor;
   return '#2196f3'; // デフォルトの青色
 }
-
-const relativeYearText = computed(() => {
-  const now = dayjs();
-  const year = userStore.nowUsingDate.year();
-  if (year === now.year()) return '';
-  if (year === now.year() - 1) return '去年';
-  if (year === now.year() + 1) return '来年';
-  if (year < now.year() - 1) return `(${now.year()}-) ${now.year() - year}年前`;
-  if (year > now.year() + 1) return `(${now.year()}+) ${year - now.year()}年後`;
-  return '';
-});
 
 /** @type {ComputedRef<{date: Dayjs, key: string, isToday: boolean, isOtherMonth: boolean, isSelected: boolean}[]>} @description カレンダーメインの日付配列 */
 const calDaysArray = computed(() => {
@@ -455,29 +442,6 @@ const getMonthCellClass = (day) => {
   return classes;
 };
 
-/**
- * ツールバーの内容が表示幅に収まるかを実測し、収まらない場合はコンパクト表示に切り替える。
- * 展開時は3等分グリッドのため、合計幅に加えてタイトルが中央列に収まることも条件にする
- */
-function updateToolbarLayout() {
-  const toolbar = rfToolbar.value;
-  if (!toolbar || toolbar.clientWidth === 0) return;
-  const left = toolbar.querySelector('.toolbar-left');
-  const title = toolbar.querySelector('h1');
-  const right = toolbar.querySelector('.toolbar-right');
-  if (!left || !title || !right) return;
-  if (!isCompactToolbar.value) expandedRightToolbarWidth = right.scrollWidth;
-  // scrollWidth はセル幅に引きずられるため、Range でテキストの自然幅を測る
-  const range = document.createRange();
-  range.selectNodeContents(title);
-  const titleWidth = range.getBoundingClientRect().width;
-  const style = getComputedStyle(toolbar);
-  const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
-  const needed = left.scrollWidth + titleWidth + expandedRightToolbarWidth + padding + 8;
-  const thirdWidth = (toolbar.clientWidth - padding) / 3;
-  isCompactToolbar.value = needed > toolbar.clientWidth || titleWidth > thirdWidth + 1;
-}
-
 // カレンダーリストがロードされたり、月が変わったりしたらイベントを取得または再取得
 watch(
   () => [calendarStore.listVisibleCalendars, userStore.nowUsingDate],
@@ -486,27 +450,6 @@ watch(
   },
   { immediate: true },
 );
-
-// 月タイトルの文字数が変わると必要幅が変わるため再計測する
-watch(
-  () => userStore.nowUsingDate,
-  async () => {
-    await nextTick();
-    updateToolbarLayout();
-  },
-);
-
-onMounted(() => {
-  if (typeof ResizeObserver !== 'undefined' && rfToolbar.value) {
-    toolbarObserver = new ResizeObserver(() => updateToolbarLayout());
-    toolbarObserver.observe(rfToolbar.value);
-  }
-  updateToolbarLayout();
-});
-
-onUnmounted(() => {
-  toolbarObserver?.disconnect();
-});
 </script>
 
 <template>
@@ -523,13 +466,13 @@ onUnmounted(() => {
           <IconCaretRight size="1.25rem" />
         </button>
       </div>
-      <h1>{{ relativeYearText }} {{ userStore.nowUsingDate.format('YYYY年 M月') }}</h1>
+      <h1>{{ monthTitle }}</h1>
       <div class="toolbar-right">
         <template v-if="!isCompactToolbar">
           <button type="button" title="今日に戻る" aria-label="今日に戻る" @click.prevent="goToday">
             <IconArrowRotateLeft size="1.25rem" />
           </button>
-          <button type="button" title="週タイムライン表示に切り替え" aria-label="週タイムライン表示に切り替え" @click="userStore.setMainCalendarView('WEEK')">
+          <button type="button" title="TL表示にする" aria-label="タイムライン表示にする" @click="userStore.setMainCalendarView('WEEK')">
             <IconBarsStaggered size="1.25rem" />
           </button>
           <button type="button" title="ユーザー設定" aria-label="ユーザー設定" @click="router.push({ name: 'UserConfig' })">
@@ -543,7 +486,7 @@ onUnmounted(() => {
             </button>
           </template>
           <button type="button" @click="goToday"><IconArrowRotateLeft size="1rem" />今日に戻る</button>
-          <button type="button" @click="userStore.setMainCalendarView('WEEK')"><IconBarsStaggered size="1rem" />週タイムライン表示に切り替え</button>
+          <button type="button" @click="userStore.setMainCalendarView('WEEK')"><IconBarsStaggered size="1rem" />TL表示にする</button>
           <button type="button" @click="router.push({ name: 'UserConfig' })"><IconGear size="1rem" />ユーザー設定</button>
         </DropdownMenu>
       </div>
