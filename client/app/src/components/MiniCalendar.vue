@@ -1,21 +1,26 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed } from 'vue';
 import dayjs, { isEventOnDate, toDayjs } from '@/services/dayjs.js';
-import { useCalendarStore } from '@/stores/calendar.js';
 import { useUserStore } from '@/stores/user.js';
-import { useEventStore } from '@/stores/event.js';
+import { useCalendarEvents } from '@/composables/useCalendarEvents.js';
+import { isJapaneseHoliday } from '@/services/japanese-holidays.js';
 import IconCaretLeft from '@/components/icons/IconCaretLeft.vue';
 import IconCaretRight from '@/components/icons/IconCaretRight.vue';
 import IconArrowRotateLeft from '@/components/icons/IconArrowRotateLeft.vue';
 
-const calendarStore = useCalendarStore();
 const userStore = useUserStore();
-const eventStore = useEventStore();
 
-/** @type {Ref<HandyCalendarEvent[]>} */
-const events = ref([]);
 /** @type {Ref<Dayjs>} ミニカレンダーが表示している月（メインカレンダーとは連動しない） */
 const usingDate = ref(dayjs());
+
+/** @type {ComputedRef<{start: Dayjs, end: Dayjs}>} 表示中の月の範囲（イベント購読用） */
+const visibleRange = computed(() => ({
+  start: usingDate.value.startOf('month').startOf('day'),
+  end: usingDate.value.endOf('month').endOf('day'),
+}));
+
+/** @type {ComputedRef<HandyCalendarEvent[]>} 表示範囲のイベント（カスタム休日を除く）。取得は composable 側のバックグラウンド処理 */
+const { events } = useCalendarEvents(visibleRange);
 
 /**
  * @typedef {Object} CalendarCell
@@ -26,6 +31,7 @@ const usingDate = ref(dayjs());
  * @property {boolean} isCurrentMonth
  * @property {boolean} isToday
  * @property {boolean} isWeekend
+ * @property {boolean} isHoliday
  * @property {boolean} hasEvent
  */
 
@@ -37,6 +43,7 @@ const calendarDays = computed(() => {
   const firstDayOfMonth = toDayjs(year, month, 1);
   const lastDayOfMonth = toDayjs(year, month + 1, 0);
 
+  /** @type {number} 月初めの空白セル数 */
   const startDayOffset = (firstDayOfMonth.day() - userStore.firstDayOfWeek + 7) % 7;
   const startDate = toDayjs(year, month, 1 - startDayOffset);
 
@@ -58,6 +65,7 @@ const calendarDays = computed(() => {
       isCurrentMonth: d.month() === month,
       isToday: dateString === todayStr,
       isWeekend: day.isWeekend,
+      isHoliday: isJapaneseHoliday(d),
       hasEvent,
     });
   }
@@ -81,6 +89,16 @@ function goCurrentMonth() {
 }
 
 /**
+ * 日付セルの文字色。祝日はユーザ設定の祝日色、それ以外は曜日設定の色
+ * @param {CalendarCell} cell
+ * @returns {string|undefined} 適用する色
+ */
+function cellColor(cell) {
+  if (cell.isHoliday) return userStore.getHolidayColor(!cell.isCurrentMonth);
+  return userStore.getWeekendColor(cell.date.day(), !cell.isCurrentMonth) ?? undefined;
+}
+
+/**
  * セルクリック時の処理
  * @param {CalendarCell} cell
  */
@@ -94,13 +112,7 @@ function handleCellClick(cell) {
   }
 }
 
-watch(
-  () => [calendarStore.listVisibleCalendars, usingDate.value],
-  async () => {
-    events.value = await eventStore.listEvents(usingDate.value.year(), usingDate.value.month());
-  },
-  { immediate: true },
-);
+// イベントの取得・再取得は useCalendarEvents が担う（ビューは表示範囲を渡すだけで待機しない）
 </script>
 
 <template>
@@ -138,7 +150,7 @@ watch(
             :data-current-month="cell.isCurrentMonth"
             :data-today="cell.isToday"
             :data-weekend="cell.isWeekend"
-            :style="{ color: userStore.getWeekendColor(cell.date.day(), !cell.isCurrentMonth) ?? undefined }"
+            :style="{ color: cellColor(cell) }"
             :data-selected="userStore.nowSelectedDate === cell.dateString ? true : null"
             @click="handleCellClick(cell)">
             <span class="day-number">{{ cell.dayNumber }}</span>

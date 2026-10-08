@@ -1,6 +1,8 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 
+const emit = defineEmits(['close']);
+
 const isOpen = ref(false);
 /** @type {Ref<HTMLElement|null>} */
 const rfContainer = ref(null);
@@ -54,14 +56,18 @@ const calculatePosition = async (event = null) => {
 };
 
 // メニューを開く
+/** @param {MouseEvent|null} event メニューを開く位置の基準イベント */
 const openMenu = async (event = null) => {
   isOpen.value = true;
   await calculatePosition(event);
 };
 
 // メニューを閉じる
+/** メニューを閉じる */
 const closeMenu = () => {
+  if (!isOpen.value) return;
   isOpen.value = false;
+  emit('close');
 };
 
 // 外側クリックおよび外側右クリックの検知
@@ -74,10 +80,12 @@ const handleClickOutside = (event) => {
 };
 
 // ウィンドウリサイズやスクロール時に位置がずれるのを防ぐため閉じる
+/** スクロール時にメニューを閉じる */
 const handleScroll = () => {
   if (isOpen.value) closeMenu();
 };
 
+/** 画面リサイズ時にメニューを閉じる */
 const handleResize = () => {
   screenWidth.value = window.innerWidth;
   if (isOpen.value) {
@@ -100,6 +108,7 @@ onUnmounted(() => {
 });
 
 // メニューの開閉を切り替え
+/** メニューの開閉を切り替える */
 const toggleMenu = async () => {
   if (isOpen.value) {
     closeMenu();

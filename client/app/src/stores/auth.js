@@ -1,13 +1,15 @@
+/**
+ * 認証トークンの状態管理のみを担当するストア。
+ * BFF サーバへのトークン取得・ログアウトなどのロジックは
+ * `composables/useAuth.js` に置く。
+ */
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { useUserStore } from '@/stores/user.js';
 
 /** @type {string} BFF サーバのベース URL（未設定時は同一オリジン） */
 export const BFF_BASE_URL = (import.meta.env.VITE_BFF_BASE_URL ?? '').replace(/\/$/, '');
 
 export const useAuthStore = defineStore('auth', () => {
-  const userStore = useUserStore();
-
   /** @type {Ref<string|null>} @description BFF サーバから取得した Google OAuth アクセストークン */
   const _gAccessToken = ref(null);
 
@@ -27,109 +29,39 @@ export const useAuthStore = defineStore('auth', () => {
   const isPhotoSharingAuthorized = computed(() => !!_gPhotoAccessToken.value);
 
   /**
-   * Cookie 経由で BFF サーバから最新のアクセストークンを取得
-   * @returns {Promise<string|null>} 取得したアクセストークン
+   * アクセストークンを設定する
+   * @param {string|null} value アクセストークン
+   * @returns {void}
    */
-  async function fetchToken() {
-    console.log('Fetching token from BFF server...', BFF_BASE_URL);
-    try {
-      const res = await fetch(`${BFF_BASE_URL}/api/token`, { credentials: 'include' });
-
-      if (res.ok && res.headers.get('Content-Type')?.startsWith('application/json')) {
-        /** @type {{ gAccessToken: string }} */
-        const data = await res.json();
-
-        if (data !== null && typeof data === 'object' && 'gAccessToken' in data && typeof data.gAccessToken === 'string') {
-          _gAccessToken.value = data.gAccessToken;
-
-          return data.gAccessToken;
-        }
-      }
-
-      _gAccessToken.value = null;
-
-      throw new Error('Authentication failed');
-    } catch (err) {
-      userStore.setError(true, err instanceof Error ? err : new Error(String(err)));
-      return null;
-    }
+  function setAccessToken(value) {
+    _gAccessToken.value = value;
   }
 
   /**
-   * Cookie 経由で BFF サーバから写真共有用のアクセストークンを取得
-   * @returns {Promise<string|null>} 取得したアクセストークン（未認証なら null）
+   * Google Photos 用アクセストークンを設定する
+   * @param {string|null} value アクセストークン
+   * @returns {void}
    */
-  async function fetchPhotoToken() {
-    try {
-      const res = await fetch(`${BFF_BASE_URL}/api/token?t=photo-sharing`, { credentials: 'include' });
-
-      if (res.ok && res.headers.get('Content-Type')?.startsWith('application/json')) {
-        /** @type {{ gAccessToken: string }} */
-        const data = await res.json();
-
-        if (data !== null && typeof data === 'object' && 'gAccessToken' in data && typeof data.gAccessToken === 'string') {
-          _gPhotoAccessToken.value = data.gAccessToken;
-          return data.gAccessToken;
-        }
-      }
-
-      _gPhotoAccessToken.value = null;
-      return null;
-    } catch (err) {
-      userStore.setError(true, err instanceof Error ? err : new Error(String(err)));
-      return null;
-    }
+  function setPhotoAccessToken(value) {
+    _gPhotoAccessToken.value = value;
   }
-
-  /** @type {Promise<string|null>|null} @description 写真共有用トークン取得中のリクエスト（重複防止用） */
-  let photoTokenRequest = null;
 
   /**
-   * 写真共有用トークンを必要に応じて取得する。未取得のときだけ BFF へ問い合わせ、取得中のリクエストは共有する。
-   * @returns {Promise<string|null>} 取得したアクセストークン（未認証なら null）
+   * 保持しているアクセストークンを全て破棄する
+   * @returns {void}
    */
-  function ensurePhotoToken() {
-    if (_gPhotoAccessToken.value) return Promise.resolve(_gPhotoAccessToken.value);
-    if (!photoTokenRequest) {
-      photoTokenRequest = fetchPhotoToken().finally(() => {
-        photoTokenRequest = null;
-      });
-    }
-    return photoTokenRequest;
-  }
-
-  /** 写真共有用トークンを破棄する（機能の無効化時に使用） */
-  function clearPhotoToken() {
+  function clearTokens() {
+    _gAccessToken.value = null;
     _gPhotoAccessToken.value = null;
-  }
-
-  /**
-   * BFF サーバのセッションを破棄してログアウトし、保持しているアクセストークンを全て破棄する
-   * @returns {Promise<boolean>} サーバ側のログアウトに成功した場合は true
-   */
-  async function logout() {
-    try {
-      const res = await fetch(`${BFF_BASE_URL}/auth/logout`, { method: 'POST', credentials: 'include' });
-      if (!res.ok) throw new Error(`Logout failed: ${res.status}`);
-      return true;
-    } catch (err) {
-      userStore.setError(true, err instanceof Error ? err : new Error(String(err)));
-      return false;
-    } finally {
-      _gAccessToken.value = null;
-      _gPhotoAccessToken.value = null;
-    }
   }
 
   return {
     token,
     isAuthenticated,
-    fetchToken,
     photoToken,
     isPhotoSharingAuthorized,
-    fetchPhotoToken,
-    ensurePhotoToken,
-    clearPhotoToken,
-    logout,
+    setAccessToken,
+    setPhotoAccessToken,
+    clearTokens,
   };
 });

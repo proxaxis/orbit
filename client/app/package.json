@@ -1,16 +1,17 @@
 {
   "name": "orbit-client",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --port 5173 --host 0.0.0.0",
-    "build": "vite build",
+    "build": "vite build && vite build --config vite.sw.config.js",
     "test": "vitest run",
     "preview": "vite preview",
     "format": "oxfmt src/"
   },
   "dependencies": {
+    "@holiday-jp/holiday_jp": "^2.5.2",
     "@twemoji/api": "^17.0.3",
     "dayjs": "^1.11.23",
     "pinia": "^4.0.3",

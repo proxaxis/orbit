@@ -1,20 +1,25 @@
+/**
+ * カレンダー一覧の状態管理のみを担当するストア。
+ * Google Calendar API との通信は `composables/useCalendars.js` に置く。
+ * 状態の変更はオフラインキャッシュ（useCache）へも永続化する。
+ */
 import { defineStore } from 'pinia';
-import { onMounted, shallowRef, computed } from 'vue';
-import { useAuthStore } from '@/stores/auth.js';
+import { shallowRef, computed } from 'vue';
 import { useUserStore } from '@/stores/user.js';
-import * as gCalAPI from '@/services/google-calendar-api.js';
-import { readOffline, writeOffline } from '@/services/offline-storage.js';
+import { useShareStore } from '@/stores/share.js';
+import { CACHE_KEYS, writeCache } from '@/composables/useCache.js';
 
 export const useCalendarStore = defineStore('calendar', () => {
-  const authStore = useAuthStore();
   const userStore = useUserStore();
+  const shareStore = useShareStore();
 
-  /** @type {ShallowRef<null|Set<GoogleCalendarListEntry>>} */
+  /** @type {ShallowRef<null|Set<GoogleCalendarListEntry>>} @description ユーザーのカレンダーリスト */
   const _gCalendarsList = shallowRef(null);
-  /** @type {ShallowRef<Set<GoogleCalendarListEntry>>} 一時利用するセッションカレンダー */
+
+  /** @type {ShallowRef<Set<GoogleCalendarListEntry>>} @description 一時利用するセッションカレンダー */
   const _sessionCalendars = shallowRef(new Set());
 
-  /** @type {ComputedRef<GoogleCalendarListEntry[]>} */
+  /** @type {ComputedRef<GoogleCalendarListEntry[]>} @description 表示順を適用したカレンダーリスト */
   const list = computed(() => {
     const calendars = Array.from(new Map([...Array.from(_gCalendarsList.value ?? new Set()), ...Array.from(_sessionCalendars.value)].map((calendar) => [calendar.id, calendar])).values());
     const order = userStore.calendarOrder;
@@ -28,14 +33,44 @@ export const useCalendarStore = defineStore('calendar', () => {
     });
   });
 
-  /** @type {ComputedRef<GoogleCalendarListEntry[]>} 書き込み権限を持つカレンダーのリスト */
+  /** @type {ComputedRef<GoogleCalendarListEntry[]>} @description 書き込み権限を持つカレンダーのリスト */
   const listWritableCalendars = computed(() => list.value.filter((cal) => cal.accessRole === 'writer' || cal.accessRole === 'owner' || cal.primary));
 
-  const listVisibleCalendars = computed(() => list.value.filter((cal) => !userStore.hiddenCalendarIds.includes(cal.id)));
+  /** @type {ComputedRef<GoogleCalendarListEntry[]>} @description 非表示設定を除いたカレンダーのリスト（期間指定共有カレンダーは明示的に表示した場合のみ含む） */
+  const listVisibleCalendars = computed(() => list.value.filter((cal) => (shareStore.copyCalendarIds.has(cal.id) ? userStore.visibleShareCalendarIds.includes(cal.id) : !userStore.hiddenCalendarIds.includes(cal.id))));
 
-  /** @param {GoogleCalendarResource|GoogleCalendarListEntry} calendar */
+  /** @type {ComputedRef<GoogleCalendarListEntry[]>} @description セッションカレンダーのリスト */
+  const sessionCalendars = computed(() => Array.from(_sessionCalendars.value));
+
+  /**
+   * カレンダーリスト全体を置き換える
+   * @param {GoogleCalendarListEntry[]} calendars カレンダー一覧
+   * @returns {void}
+   */
+  function setCalendars(calendars) {
+    _gCalendarsList.value = new Set(Array.isArray(calendars) ? calendars : []);
+    writeCache(CACHE_KEYS.CALENDARS, Array.from(_gCalendarsList.value));
+  }
+
+  /**
+   * セッションカレンダー一覧を置き換える
+   * @param {GoogleCalendarListEntry[]} calendars セッションカレンダー一覧
+   * @returns {void}
+   */
+  function setSessionCalendars(calendars) {
+    _sessionCalendars.value = new Set(Array.isArray(calendars) ? calendars : []);
+    writeCache(CACHE_KEYS.SESSION_CALENDARS, Array.from(_sessionCalendars.value));
+  }
+
+  /**
+   * セッションカレンダーを追加する
+   * @param {GoogleCalendarResource|GoogleCalendarListEntry} calendar 追加するカレンダー
+   * @returns {void}
+   */
   function addSessionCalendar(calendar) {
     if (!calendar?.id) return;
+    // 期間指定共有のコピーカレンダーはセッション追加しない（共有管理側で表示・削除を行うため）
+    if (shareStore.copyCalendarIds.has(calendar.id)) return;
     const entry = {
       kind: 'calendar#calendarListEntry',
       etag: calendar.etag ?? '',
@@ -50,52 +85,62 @@ export const useCalendarStore = defineStore('calendar', () => {
       session: true,
     };
     _sessionCalendars.value = new Set([..._sessionCalendars.value].filter((item) => item.id !== entry.id).concat(entry));
-    writeOffline('session-calendars', Array.from(_sessionCalendars.value));
+    writeCache(CACHE_KEYS.SESSION_CALENDARS, Array.from(_sessionCalendars.value));
   }
 
-  /** セッションカレンダーを全て消去します。 */
+  /** セッションカレンダーを全て消去する */
   function clearSessionCalendars() {
-    _sessionCalendars.value = new Set();
-    writeOffline('session-calendars', []);
+    setSessionCalendars([]);
   }
 
-  /** @param {string} calendarId セッション一覧から除去する ID */
+  /**
+   * セッション一覧からカレンダーを除去する
+   * @param {string} calendarId 除去するカレンダー ID
+   * @returns {void}
+   */
   function removeSessionCalendar(calendarId) {
     _sessionCalendars.value = new Set([..._sessionCalendars.value].filter((calendar) => calendar.id !== calendarId));
-    writeOffline('session-calendars', Array.from(_sessionCalendars.value));
+    writeCache(CACHE_KEYS.SESSION_CALENDARS, Array.from(_sessionCalendars.value));
   }
 
-  /** @param {string} calendarId @returns {Promise<GoogleCalendarListEntry|null>} ID から検索して保存します。 */
-  async function searchSessionCalendar(calendarId) {
-    const normalizedId = calendarId.trim();
-    if (!normalizedId || !authStore.isAuthenticated || userStore.isOffline) return null;
-    const resource = await gCalAPI.getCalendar(authStore.token, normalizedId);
-    addSessionCalendar(resource);
-    return list.value.find((item) => item.id === normalizedId) ?? null;
-  }
-
-  /** @param {GoogleCalendarListEntry} calendar */
+  /**
+   * カレンダーを一覧へ追加する
+   * @param {GoogleCalendarListEntry} calendar 追加するカレンダー
+   * @returns {void}
+   */
   function addCalendar(calendar) {
     if (!calendar?.id) return;
     _gCalendarsList.value = new Set([...list.value, calendar]);
-    writeOffline('calendars', Array.from(_gCalendarsList.value));
+    writeCache(CACHE_KEYS.CALENDARS, Array.from(_gCalendarsList.value));
   }
 
-  /** @param {GoogleCalendarListEntry} calendar */
+  /**
+   * カレンダーを一覧上で更新する
+   * @param {GoogleCalendarListEntry} calendar 更新するカレンダー
+   * @returns {void}
+   */
   function updateCalendar(calendar) {
     if (!calendar?.id) return;
     _gCalendarsList.value = new Set(list.value.map((item) => (item.id === calendar.id ? calendar : item)));
-    writeOffline('calendars', Array.from(_gCalendarsList.value));
+    writeCache(CACHE_KEYS.CALENDARS, Array.from(_gCalendarsList.value));
   }
 
-  /** @param {string} calendarId カレンダー一覧から除去する ID */
+  /**
+   * カレンダーを一覧から除去する
+   * @param {string} calendarId 除去するカレンダー ID
+   * @returns {void}
+   */
   function removeCalendar(calendarId) {
     if (!calendarId) return;
     _gCalendarsList.value = new Set(list.value.filter((calendar) => calendar.id !== calendarId));
-    writeOffline('calendars', Array.from(_gCalendarsList.value));
+    writeCache(CACHE_KEYS.CALENDARS, Array.from(_gCalendarsList.value));
   }
 
-  /** @param {string} calendarId @returns {{ colorId?: string; backgroundColor?: string; foregroundColor?: string }} */
+  /**
+   * カレンダーの配色を取得する
+   * @param {string} calendarId カレンダー ID
+   * @returns {{ colorId?: string; backgroundColor?: string; foregroundColor?: string }}
+   */
   function getCalendarColor(calendarId) {
     const calendar = list.value.find((cal) => cal.id === calendarId);
     return {
@@ -105,41 +150,19 @@ export const useCalendarStore = defineStore('calendar', () => {
     };
   }
 
-  async function loadCalendars() {
-    const savedCalendars = await readOffline('calendars', []);
-    const savedSessionCalendars = await readOffline('session-calendars', []);
-    if (Array.isArray(savedCalendars) && savedCalendars.length > 0) _gCalendarsList.value = new Set(savedCalendars);
-    if (Array.isArray(savedSessionCalendars)) _sessionCalendars.value = new Set(savedSessionCalendars);
-    if (!authStore.isAuthenticated || userStore.isOffline) return;
-
-    userStore.setLoading(true, 'Loading calendars...');
-    try {
-      const response = await gCalAPI.listCalendarList(authStore.token);
-      const listEntries = Array.isArray(response?.items) ? response.items : [];
-      _gCalendarsList.value = new Set(listEntries);
-      writeOffline('calendars', listEntries);
-    } catch (err) {
-      userStore.setError(true, err);
-    } finally {
-      userStore.setLoading(false);
-    }
-  }
-
-  onMounted(loadCalendars);
-
   return {
     list,
     listWritableCalendars,
     listVisibleCalendars,
-    sessionCalendars: computed(() => Array.from(_sessionCalendars.value)),
+    sessionCalendars,
+    setCalendars,
+    setSessionCalendars,
     addSessionCalendar,
     clearSessionCalendars,
     removeSessionCalendar,
-    searchSessionCalendar,
     addCalendar,
     updateCalendar,
     removeCalendar,
     getCalendarColor,
-    loadCalendars,
   };
 });

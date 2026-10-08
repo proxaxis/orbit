@@ -1,11 +1,22 @@
-import { useAuthStore } from '@/stores/auth.js';
+/** @type {(() => Promise<string|null>)|null} 401 応答時に新しいアクセストークンを返すコールバック（呼び出し側が注入） */
+let tokenRefresher = null;
+
+/**
+ * 401 応答時に呼び出すトークン再取得コールバックを登録する。
+ * API クライアントを Pinia ストアから切り離すため、認証処理を外部から注入する。
+ * @param {() => Promise<string|null>} refresher 新しいアクセストークンを返すコールバック
+ * @returns {void}
+ */
+export function setTokenRefresher(refresher) {
+  tokenRefresher = refresher;
+}
 
 /** @type {string|undefined} Google People API のベース URL */
 export const API_BASE_URL = import.meta.env.VITE_GOOGLE_PEOPLE_API_BASE_URL;
 
 /**
  * ============================================================================
- * 1. Contacts (連絡先) 関連 API (.../auth/contacts)
+ * 1. Contacts (連絡先) 関連 API (.../auth/contacts.readonly)
  * ============================================================================
  */
 
@@ -17,7 +28,7 @@ export const API_BASE_URL = import.meta.env.VITE_GOOGLE_PEOPLE_API_BASE_URL;
  * @returns {Promise<GooglePeopleConnectionsListResponse>} 連絡先一覧レスポンス
  */
 export function listConnections(token, query = { personFields: 'names,emailAddresses,phoneNumbers,photos' }, resourceName = 'people/me') {
-  return fetchPeopleAPI(token, 'GET', `/$resourceName/connections`, {
+  return fetchPeopleAPI(token, `/$resourceName/connections`, {
     params: { resourceName },
     query,
   });
@@ -31,7 +42,7 @@ export function listConnections(token, query = { personFields: 'names,emailAddre
  * @returns {Promise<GooglePeoplePerson>} 連絡先データ
  */
 export function getPerson(token, resourceName, query = { personFields: 'names,emailAddresses,phoneNumbers,photos,birthdays,organizations,addresses' }) {
-  return fetchPeopleAPI(token, 'GET', `/$resourceName`, {
+  return fetchPeopleAPI(token, `/$resourceName`, {
     params: { resourceName },
     query,
   });
@@ -45,53 +56,11 @@ export function getPerson(token, resourceName, query = { personFields: 'names,em
  * @returns {Promise<{ responses: Array<{ httpStatusCode: number, person?: GooglePeoplePerson, requestedResourceName?: string, status?: any }> }>} 一括取得レスポンス
  */
 export function batchGetPeople(token, resourceNames, query = { personFields: 'names,emailAddresses,phoneNumbers,photos' }) {
-  return fetchPeopleAPI(token, 'GET', `/people:batchGet`, {
+  return fetchPeopleAPI(token, `/people:batchGet`, {
     query: {
       resourceNames,
       ...query,
     },
-  });
-}
-
-/**
- * 連絡先の新規作成 (people.createContact)
- * @param {string} token アクセストークン
- * @param {Partial<GooglePeoplePerson>} body 登録する連絡先データ
- * @param {{ personFields?: string }} [query={ personFields: 'names,emailAddresses,phoneNumbers,photos' }] レスポンスに含めるフィールド
- * @returns {Promise<GooglePeoplePerson>} 作成された連絡先データ
- */
-export function createContact(token, body, query = { personFields: 'names,emailAddresses,phoneNumbers,photos' }) {
-  return fetchPeopleAPI(token, 'POST', `/people:createContact`, {
-    body,
-    query,
-  });
-}
-
-/**
- * 連絡先の更新 (people.updateContact)
- * @param {string} token アクセストークン
- * @param {string} resourceName 更新対象のリソース名 (例: 'people/c1234567890')
- * @param {Partial<GooglePeoplePerson>} body 更新する連絡先データ (etag 必須)
- * @param {{ updatePersonFields: string, personFields?: string }} query 更新対象フィールドの指定
- * @returns {Promise<GooglePeoplePerson>} 更新された連絡先データ
- */
-export function updateContact(token, resourceName, body, query) {
-  return fetchPeopleAPI(token, 'PATCH', `/$resourceName:updateContact`, {
-    params: { resourceName },
-    body,
-    query,
-  });
-}
-
-/**
- * 連絡先の削除 (people.deleteContact)
- * @param {string} token アクセストークン
- * @param {string} resourceName 削除対象のリソース名 (例: 'people/c1234567890')
- * @returns {Promise<null>} 削除成功時は 200 または 204 (空レスポンス)
- */
-export function deleteContact(token, resourceName) {
-  return fetchPeopleAPI(token, 'DELETE', `/$resourceName:deleteContact`, {
-    params: { resourceName },
   });
 }
 
@@ -103,7 +72,7 @@ export function deleteContact(token, resourceName) {
  * @returns {Promise<{ results: Array<{ person: GooglePeoplePerson }> }>} 検索結果
  */
 export function searchContacts(token, queryText, options = { readMask: 'names,emailAddresses,phoneNumbers,photos' }) {
-  return fetchPeopleAPI(token, 'GET', `/people:searchContacts`, {
+  return fetchPeopleAPI(token, `/people:searchContacts`, {
     query: {
       query: queryText,
       ...options,
@@ -124,7 +93,7 @@ export function searchContacts(token, queryText, options = { readMask: 'names,em
  * @returns {Promise<GooglePeopleOtherContactsListResponse>} その他の連絡先一覧レスポンス
  */
 export function listOtherContacts(token, query = { readMask: 'names,emailAddresses,phoneNumbers,photos' }) {
-  return fetchPeopleAPI(token, 'GET', `/otherContacts`, { query });
+  return fetchPeopleAPI(token, `/otherContacts`, { query });
 }
 
 /**
@@ -135,7 +104,7 @@ export function listOtherContacts(token, query = { readMask: 'names,emailAddress
  * @returns {Promise<{ results: Array<{ person: GooglePeoplePerson }> }>} 検索結果
  */
 export function searchOtherContacts(token, queryText, options = { readMask: 'names,emailAddresses,phoneNumbers,photos' }) {
-  return fetchPeopleAPI(token, 'GET', `/otherContacts:search`, {
+  return fetchPeopleAPI(token, `/otherContacts:search`, {
     query: {
       query: queryText,
       ...options,
@@ -150,22 +119,17 @@ export function searchOtherContacts(token, queryText, options = { readMask: 'nam
  */
 
 /**
- * Google People API エンドポイントへリクエストを送信
+ * Google People API エンドポイントへ GET リクエストを送信
  * @template T
  * @param {string|null} token アクセストークン
- * @param {'GET'|'POST'|'PUT'|'PATCH'|'DELETE'} method HTTP メソッド
  * @param {string} endpoint エンドポイントのパス（例: /$resourceName/connections）
  * @param {object} [options={}] リクエストオプション
  * @param {Record<string, any>} [options.params={}] パスパラメータ（'$'プレフィックスは自動置換）
  * @param {Record<string, any>} [options.query={}] クエリパラメータ
- * @param {any|null} [options.body=null] リクエストボディ
- * @returns {Promise<T>} レスポンスデータ（204 の場合は null を返却）
+ * @returns {Promise<T>} レスポンスデータ
  * @throws {Error & { status: number, details?: GoogleApiErrorResponse }} HTTP エラー発生時
  */
-async function fetchPeopleAPI(token, method, endpoint, { params = {}, query = {}, body = null } = {}) {
-  if (!method || typeof method !== 'string' || !['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-    throw new Error('HTTP method is not set or invalid');
-  }
+async function fetchPeopleAPI(token, endpoint, { params = {}, query = {} } = {}) {
   if (!endpoint) throw new Error('Endpoint is not set');
   if (!token) throw new Error('Access token is not available');
 
@@ -178,6 +142,7 @@ async function fetchPeopleAPI(token, method, endpoint, { params = {}, query = {}
     resolvedEndpoint = resolvedEndpoint.replace(`$${key}`, replacement);
   });
 
+  /** @type {string} People API のベース URL */
   const base = (API_BASE_URL || 'https://people.googleapis.com/v1').replace(/\/+$/, '');
   const epUrl = new URL(`${base}${resolvedEndpoint.startsWith('/') ? '' : '/'}${resolvedEndpoint}`);
 
@@ -192,54 +157,37 @@ async function fetchPeopleAPI(token, method, endpoint, { params = {}, query = {}
     }
   });
 
-  // console.log(`Calling Google People API: ${method} ${epUrl.toString()}`);
+  // console.log(`Calling Google People API: GET ${epUrl.toString()}`);
 
   /**
    * API を fetch で呼び出す
-   * @param {RequestInit} [args={}]
    * @returns {Promise<Response>}
    */
-  const call = (args = {}) =>
+  const call = () =>
     fetch(epUrl.toString(), {
-      method,
+      method: 'GET',
       headers: {
         Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
       },
-      ...args,
     });
 
-  let res;
-  if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
-    res = await call({ body: JSON.stringify(body) });
-  } else {
-    res = await call();
-  }
+  let res = await call();
 
   // トークン期限切れ (401) 時のリフレッシュと再試行
   if (res.status === 401) {
-    const authStore = useAuthStore();
-    const refreshedToken = await authStore.fetchToken();
+    /** @type {string|null} 注入されたリフレッシュ処理で再取得したアクセストークン */
+    const refreshedToken = (await tokenRefresher?.()) ?? null;
     if (refreshedToken) {
       token = refreshedToken;
-      if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
-        res = await call({ body: JSON.stringify(body) });
-      } else {
-        res = await call();
-      }
+      res = await call();
     }
-  }
-
-  // 204 No Content または空レスポンスのハンドリング
-  if (res.status === 204) {
-    return /** @type {T} */ (null);
   }
 
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
 
   if (!res.ok) {
-    const errorMsg = data?.error?.message || `People API Error: ${method} ${res.status} ${res.statusText}`;
+    const errorMsg = data?.error?.message || `People API Error: GET ${res.status} ${res.statusText}`;
     console.error(errorMsg);
     const error = new Error(errorMsg);
     Object.assign(error, { status: res.status, details: data });

@@ -102,3 +102,16 @@ export function getCalendarListColorIdByColor(color) {
 export function getCalendarEventColorInfoById(eColorId) {
   return GOOGLE_CALENDAR_EVENT_COLORS[eColorId];
 }
+
+/**
+ * イベントバー・ブロックの表示色を解決する。
+ * イベント個別の色設定（colorId）があればそれを、なければカレンダーの色を返す。
+ * @param {{eventColorId?: string, calendarBackgroundColor?: string}} evt イベント情報
+ * @returns {{backgroundColor: string, color?: string}} バーの背景色と文字色
+ */
+export function getEventColorStyle(evt) {
+  const eventColor = evt?.eventColorId ? GOOGLE_CALENDAR_EVENT_COLORS[evt.eventColorId] : undefined;
+  if (eventColor) return { backgroundColor: eventColor.background, color: eventColor.foreground };
+  if (evt?.calendarBackgroundColor && evt.calendarBackgroundColor.startsWith('#')) return { backgroundColor: evt.calendarBackgroundColor };
+  return { backgroundColor: '#2196f3' }; // デフォルトの青色
+}

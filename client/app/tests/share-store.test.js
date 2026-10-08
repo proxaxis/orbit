@@ -13,12 +13,20 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/services/google-calendar-api.js', () => mocks);
+vi.mock('@/composables/useCache.js', () => ({
+  CACHE_KEYS: { SHARE_SPECS: 'share-specs' },
+  SYNC_TAGS: { SHARE_SYNC: 'orbit-share-sync' },
+  readCache: vi.fn(async (key, fallback) => fallback),
+  writeCache: vi.fn(async () => {}),
+  registerBackgroundSync: vi.fn(async () => false),
+}));
 vi.mock('@/stores/auth.js', () => ({
   BFF_BASE_URL: '',
   useAuthStore: () => ({ token: 'cal-token', isAuthenticated: true }),
 }));
 
 const { useShareStore } = await import('@/stores/share.js');
+const { useShare } = await import('@/composables/useShare.js');
 
 const baseInput = {
   title: 'テスト共有',
@@ -61,7 +69,7 @@ describe('useShareStore', () => {
         calendarId === 'cal-1' ? { items: [sourceEvent(), sourceEvent({ id: 'src-cancelled', status: 'cancelled' })] } : { items: [] },
       );
 
-      const spec = await store.createShare(baseInput);
+      const spec = await useShare().createShare(baseInput);
 
       expect(mocks.insertCalendar).toHaveBeenCalledWith('cal-token', expect.objectContaining({ summary: 'テスト共有' }));
       expect(spec.copyCalendarId).toBe('copy-cal-1');
@@ -82,7 +90,7 @@ describe('useShareStore', () => {
     it('freeBusyReader の場合は内容を伏せてコピーする', async () => {
       const store = useShareStore();
       mocks.listEvents.mockResolvedValue({ items: [sourceEvent()] });
-      await store.createShare({ ...baseInput, role: 'freeBusyReader' });
+      await useShare().createShare({ ...baseInput, role: 'freeBusyReader' });
 
       const [, , body] = mocks.insertEvent.mock.calls[0];
       expect(body.summary).toBe('予定あり');
@@ -96,7 +104,7 @@ describe('useShareStore', () => {
       mocks.insertAcl.mockRejectedValue(new Error('acl failed'));
       mocks.listEvents.mockResolvedValue({ items: [sourceEvent()] });
 
-      await expect(store.createShare(baseInput)).rejects.toThrow('acl failed');
+      await expect(useShare().createShare(baseInput)).rejects.toThrow('acl failed');
       expect(mocks.deleteCalendar).toHaveBeenCalledWith('cal-token', 'copy-cal-1');
       expect(store.specs).toHaveLength(0);
     });
@@ -106,9 +114,9 @@ describe('useShareStore', () => {
     it('expiresAt 当日は有効・前日は期限切れ', () => {
       const store = useShareStore();
       const today = dayjs().format('YYYY-MM-DD');
-      expect(store.isExpired({ expiresAt: today })).toBe(false);
-      expect(store.isExpired({ expiresAt: dayjs().subtract(1, 'day').format('YYYY-MM-DD') })).toBe(true);
-      expect(store.isExpired({ expiresAt: dayjs().add(1, 'day').format('YYYY-MM-DD') })).toBe(false);
+      expect(useShare().isExpired({ expiresAt: today })).toBe(false);
+      expect(useShare().isExpired({ expiresAt: dayjs().subtract(1, 'day').format('YYYY-MM-DD') })).toBe(true);
+      expect(useShare().isExpired({ expiresAt: dayjs().add(1, 'day').format('YYYY-MM-DD') })).toBe(false);
     });
   });
 
@@ -147,7 +155,7 @@ describe('useShareStore', () => {
         return { items: [] };
       });
 
-      const ok = await store.syncShare(spec);
+      const ok = await useShare().syncShare(spec);
       expect(ok).toBe(true);
       expect(mocks.patchEvent).toHaveBeenCalledWith('cal-token', 'copy-cal-1', 'copy-1', expect.objectContaining({ summary: 'ランチ' }));
       expect(mocks.insertEvent).toHaveBeenCalledWith('cal-token', 'copy-cal-1', expect.objectContaining({ summary: '追加予定' }));
@@ -166,7 +174,7 @@ describe('useShareStore', () => {
           : { items: [{ id: 'copy-1', extendedProperties: { private: { orbitShareSource: 'cal-1:src-1', orbitShareUpdated: '2026-10-01T00:00:00Z' } } }] },
       );
 
-      await store.syncShare(spec);
+      await useShare().syncShare(spec);
       expect(mocks.patchEvent).not.toHaveBeenCalled();
       expect(mocks.insertEvent).not.toHaveBeenCalled();
       expect(mocks.deleteEvent).not.toHaveBeenCalled();
@@ -177,7 +185,7 @@ describe('useShareStore', () => {
       const spec = makeSpec({ expiresAt: dayjs().subtract(1, 'day').format('YYYY-MM-DD') });
       store.specs = [spec];
 
-      const ok = await store.syncShare(spec);
+      const ok = await useShare().syncShare(spec);
       expect(ok).toBe(true);
       expect(mocks.deleteCalendar).toHaveBeenCalledWith('cal-token', 'copy-cal-1');
       expect(store.specs).toHaveLength(0);
@@ -190,7 +198,7 @@ describe('useShareStore', () => {
     it('コピーカレンダーを削除して spec を除去する', async () => {
       const store = useShareStore();
       store.specs = [{ id: 'share-x', copyCalendarId: 'copy-cal-1' }];
-      await store.removeShare('share-x');
+      await useShare().removeShare('share-x');
       expect(mocks.deleteCalendar).toHaveBeenCalledWith('cal-token', 'copy-cal-1');
       expect(store.specs).toHaveLength(0);
     });

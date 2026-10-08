@@ -39,6 +39,7 @@ function selectPane(pane) {
   activePane.value = pane;
 }
 
+/** モバイル表示の下部ペインを閉じる */
 function collapseMobileSubPane() {
   if (!userStore.isMobile) return;
   isCollapsingMobileSub.value = true;
@@ -76,6 +77,7 @@ function finishNavSwipe(evt) {
   if (deltaX <= -60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25) activePane.value = 'main';
 }
 
+/** ナビゲーションのスワイプをキャンセルする */
 function cancelNavSwipe() {
   navSwipeStart.value = null;
 }
@@ -112,6 +114,7 @@ function resizeMobileSub(evt) {
   mobileSubResizeLastY.value = touch.clientY;
 }
 
+/** モバイル下部ペインのリサイズを終了する */
 function stopMobileSubResize() {
   isResizingMobileSub.value = false;
 }
@@ -153,6 +156,7 @@ function handleResizeMove(evt) {
   }
 }
 
+/** ペインのリサイズを終了する */
 function stopResize() {
   isResizingNav.value = false;
   isResizingSub.value = false;
@@ -163,7 +167,23 @@ function stopResize() {
 
 watch(navWidth, (width) => userStore.setNavPaneWidth(width));
 watch(subWidth, (width) => userStore.setSubPaneWidth(width));
-watch(() => route.name, selectPaneForRoute, { immediate: true });
+watch(
+  () => route.name,
+  (name) => {
+    selectPaneForRoute(name);
+    // 別画面へ遷移した場合は未完了の日付ピック要求を破棄する
+    if (userStore.formDatePick) userStore.cancelFormDatePick();
+  },
+  { immediate: true },
+);
+// イベントフォームの日付ピック中はメインカレンダーを全面に出す（モバイルでは Sub ペインを隠す）
+watch(
+  () => userStore.formDatePick,
+  (picking) => {
+    if (picking) activePane.value = 'main';
+    else if (userStore.isMobile && route.name !== 'Home') activePane.value = 'sub';
+  },
+);
 watch(
   () => userStore.device,
   () => selectPaneForRoute(route.name),

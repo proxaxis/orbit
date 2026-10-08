@@ -45,12 +45,14 @@ function afterTransition(el, callback) {
     if (event.target !== el || event.propertyName !== 'height') return;
     finish();
   };
+  /** 開閉アニメーションを完了する */
   function finish() {
     window.clearTimeout(timer);
     el.removeEventListener('transitionend', onEnd);
     if (abortWaiting === abort) abortWaiting = null;
     callback();
   }
+  /** 開閉アニメーションを中断する */
   function abort() {
     window.clearTimeout(timer);
     el.removeEventListener('transitionend', onEnd);

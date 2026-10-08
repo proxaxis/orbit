@@ -1,52 +1,47 @@
 <script setup>
-import { useRouter } from 'vue-router';
+import { computed, onMounted, ref } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import MenuBar from '@/components/MenuBar.vue';
 import EventForm from '@/components/EventForm.vue';
-import { useEventStore } from '@/stores/event.js';
+import { useEventSubmit } from '@/composables/useEventSubmit.js';
+import { useEventTemplates } from '@/composables/useEventTemplates.js';
 import { useUserStore } from '@/stores/user.js';
-import { usePeopleStore } from '@/stores/people.js';
-import { usePhotosStore } from '@/stores/photos.js';
 import IconXMark from '@/components/icons/IconXMark.vue';
 
 const router = useRouter();
-const eventStore = useEventStore();
+const route = useRoute();
 const userStore = useUserStore();
-const peopleStore = usePeopleStore();
-const photosStore = usePhotosStore();
+const { submitCreate } = useEventSubmit();
+const eventTemplates = useEventTemplates();
+
+/** @type {Ref<OrbitEventTemplate|null>} クエリで指定されたテンプレート */
+const template = ref(null);
+/** @type {Ref<boolean>} テンプレートの解決が完了したか（フォーム描画前に確定させる） */
+const isTemplateResolved = ref(false);
 
 /**
- * イベントを作成する
- * @param {object} param
- * @param {object} param.body イベント作成のリクエストボディ
- * @param {string} param.calendarId イベントを作成するカレンダー
- * @param {string[]} [param.peopleToCreate] People 登録対象のメールアドレス
- * @param {GoogleCalendarAttendee[]} [param.attendees] フォームで指定された参加者
- * @param {boolean} [param.createPhotoAlbum] 写真共有アルバムを作成するか
+ * カレンダーのドラッグ選択等からクエリで渡された初期日時範囲。
+ * - 終日: start/end は YYYY-MM-DD（end は含む側の日付）+ allday=1
+ * - 時間指定: start/end は YYYY-MM-DDTHH:mm
+ * @type {ComputedRef<{start: string, end: string, isAllDay: boolean}|null>}
  */
-async function submit({ body, calendarId, peopleToCreate = [], attendees = [], createPhotoAlbum = false }) {
-  userStore.setLoading(true, 'Creating event...');
-  try {
-    const event = await eventStore.createEvent(body, calendarId);
-    if (!event) throw new Error('Failed to create event. No event returned.');
-    userStore.rememberEventTitle(body.summary);
-    if (createPhotoAlbum) {
-      // イベントの作成自体は成功しているため、アルバム作成の失敗はエラー表示だけに留める
-      try {
-        await photosStore.ensureEventAlbum(photosStore.applySubmitBody(event, { ...body, attendees }));
-      } catch (albumError) {
-        userStore.setError(true, albumError);
-      }
-    }
-    if (peopleToCreate.length) {
-      peopleStore.setPendingRegistrationEmails(peopleToCreate);
-      router.push({ name: 'PeopleEditor' });
-    } else router.push({ name: 'EventDetail' });
-  } catch (err) {
-    userStore.setError(true, err);
-  } finally {
-    userStore.setLoading(false);
+const initialRange = computed(() => {
+  const start = typeof route.query.start === 'string' ? route.query.start : '';
+  if (!start) return null;
+  const end = typeof route.query.end === 'string' && route.query.end ? route.query.end : start;
+  const isAllDay = route.query.allday === '1' || !start.includes('T');
+  return { start, end, isAllDay };
+});
+
+onMounted(async () => {
+  const templateId = typeof route.query.template === 'string' ? route.query.template : '';
+  if (templateId) {
+    await eventTemplates.ensureLoaded();
+    template.value = eventTemplates.findById(templateId);
+    if (!template.value) userStore.showToast('指定されたテンプレートが見つかりませんでした');
   }
-}
+  isTemplateResolved.value = true;
+});
 </script>
 
 <template>
@@ -62,9 +57,9 @@ async function submit({ body, calendarId, peopleToCreate = [], attendees = [], c
           </button>
         </div>
       </template>
-      新しいイベントを作成します
+      {{ template ? `テンプレート「${template.name}」から作成します` : '新しいイベントを作成します' }}
     </MenuBar>
-    <EventForm @submit="submit" @cancel="router.back()" />
+    <EventForm v-if="isTemplateResolved" :template="template" :initial-range="initialRange" @submit="submitCreate" @cancel="router.back()" />
   </section>
 </template>
 

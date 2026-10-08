@@ -25,6 +25,7 @@ watch(
 );
 
 // 色の更新処理
+/** @param {string} colorId 選択されたカラー ID */
 const updateColor = (colorId) => {
   inputValue.value = colorId;
   emit('update:modelValue', colorId);

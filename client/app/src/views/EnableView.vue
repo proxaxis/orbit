@@ -1,12 +1,12 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useAuthStore } from '@/stores/auth.js';
+import { useAuth } from '@/composables/useAuth.js';
 import { useUserStore } from '@/stores/user.js';
 
 const route = useRoute();
 const router = useRouter();
-const authStore = useAuthStore();
+const auth = useAuth();
 const userStore = useUserStore();
 
 /** @type {Ref<'loading'|'success'|'error'>} 認証結果の状態 */
@@ -16,7 +16,7 @@ const message = ref('写真共有機能を有効化しています...');
 onMounted(async () => {
   const type = route.query.t;
   if (type === 'photo-sharing') {
-    const token = await authStore.fetchPhotoToken();
+    const token = await auth.fetchPhotoToken();
     if (token) {
       userStore.setUsePhotoSharing(true);
       state.value = 'success';

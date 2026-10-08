@@ -45,12 +45,39 @@ const router = createRouter({
           },
         },
         {
-          path: '/people/edit',
-          name: 'PeopleEditor',
+          path: '/evt/clone',
+          name: 'EventCloner',
           components: {
             default: () => import('@/views/CalendarMainView.vue'),
             nav: () => import('@/views/UserCalendarsView.vue'),
-            sub: () => import('@/views/PeopleEditor.vue'),
+            sub: () => import('@/views/EventClonerView.vue'),
+          },
+        },
+        {
+          path: '/evt/search',
+          name: 'EventSearch',
+          components: {
+            default: () => import('@/views/CalendarMainView.vue'),
+            nav: () => import('@/views/UserCalendarsView.vue'),
+            sub: () => import('@/views/EventSearchView.vue'),
+          },
+        },
+        {
+          path: '/evt/quick-add',
+          name: 'EventQuickAdd',
+          components: {
+            default: () => import('@/views/CalendarMainView.vue'),
+            nav: () => import('@/views/UserCalendarsView.vue'),
+            sub: () => import('@/views/EventQuickAddView.vue'),
+          },
+        },
+        {
+          path: '/evt/templates',
+          name: 'EventTemplatePicker',
+          components: {
+            default: () => import('@/views/CalendarMainView.vue'),
+            nav: () => import('@/views/UserCalendarsView.vue'),
+            sub: () => import('@/views/EventTemplatePickerView.vue'),
           },
         },
         {

@@ -1,11 +1,12 @@
+/**
+ * イベント通知のスケジューリングを担うコンポーザブル。
+ * ページ側ではタイマーで通知を配信し、アプリ未起動時は
+ * Service Worker のバックグラウンド同期にスケジュールを委譲する。
+ */
 import dayjs from '@/services/dayjs.js';
-import { readOffline, writeOffline } from '@/services/offline-storage.js';
 import { rrulestr } from 'rrule';
+import { CACHE_KEYS, SYNC_TAGS, readCache, registerBackgroundSync, registerPeriodicBackgroundSync, writeCache } from '@/composables/useCache.js';
 
-/** 通知済みイベントを記録するオフラインストレージのキー */
-const NOTIFIED_KEY = 'notified-events';
-/** Service Worker 側が参照する今後の通知スケジュールのキー */
-const SCHEDULE_KEY = 'notification-schedule';
 /** スケジュールに保存する通知エントリの上限 */
 const MAX_SCHEDULE_ENTRIES = 200;
 /** 発火済みかどうかの再スキャン間隔 */
@@ -16,6 +17,8 @@ const MAX_TIMER_DELAY_MS = 2_000_000_000;
 const SCAN_WINDOW_DAYS = 45;
 /** Google Calendar API のリマインダー上限 */
 const MAX_REMINDER_MINUTES = 40320;
+/** バックグラウンド通知の定期同期の最小間隔 */
+const PERIODIC_SYNC_INTERVAL_MS = 15 * 60 * 1000;
 
 /** @type {boolean} 初期化済みかどうか */
 let initialized = false;
@@ -84,7 +87,7 @@ export function reminderMinutesOf(evt, calendar) {
 /**
  * イベントの開始日時を解析する。オフライン作成イベントは body 形式を持つため両方を見る。
  * @param {any} evt 保存済みイベント
- * @returns {import('dayjs').Dayjs|null}
+ * @returns {Dayjs|null}
  */
 export function eventStartOf(evt) {
   const raw = evt?.raw?.start?.dateTime ?? evt?.raw?.start?.date ?? evt?.start?.dateTime ?? evt?.start?.date ?? evt?.startDateTime ?? null;
@@ -93,12 +96,20 @@ export function eventStartOf(evt) {
   return parsed.isValid() ? parsed : null;
 }
 
-/** @param {import('dayjs').Dayjs} date ローカル壁時計を UTC として解釈した Date に変換する */
+/**
+ * ローカル壁時計を UTC として解釈した Date に変換する（rrule 展開のための補助関数）
+ * @param {Dayjs} date 変換する日時
+ * @returns {Date}
+ */
 function toFakeUtc(date) {
   return new Date(Date.UTC(date.year(), date.month(), date.date(), date.hour(), date.minute(), date.second()));
 }
 
-/** @param {Date} date fake-UTC の Date をローカル壁時計の dayjs に戻す */
+/**
+ * fake-UTC の Date をローカル壁時計の dayjs に戻す
+ * @param {Date} date 変換する日時
+ * @returns {Dayjs}
+ */
 function fromFakeUtc(date) {
   return dayjs(new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds()));
 }
@@ -106,9 +117,9 @@ function fromFakeUtc(date) {
 /**
  * ウィンドウ内のイベント開始日時の一覧を返す。繰り返しイベントは RRULE で展開する。
  * @param {any} evt 保存済みイベント
- * @param {import('dayjs').Dayjs} windowStart スキャン開始
- * @param {import('dayjs').Dayjs} windowEnd スキャン終了
- * @returns {import('dayjs').Dayjs[]}
+ * @param {Dayjs} windowStart スキャン開始
+ * @param {Dayjs} windowEnd スキャン終了
+ * @returns {Dayjs[]}
  */
 export function occurrenceStarts(evt, windowStart, windowEnd) {
   const start = eventStartOf(evt);
@@ -135,13 +146,14 @@ export function occurrenceStarts(evt, windowStart, windowEnd) {
 /**
  * 通知を送信する
  * @param {any} evt イベント
- * @param {import('dayjs').Dayjs} start その回の開始日時
+ * @param {Dayjs} start その回の開始日時
  * @param {number} minutes 何分前の通知か
  * @param {string} key 通知済み管理用キー
+ * @returns {Promise<void>}
  */
 async function deliverNotification(evt, start, minutes, key) {
   notifiedKeys.add(key);
-  await writeOffline(NOTIFIED_KEY, [...notifiedKeys]);
+  await writeCache(CACHE_KEYS.NOTIFIED_EVENTS, [...notifiedKeys]);
 
   const minutesLeft = Math.max(0, start.diff(dayjs(), 'minute'));
   const timingText = minutes > 0 ? `${minutes}分前` : '開始時刻';
@@ -161,6 +173,7 @@ async function deliverNotification(evt, start, minutes, key) {
   };
 
   try {
+    /** @type {ServiceWorkerRegistration|null} 登録済みの Service Worker */
     const registration = (await navigator.serviceWorker?.getRegistration?.()) ?? (await navigator.serviceWorker?.ready);
     if (registration?.showNotification) {
       await registration.showNotification(title, options);
@@ -195,7 +208,7 @@ export async function rescheduleNotifications() {
   /** @type {Array<{key: string, fireAt: number, start: number, eid: string, cid: string, summary: string, icon: string|null, minutes: number}>} Service Worker のバックグラウンド配信が参照するスケジュール */
   const scheduleEntries = [];
 
-  const [storedEvents, storedCalendars, storedNotified] = await Promise.all([readOffline('events', []), readOffline('calendars', []), readOffline(NOTIFIED_KEY, [])]);
+  const [storedEvents, storedCalendars, storedNotified] = await Promise.all([readCache(CACHE_KEYS.EVENTS, []), readCache(CACHE_KEYS.CALENDARS, []), readCache(CACHE_KEYS.NOTIFIED_EVENTS, [])]);
   // Service Worker 側で配信済みの通知を取り込んで二重通知を防ぐ
   notifiedKeys = new Set([...notifiedKeys, ...(Array.isArray(storedNotified) ? storedNotified : [])]);
   const calendarMap = new Map((Array.isArray(storedCalendars) ? storedCalendars : []).map((/** @type {any} */ cal) => [cal.id, cal]));
@@ -232,7 +245,7 @@ export async function rescheduleNotifications() {
   }
 
   scheduleEntries.sort((a, b) => a.fireAt - b.fireAt);
-  await writeOffline(SCHEDULE_KEY, scheduleEntries.slice(0, MAX_SCHEDULE_ENTRIES));
+  await writeCache(CACHE_KEYS.NOTIFICATION_SCHEDULE, scheduleEntries.slice(0, MAX_SCHEDULE_ENTRIES));
 
   if (nextDelay !== null) {
     scanTimer = window.setTimeout(
@@ -250,30 +263,20 @@ export async function rescheduleNotifications() {
  * 非対応ブラウザでは無視される（ページ側のタイマーが引き続き通知を担当する）。
  * @returns {Promise<void>}
  */
-async function registerBackgroundSync() {
-  try {
-    const registration = await navigator.serviceWorker?.ready;
-    if (registration?.sync) await registration.sync.register('orbit-notifications').catch(() => null);
-    if (registration?.periodicSync) {
-      const status = await navigator.permissions?.query?.({ name: /** @type {any} */ ('periodic-background-sync') }).catch(() => null);
-      if (!status || status.state === 'granted') {
-        await registration.periodicSync.register('orbit-notifications', { minInterval: 15 * 60 * 1000 }).catch(() => null);
-      }
-    }
-  } catch {
-    // 非対応環境ではバックグラウンド通知なし
-  }
+async function registerNotificationBackgroundSync() {
+  await registerBackgroundSync(SYNC_TAGS.NOTIFICATIONS);
+  await registerPeriodicBackgroundSync(SYNC_TAGS.NOTIFICATIONS, PERIODIC_SYNC_INTERVAL_MS);
 }
 
 /** イベント通知のスケジューリングを開始する */
 export function initEventNotifications() {
   if (initialized || !notificationsSupported()) return;
   initialized = true;
-  readOffline(NOTIFIED_KEY, []).then((keys) => {
+  readCache(CACHE_KEYS.NOTIFIED_EVENTS, []).then((keys) => {
     notifiedKeys = new Set(Array.isArray(keys) ? keys : []);
     rescheduleNotifications();
   });
-  registerBackgroundSync();
+  registerNotificationBackgroundSync();
   window.setInterval(rescheduleNotifications, RESCAN_INTERVAL_MS);
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) rescheduleNotifications();

@@ -15,11 +15,13 @@ export const WEEKDAYS = [
 
 const FREQUENCIES = new Set(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']);
 
+/** @param {Dayjs} value @returns {string} RRULE 用の日付トークン */
 function dateToken(value) {
   const parsed = dayjs(value);
   return parsed.isValid() ? parsed.format('YYYYMMDD') : '';
 }
 
+/** @param {*} value @returns {Dayjs|null} 入力値を Dayjs に正規化する */
 function normalizeDate(value) {
   if (!value) return '';
   const normalized = String(value).replace(/\D/g, '');
@@ -46,6 +48,7 @@ export function buildRecurrence(settings) {
   const parts = [`FREQ=${settings.frequency}`];
   const interval = Math.max(1, Number(settings.interval) || 1);
   if (interval > 1) parts.push(`INTERVAL=${interval}`);
+  /** @type {string[]} 有効な曜日だけに絞った一覧 */
   const weekdays = (settings.weekdays ?? []).filter((day) => WEEKDAYS.some((item) => item.value === day));
   if (weekdays.length) parts.push(`BYDAY=${weekdays.join(',')}`);
   if (settings.frequency === 'MONTHLY' && settings.monthDay) parts.push(`BYMONTHDAY=${Math.min(31, Math.max(1, Number(settings.monthDay)))}`);

@@ -93,8 +93,10 @@ export function useCalendarToolbar(rfToolbar) {
     const narrow = userStore.isMobile;
     const titleWidth = Math.max(measureTitleWidth(title, monthTitle.value, 'var(--ui-font-family)', narrow ? 'var(--text-size-lg)' : 'var(--text-size-xl)'), measureTitleWidth(title, weekTitle.value, 'var(--calendar-font-family)', narrow ? 'var(--text-size-md)' : 'var(--text-size-lg)'));
     const style = getComputedStyle(toolbar);
+    /** @type {number} ツールバー左右の合計 padding */
     const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
     const needed = left.scrollWidth + titleWidth + expandedRightToolbarWidth + padding + 8;
+    /** @type {number} ツールバーを 3 等分した幅 */
     const thirdWidth = (toolbar.clientWidth - padding) / 3;
     isCompactToolbar.value = needed > toolbar.clientWidth || titleWidth > thirdWidth + 1;
   }

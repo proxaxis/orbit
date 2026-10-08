@@ -1,91 +1,19 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
+import { reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import { USER_FONT_FAMILIES, USER_TEXT_SIZE_VALUES, useUserStore } from '@/stores/user.js';
-import { useAuthStore, BFF_BASE_URL } from '@/stores/auth.js';
-import { clearOfflineCache, deleteOffline, USER_SETTINGS_KEY } from '@/services/offline-storage.js';
+import { useTheme } from '@/composables/useTheme.js';
 import MenuBar from '@/components/MenuBar.vue';
-import GoogleLogin from '@/components/GoogleLogin.vue';
-import { ensureNotificationPermission, notificationPermission } from '@/services/notifications.js';
 import IconFloppyDisk from '@/components/icons/IconFloppyDisk.vue';
-import IconTrash from '@/components/icons/IconTrash.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
-import IconBell from '@/components/icons/IconBell.vue';
-import IconImage from '@/components/icons/IconImage.vue';
-import IconArrowsRotate from '@/components/icons/IconArrowsRotate.vue';
-import IconArrowRightFromBracket from '@/components/icons/IconArrowRightFromBracket.vue';
+import UserConfigViewAccountSection from '@/components/items/UserConfigViewAccountSection.vue';
+import UserConfigViewPhotoSharingSection from '@/components/items/UserConfigViewPhotoSharingSection.vue';
+import UserConfigViewNotificationSection from '@/components/items/UserConfigViewNotificationSection.vue';
+import UserConfigViewDataSection from '@/components/items/UserConfigViewDataSection.vue';
 
 const router = useRouter();
 const userStore = useUserStore();
-const authStore = useAuthStore();
-const savedMessage = ref('');
-/** @type {Ref<'unsupported'|NotificationPermission>} ブラウザーの通知許可状態 */
-const notificationPermissionState = ref(notificationPermission());
-/** @type {Ref<boolean>} 写真共有の認証状態を確認中かどうか */
-const isCheckingPhotoAuth = ref(false);
-
-onMounted(async () => {
-  if (!authStore.isAuthenticated || !userStore.usePhotoSharing || authStore.isPhotoSharingAuthorized) return;
-  isCheckingPhotoAuth.value = true;
-  try {
-    await authStore.ensurePhotoToken();
-  } finally {
-    isCheckingPhotoAuth.value = false;
-  }
-});
-
-/** ブラウザーの通知許可を要求し、表示中の状態を再取得する */
-async function requestNotificationPermission() {
-  notificationPermissionState.value = await ensureNotificationPermission();
-}
-
-/** 写真共有の有効化（Google OAuth 認証へリダイレクト） */
-function startPhotoSharingAuth() {
-  window.location.href = `${BFF_BASE_URL}/auth/photo-sharing`;
-}
-
-/** 写真共有を無効化し、保存済みの写真トークンを破棄する */
-async function disablePhotoSharing() {
-  const confirmed = await userStore.confirm({
-    title: '写真共有を無効化',
-    message: 'イベントへの写真共有機能を無効にします。作成済みのアルバムは削除されません。',
-  });
-  if (!confirmed) return;
-  userStore.setUsePhotoSharing(false);
-  authStore.clearPhotoToken();
-}
-
-/** Google アカウントからログアウトする */
-async function handleLogout() {
-  const confirmed = await userStore.confirm({
-    title: 'ログアウト',
-    message: 'Google アカウントからログアウトします。カレンダーの同期は停止します。続行しますか？',
-  });
-  if (!confirmed) return;
-  userStore.setLoading(true, 'Logging out...');
-  try {
-    await authStore.logout();
-  } finally {
-    userStore.setLoading(false);
-  }
-}
-
-/** ログアウト後に Google 認証へリダイレクトして、別アカウントでログインし直す */
-async function switchAccount() {
-  const confirmed = await userStore.confirm({
-    title: 'アカウントを変更',
-    message: 'ログアウトして、別の Google アカウントでログインし直します。続行しますか？',
-  });
-  if (!confirmed) return;
-  userStore.setLoading(true, 'Switching account...');
-  try {
-    await authStore.logout();
-  } finally {
-    userStore.setLoading(false);
-  }
-  // BFF が prompt=select_account に対応していれば Google のアカウント選択画面が表示される
-  window.location.href = `${BFF_BASE_URL}/auth/login?prompt=select_account`;
-}
+const theme = useTheme();
 
 const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const draft = reactive({
@@ -96,12 +24,16 @@ const draft = reactive({
   useWheelMonthNavigation: userStore.useWheelMonthNavigation,
   maxEventBarsPerCell: userStore.maxEventBarsPerCell,
   calendarCellHeightMode: userStore.calendarCellHeightMode,
+  allDayEventBarStyle: userStore.allDayEventBarStyle,
+  timedEventBarStyle: userStore.timedEventBarStyle,
   uiFontFamily: userStore.uiFontFamily,
   calendarFontFamily: userStore.calendarFontFamily,
   uiTextSize: userStore.uiTextSize,
   calendarTextSize: userStore.calendarTextSize,
   labels: [...userStore.weekdayLabels],
   weekendDays: userStore.weekendDays.map((day) => ({ ...day })),
+  customHolidayColor: userStore.customHolidayColor,
+  holidayColor: userStore.holidayColor,
 });
 
 /** @returns {{index: number, color: string}|undefined} */
@@ -109,6 +41,7 @@ function weekend(/** @type {number} */ dayIndex) {
   return draft.weekendDays.find((day) => day.index === dayIndex);
 }
 
+/** @param {number} dayIndex 曜日番号 @param {Event} event 色変更イベント */
 function updateWeekendColor(/** @type {number} */ dayIndex, /** @type {Event} */ event) {
   const target = event.target;
   if (!(target instanceof HTMLInputElement)) return;
@@ -116,35 +49,42 @@ function updateWeekendColor(/** @type {number} */ dayIndex, /** @type {Event} */
   if (current) current.color = target.value;
 }
 
+/** @param {number} dayIndex 週末扱いにする曜日の切り替え */
 function toggleWeekend(/** @type {number} */ dayIndex) {
   const current = weekend(dayIndex);
   if (current) draft.weekendDays = draft.weekendDays.filter((day) => day.index !== dayIndex);
   else draft.weekendDays.push({ index: dayIndex, color: dayIndex === 0 ? '#d32f2f' : '#0a0dd6' });
 }
 
+/** 入力中のテーマ設定を即時プレビュー反映する */
 function applyTheme() {
-  userStore.applyTheme(draft.theme);
+  theme.applyTheme(draft.theme);
 }
 
+/** 設定を保存してホームへ戻る */
 function save() {
-  userStore.applyTheme(draft.theme);
+  theme.applyTheme(draft.theme);
   userStore.themeColor = draft.themeColor;
-  userStore.applyThemeColor();
+  theme.applyThemeColor();
   userStore.setFirstDayOfWeek(Number(draft.firstDayOfWeek));
   userStore.useMiniCalendar = draft.useMiniCalendar;
   userStore.useWheelMonthNavigation = draft.useWheelMonthNavigation;
   userStore.maxEventBarsPerCell = Math.min(10, Math.max(1, Number(draft.maxEventBarsPerCell)));
   userStore.calendarCellHeightMode = draft.calendarCellHeightMode;
+  userStore.allDayEventBarStyle = draft.allDayEventBarStyle;
+  userStore.timedEventBarStyle = draft.timedEventBarStyle;
   userStore.uiFontFamily = draft.uiFontFamily;
   userStore.calendarFontFamily = draft.calendarFontFamily;
-  userStore.applyFonts();
+  theme.applyFonts();
   userStore.uiTextSize = draft.uiTextSize;
   userStore.calendarTextSize = draft.calendarTextSize;
-  userStore.applyTextSizes();
+  theme.applyTextSizes();
   userStore.weekendDays = draft.weekendDays.map((day) => ({ ...day }));
+  userStore.customHolidayColor = draft.customHolidayColor;
+  userStore.holidayColor = draft.holidayColor;
   userStore.setWeekdayLabels(draft.labels);
   userStore.saveSettings();
-  savedMessage.value = '設定を保存しました。';
+  userStore.showToast('設定を保存しました。');
 }
 
 /** カレンダー一覧と表示中の予定を最新状態へ同期します。 */
@@ -163,38 +103,6 @@ function save() {
 //     userStore.setLoading(false);
 //   }
 // }
-
-async function clearCache() {
-  const confirmed = await userStore.confirm({
-    title: 'キャッシュを削除',
-    message: '設定以外のオフラインデータとアプリのキャッシュを削除します。続行しますか？',
-  });
-  if (!confirmed) return;
-
-  try {
-    await clearOfflineCache([USER_SETTINGS_KEY]);
-    window.location.reload();
-  } catch (error) {
-    console.warn('Failed to clear offline cache.', error);
-    savedMessage.value = 'キャッシュを削除できませんでした。';
-  }
-}
-
-async function clearSettings() {
-  const confirmed = await userStore.confirm({
-    title: '設定を削除',
-    message: '保存したユーザー設定を削除して初期設定に戻します。続行しますか？',
-  });
-  if (!confirmed) return;
-
-  try {
-    await deleteOffline(USER_SETTINGS_KEY);
-    window.location.reload();
-  } catch (error) {
-    console.warn('Failed to clear user settings.', error);
-    savedMessage.value = '設定を削除できませんでした。';
-  }
-}
 </script>
 
 <template>
@@ -211,20 +119,7 @@ async function clearSettings() {
     </MenuBar>
 
     <form class="config-form" @submit.prevent="save">
-      <section class="config-section">
-        <h2>アカウント</h2>
-        <template v-if="authStore.isAuthenticated">
-          <p class="hint">Google アカウントでログイン中です.</p>
-          <div class="account-actions">
-            <button type="button" class="clear-cache-button" @click="switchAccount"><IconArrowsRotate />アカウントを変更</button>
-            <button type="button" class="clear-cache-button" @click="handleLogout"><IconArrowRightFromBracket />ログアウト</button>
-          </div>
-        </template>
-        <template v-else>
-          <p class="hint">カレンダーの同期や写真共有を利用するには、Google アカウントでログインしてください.</p>
-          <GoogleLogin />
-        </template>
-      </section>
+      <UserConfigViewAccountSection />
 
       <section class="config-section">
         <h2>表示</h2>
@@ -251,6 +146,20 @@ async function clearSettings() {
           <select v-model="draft.calendarCellHeightMode">
             <option value="FIXED">固定</option>
             <option value="VARIABLE">可変</option>
+          </select>
+        </label>
+        <label
+          >終日の予定バー
+          <select v-model="draft.allDayEventBarStyle">
+            <option value="FILL">背景を塗りつぶす</option>
+            <option value="DOT">ドット表示</option>
+          </select>
+        </label>
+        <label
+          >時間指定の予定バー
+          <select v-model="draft.timedEventBarStyle">
+            <option value="FILL">背景を塗りつぶす</option>
+            <option value="DOT">ドット表示</option>
           </select>
         </label>
         <label
@@ -299,6 +208,16 @@ async function clearSettings() {
             <span v-else class="not-set">休日にしない</span>
           </div>
         </div>
+        <label class="custom-holiday-color">
+          祝日の色
+          <input v-model="draft.holidayColor" type="color" aria-label="祝日の色" />
+        </label>
+        <p class="hint">日本の祝日の日付は、この色で日付が表示されます.</p>
+        <label class="custom-holiday-color">
+          カスタム休日の色
+          <input v-model="draft.customHolidayColor" type="color" aria-label="カスタム休日の色" />
+        </label>
+        <p class="hint">日付セルの右クリックメニューから「この日を休日にする」で登録した日は、この色で日付が表示されます.</p>
       </section>
 
       <section class="config-section">
@@ -312,39 +231,12 @@ async function clearSettings() {
         </div>
       </section>
 
-      <section class="config-section">
-        <h2>写真共有</h2>
-        <p class="hint">イベントに写真の共有アルバムを紐づけます. 有効化にはGoogleアカウントでの追加認証が必要です.</p>
-        <p v-if="!authStore.isAuthenticated" class="hint">利用するには Google アカウントでログインしてください.</p>
-        <p v-else-if="isCheckingPhotoAuth" class="hint">認証状態を確認しています...</p>
-        <template v-else-if="userStore.usePhotoSharing && authStore.isPhotoSharingAuthorized">
-          <p class="hint">写真共有は有効です. イベント詳細画面から写真を追加できます.</p>
-          <button type="button" class="clear-cache-button" @click="disablePhotoSharing"><IconXMark />無効にする</button>
-        </template>
-        <template v-else>
-          <p v-if="userStore.usePhotoSharing" class="hint">認証が切れています. 再度認証してください.</p>
-          <button type="button" class="clear-cache-button" @click="startPhotoSharingAuth"><IconImage />{{ userStore.usePhotoSharing ? '再認証' : '有効化' }}</button>
-        </template>
-      </section>
+      <UserConfigViewPhotoSharingSection />
 
-      <section class="config-section">
-        <h2>通知</h2>
-        <p class="hint">予定の通知にはブラウザの通知機能を使います. 通知タイミングは予定の編集画面で設定できます.</p>
-        <p v-if="notificationPermissionState === 'unsupported'" class="hint">このブラウザーは通知に対応していません.</p>
-        <p v-else-if="notificationPermissionState === 'granted'" class="hint">通知は許可されています.</p>
-        <p v-else-if="notificationPermissionState === 'denied'" class="hint">通知がブロックされています. ブラウザの設定から許可してください.</p>
-        <button v-if="notificationPermissionState === 'default'" type="button" class="clear-cache-button" @click="requestNotificationPermission"><IconBell />通知を許可する</button>
-      </section>
+      <UserConfigViewNotificationSection />
 
-      <section class="config-section">
-        <h2>データ管理</h2>
-        <p class="hint">設定のデータを削除します。</p>
-        <button type="button" class="clear-cache-button" @click="clearSettings"><IconTrash />設定を削除</button>
-        <p class="hint">設定以外の全てのオフラインデータを削除します.</p>
-        <button type="button" class="clear-cache-button" @click="clearCache"><IconTrash />キャッシュを削除</button>
-      </section>
+      <UserConfigViewDataSection />
 
-      <p v-if="savedMessage" class="saved">{{ savedMessage }}</p>
       <div class="actions">
         <button data-app-button="secondary" type="button" @click="router.push({ name: 'Home' })">キャンセル</button>
         <button data-app-button="primary" type="submit"><IconFloppyDisk />保存</button>
@@ -421,6 +313,20 @@ label {
   background: transparent;
 }
 
+.custom-holiday-color {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+
+  input[type='color'] {
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+}
+
 .not-set {
   grid-column: 4;
 }
@@ -441,29 +347,6 @@ label {
   min-height: 2.25rem;
   padding: var(--space-xs) var(--space-sm);
   gap: var(--space-xs);
-}
-
-.saved {
-  color: var(--primary);
-  font-size: var(--text-size-sm);
-}
-
-.account-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-}
-
-.clear-cache-button {
-  align-self: flex-start;
-  gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-sm);
-  border: 1px solid var(--border);
-  border-radius: var(--border-radius);
-
-  &:hover {
-    background-color: var(--bg-2);
-  }
 }
 
 .icon-x-mark-wrapper {

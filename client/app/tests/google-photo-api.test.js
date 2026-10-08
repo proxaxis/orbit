@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import * as photosAPI from '@/services/google-photo-api.js';
-import { useAuthStore } from '@/stores/auth.js';
+import { useAuthStore, BFF_BASE_URL } from '@/stores/auth.js';
 
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -110,11 +110,20 @@ describe('google-photo-api', () => {
     });
 
     const authStore = useAuthStore();
+    // 401 時のトークン再取得は呼び出し側が注入するコールバックで行う
+    photosAPI.setTokenRefresher(async () => {
+      const res = await fetch(`${BFF_BASE_URL}/api/token?t=photo-sharing`, { credentials: 'include' });
+      const data = await res.json();
+      authStore.setPhotoAccessToken(data.gAccessToken);
+      return data.gAccessToken;
+    });
+
     const result = await photosAPI.getAlbum('expired-token', 'album-1');
     expect(result.id).toBe('album-1');
     expect(authStore.photoToken).toBe('refreshed-photo-token');
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[2][1].headers.Authorization).toBe('Bearer refreshed-photo-token');
+    photosAPI.setTokenRefresher(null);
   });
 
   it('API エラーは status を持つ Error を投げる', async () => {

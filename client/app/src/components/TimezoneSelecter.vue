@@ -14,6 +14,7 @@ const emit = defineEmits(['update:modelValue']);
 const timezones = ref([]);
 
 // ブラウザのAPIからタイムゾーン一覧を取得
+/** タイムゾーン一覧を読み込む */
 const loadTimezones = () => {
   if (typeof Intl !== 'undefined' && typeof Intl.supportedValuesOf === 'function') {
     timezones.value = Intl.supportedValuesOf('timeZone');
@@ -24,12 +25,14 @@ const loadTimezones = () => {
 };
 
 // 現在のブラウザ設定からタイムゾーンを推定して設定
+/** 端末のローカルタイムゾーンを選択状態にする */
 const setLocalTimezone = () => {
   const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   emit('update:modelValue', localTz);
 };
 
 // 選択値の更新
+/** @param {Event} event タイムゾーン選択の変更イベント */
 const onSelectChange = (event) => {
   emit('update:modelValue', event.target.value);
 };

@@ -3,60 +3,26 @@ import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import MenuBar from '@/components/MenuBar.vue';
 import EventForm from '@/components/EventForm.vue';
-import { useEventStore } from '@/stores/event.js';
-import { useUserStore } from '@/stores/user.js';
+import { useEventSubmit } from '@/composables/useEventSubmit.js';
 import IconXMark from '@/components/icons/IconXMark.vue';
-import { usePeopleStore } from '@/stores/people.js';
-import { usePhotosStore } from '@/stores/photos.js';
 
 const router = useRouter();
-const eventStore = useEventStore();
-const userStore = useUserStore();
-const peopleStore = usePeopleStore();
-const photosStore = usePhotosStore();
+const { submitUpdate, loadEditingEvent } = useEventSubmit();
 
-/** @type {Ref<HandyCalendarEvent|null>} */
+/** @type {Ref<HandyCalendarEvent|null>} 編集対象のイベント */
 const event = ref(null);
 
 onMounted(async () => {
-  try {
-    if (!userStore.nowSelectedEvent) throw new Error('You do not have an event selected. You must select an event to edit it.');
-    userStore.setLoading(true, 'Loading the event...');
-    const result = await eventStore.getEventById(userStore.nowSelectedEvent.eid, userStore.nowSelectedEvent.cid);
-    if (!result) throw new Error('The event could not be found. Go back to the calendar and select a different event.');
-    event.value = result;
-  } catch (err) {
-    userStore.setError(true, err);
-  } finally {
-    userStore.setLoading(false);
-  }
+  event.value = await loadEditingEvent();
 });
 
-/** @param {{ body: Record<string, any>, peopleToCreate?: string[], attendees?: GoogleCalendarAttendee[], createPhotoAlbum?: boolean }} payload */
-async function update(payload) {
-  const { body, peopleToCreate = [], attendees = [], createPhotoAlbum = false } = payload;
-  try {
-    if (!userStore.nowSelectedEvent) throw new Error('You do not have an event selected. You must select an event to update it.');
-    userStore.setLoading(true, 'Updating the event...');
-    await eventStore.updateEvent(userStore.nowSelectedEvent.eid, userStore.nowSelectedEvent.cid, body);
-    userStore.rememberEventTitle(body.summary);
-    if (createPhotoAlbum && event.value) {
-      // イベントの更新自体は成功しているため、アルバム作成の失敗はエラー表示だけに留める
-      try {
-        await photosStore.ensureEventAlbum(photosStore.applySubmitBody(event.value, { ...body, attendees }));
-      } catch (albumError) {
-        userStore.setError(true, albumError);
-      }
-    }
-    if (peopleToCreate.length) {
-      peopleStore.setPendingRegistrationEmails(peopleToCreate);
-      router.replace({ name: 'PeopleEditor' });
-    } else router.replace({ name: 'EventDetail' });
-  } catch (err) {
-    userStore.setError(true, err);
-  } finally {
-    userStore.setLoading(false);
-  }
+/**
+ * フォームの送信内容で選択中のイベントを更新する
+ * @param {import('@/composables/useEventSubmit.js').EventSubmitPayload} payload フォームの送信内容
+ * @returns {Promise<void>}
+ */
+function update(payload) {
+  return submitUpdate(payload, event.value);
 }
 </script>
 

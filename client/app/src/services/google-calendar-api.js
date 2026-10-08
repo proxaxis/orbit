@@ -1,4 +1,15 @@
-import { useAuthStore } from '@/stores/auth.js';
+/** @type {(() => Promise<string|null>)|null} 401 応答時に新しいアクセストークンを返すコールバック（呼び出し側が注入） */
+let tokenRefresher = null;
+
+/**
+ * 401 応答時に呼び出すトークン再取得コールバックを登録する。
+ * API クライアントを Pinia ストアから切り離すため、認証処理を外部から注入する。
+ * @param {() => Promise<string|null>} refresher 新しいアクセストークンを返すコールバック
+ * @returns {void}
+ */
+export function setTokenRefresher(refresher) {
+  tokenRefresher = refresher;
+}
 
 /** @type {string} Google Calendar API のベース URL */
 export const API_BASE_URL = (import.meta.env.VITE_GOOGLE_CALENDAR_API_BASE_URL || 'https://www.googleapis.com/calendar/v3').replace(/\/+$/, '');
@@ -99,6 +110,19 @@ export function moveEvent(token, gCalendarId, gEventId, destinationCalendarId, q
  */
 export function importEvent(token, gCalendarId, body, query = {}) {
   return fetchCalendarAPI(token, 'POST', `/calendars/$gCalendarId/events/import`, { params: { gCalendarId }, body, query });
+}
+
+/**
+ * 自然言語テキストから予定を作成する（events.quickAdd）。
+ * ※ Google 公式では非推奨 (deprecated) だが現在も動作する自然言語登録エンドポイント。
+ * @param {string} token アクセストークン
+ * @param {string} gCalendarId カレンダー ID
+ * @param {string} text 自然言語の予定テキスト（例: "明日の15時に会議"）
+ * @param {Record<string, any>} [query={}] 追加のクエリパラメータ
+ * @returns {Promise<GoogleCalendarEvent>} 作成されたイベントデータ
+ */
+export function quickAddEvent(token, gCalendarId, text, query = {}) {
+  return fetchCalendarAPI(token, 'POST', `/calendars/$gCalendarId/events/quickAdd`, { params: { gCalendarId }, query: { ...query, text } });
 }
 
 /**
@@ -471,8 +495,8 @@ async function fetchCalendarAPI(token, method, endpoint, { params = {}, query = 
 
   // トークン期限切れ (401) 時のリフレッシュと再試行
   if (res.status === 401) {
-    const authStore = useAuthStore();
-    const refreshedToken = await authStore.fetchToken();
+    /** @type {string|null} 注入されたリフレッシュ処理で再取得したアクセストークン */
+    const refreshedToken = (await tokenRefresher?.()) ?? null;
     if (refreshedToken) {
       token = refreshedToken;
       if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {

@@ -1,4 +1,15 @@
-import { useAuthStore } from '@/stores/auth.js';
+/** @type {(() => Promise<string|null>)|null} 401 応答時に新しいアクセストークンを返すコールバック（呼び出し側が注入） */
+let tokenRefresher = null;
+
+/**
+ * 401 応答時に呼び出すトークン再取得コールバックを登録する。
+ * API クライアントを Pinia ストアから切り離すため、認証処理を外部から注入する。
+ * @param {() => Promise<string|null>} refresher 新しいアクセストークンを返すコールバック
+ * @returns {void}
+ */
+export function setTokenRefresher(refresher) {
+  tokenRefresher = refresher;
+}
 
 /** @type {string} Google Photos Library API のベース URL */
 export const API_BASE_URL = (import.meta.env.VITE_GOOGLE_PHOTOS_LIBRARY_API_BASE_URL || 'https://photoslibrary.googleapis.com/v1').replace(/\/+$/, '');
@@ -220,8 +231,8 @@ async function fetchPhotosAPI(token, method, endpoint, { base = API_BASE_URL, pa
 
   // トークン期限切れ (401) 時は写真共有用トークンを再取得して再試行
   if (res.status === 401) {
-    const authStore = useAuthStore();
-    const refreshedToken = await authStore.fetchPhotoToken();
+    /** @type {string|null} 注入されたリフレッシュ処理で再取得したアクセストークン */
+    const refreshedToken = (await tokenRefresher?.()) ?? null;
     if (refreshedToken) res = await call(refreshedToken);
   }
 

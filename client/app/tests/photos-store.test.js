@@ -29,7 +29,7 @@ vi.mock('@/services/google-calendar-api.js', () => ({ patchEvent: mocks.patchEve
 vi.mock('@/services/google-photo-api.js', () => mocks);
 vi.mock('@/stores/auth.js', () => ({ BFF_BASE_URL: '', useAuthStore: () => authState }));
 
-const { usePhotosStore } = await import('@/stores/photos.js');
+const { usePhotos } = await import('@/composables/usePhotos.js');
 const { useUserStore } = await import('@/stores/user.js');
 
 function handyEvent(overrides = {}) {
@@ -43,8 +43,8 @@ function handyEvent(overrides = {}) {
   };
 }
 
-describe('usePhotosStore', () => {
-  /** @type {ReturnType<typeof usePhotosStore>} */
+describe('usePhotos', () => {
+  /** @type {ReturnType<typeof usePhotos>} */
   let store;
   /** @type {ReturnType<typeof useUserStore>} */
   let userStore;
@@ -53,7 +53,7 @@ describe('usePhotosStore', () => {
     setActivePinia(createPinia());
     vi.clearAllMocks();
     vi.stubGlobal('open', vi.fn());
-    store = usePhotosStore();
+    store = usePhotos();
     userStore = useUserStore();
     userStore.setUsePhotoSharing(true);
     authState.isPhotoSharingAuthorized = true;

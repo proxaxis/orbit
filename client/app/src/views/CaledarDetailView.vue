@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth.js';
 import { useCalendarStore } from '@/stores/calendar.js';
 import { useUserStore } from '@/stores/user.js';
-import * as gCalAPI from '@/services/google-calendar-api.js';
+import { useCalendarDetail } from '@/composables/useCalendarDetail.js';
 import MenuBar from '@/components/MenuBar.vue';
 import ColorPicker from '@/components/ColorPicker.vue';
 import TimezoneSelecter from '@/components/TimezoneSelecter.vue';
@@ -13,16 +13,20 @@ import IconXMark from '@/components/icons/IconXMark.vue';
 import AskLoginMessage from '@/components/AskLoginMessage.vue';
 import { getCalendarListColorIdByColor, getRandomCalendarListColorId } from '@/services/google-calendar-colors.js';
 import AccordionMenu from '@/components/AccordionMenu.vue';
+import IconFloppyDisk from '@/components/icons/IconFloppyDisk.vue';
+import IconRotateLeft from '@/components/icons/IconRotateLeft.vue';
+import IconTrash from '@/components/icons/IconTrash.vue';
+import IconFileCircleMinus from '@/components/icons/IconFileCircleMinus.vue';
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const calendarStore = useCalendarStore();
 const userStore = useUserStore();
+const calendarDetail = useCalendarDetail();
 
 /** @type {Ref<{listEntry: GoogleCalendarListEntry|null, calendar: GoogleCalendarResource|null}>} */
 const source = ref({ listEntry: null, calendar: null });
-const isSaving = ref(false);
 const form = reactive({
   summary: '',
   description: '',
@@ -52,46 +56,16 @@ function checkInputSummary() {
   return null;
 }
 
+/** カレンダーの設定を保存する */
 async function save() {
   if (!theCalendarId.value || !authStore.isAuthenticated) return;
   if (checkInputSummary() !== null) return;
 
-  isSaving.value = true;
-  userStore.setLoading(true, 'Saving the calendar settings...');
+  userStore.setLoading(true, 'カレンダーを保存しています...');
   try {
-    // カレンダーリストエントリの更新
-    const newListEntry = await gCalAPI.patchCalendarListEntry(authStore.token, theCalendarId.value, {
-      colorId: form.colorId,
-      ...(!isOwner.value ? { summaryOverride: form.summary.trim() } : {}),
-    });
-
-    // カレンダーの更新
-    let newCalendar = source.value.calendar;
-    if (canEditCalendar.value) {
-      newCalendar = await gCalAPI.patchCalendar(authStore.token, theCalendarId.value, {
-        summary: form.summary.trim(),
-        description: form.description.trim(),
-        location: form.location.trim(),
-        timeZone: form.timeZone,
-      });
-    }
-    source.value.calendar = newCalendar;
-    const currentEntry = source.value.listEntry ?? storedCalendarEntry.value;
-    if (!currentEntry) throw new Error('The selected calendar could not be found.');
-    calendarStore.updateCalendar({
-      ...currentEntry,
-      ...(newListEntry ?? {}),
-      id: theCalendarId.value,
-      summary: isOwner.value ? form.summary.trim() : (newListEntry?.summaryOverride ?? form.summary.trim()),
-      ...(isOwner.value ? { summaryOverride: undefined } : { summaryOverride: form.summary.trim() }),
-      colorId: newListEntry?.colorId ?? form.colorId,
-      backgroundColor: newListEntry?.backgroundColor,
-      foregroundColor: newListEntry?.foregroundColor,
-    });
-  } catch (err) {
-    userStore.setError(true, err);
+    const newCalendar = await calendarDetail.saveCalendarDetail(theCalendarId.value, form, { isOwner: isOwner.value, canEdit: canEditCalendar.value }, source.value.listEntry ?? storedCalendarEntry.value);
+    if (newCalendar) source.value.calendar = newCalendar;
   } finally {
-    isSaving.value = false;
     userStore.setLoading(false);
   }
 }
@@ -100,25 +74,11 @@ async function save() {
 async function removeCalendar() {
   if (!theCalendarId.value || !authStore.isAuthenticated || (!canDeleteCalendar.value && !canRemoveFromCalendarList.value)) return;
 
-  const deleteCalendarItself = canDeleteCalendar.value;
-  const message = deleteCalendarItself ? 'このカレンダー自体を削除します。予定や共有設定も利用できなくなります。実行しますか？' : 'このカレンダーを自分のカレンダーリストから削除しますか？';
-  const confirmed = await userStore.confirm({
-    title: deleteCalendarItself ? 'カレンダーを削除' : 'カレンダーリストから削除',
-    message,
-  });
-  if (!confirmed) return;
-
-  isSaving.value = true;
-  userStore.setLoading(true, deleteCalendarItself ? 'Deleting the calendar...' : 'Removing the calendar from your list...');
+  userStore.setLoading(true, 'カレンダーを削除しています...');
   try {
-    if (deleteCalendarItself) await gCalAPI.deleteCalendar(authStore.token, theCalendarId.value);
-    else await gCalAPI.deleteCalendarListEntry(authStore.token, theCalendarId.value);
-    calendarStore.removeCalendar(theCalendarId.value);
-    await router.push({ name: 'Home' });
-  } catch (err) {
-    userStore.setError(true, err);
+    const removed = await calendarDetail.removeCalendarWithConfirm(theCalendarId.value, canDeleteCalendar.value);
+    if (removed) await router.push({ name: 'Home' });
   } finally {
-    isSaving.value = false;
     userStore.setLoading(false);
   }
 }
@@ -129,11 +89,8 @@ watch(
     source.value = { listEntry: null, calendar: null };
     if (!theCalendarId.value || typeof theCalendarId.value !== 'string' || !authStore.isAuthenticated) return;
 
-    userStore.setLoading(true, 'Loading the calendar...');
-    try {
-      source.value.listEntry = await gCalAPI.getCalendarListEntry(authStore.token, theCalendarId.value);
-      source.value.calendar = await gCalAPI.getCalendar(authStore.token, theCalendarId.value);
-      if (!source.value.listEntry) source.value.listEntry = storedCalendarEntry.value;
+    source.value = await calendarDetail.loadCalendarDetail(theCalendarId.value, storedCalendarEntry.value);
+    if (source.value.listEntry || source.value.calendar) {
       Object.assign(form, {
         summary: source.value?.listEntry?.summaryOverride ?? source.value?.calendar?.summary ?? source.value?.listEntry?.summary ?? '',
         description: source.value?.calendar?.description ?? source.value?.listEntry?.description ?? '',
@@ -141,10 +98,6 @@ watch(
         timeZone: source.value?.calendar?.timeZone ?? source.value?.listEntry?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
         colorId: source.value?.listEntry?.colorId ?? getCalendarListColorIdByColor(source.value?.listEntry?.backgroundColor ?? '') ?? '1',
       });
-    } catch (err) {
-      userStore.setError(true, err);
-    } finally {
-      userStore.setLoading(false);
     }
   },
   { immediate: true },
@@ -213,17 +166,18 @@ watch(
           <ColorPicker v-model="form.colorId" />
         </label>
         <div class="actions">
-          <button data-app-button="secondary" type="button" @click="router.back">キャンセル</button>
-          <button data-app-button="primary" type="submit" :disabled="userStore.isLoading">保存</button>
+          <button data-app-button="secondary" type="button" @click="router.back"><IconRotateLeft />キャンセル</button>
+          <button data-app-button="primary" type="submit" :disabled="userStore.isLoading"><IconFloppyDisk />保存</button>
         </div>
         <AccordionMenu>
           <template #summary>
             <span>その他のアクション</span>
           </template>
           <div class="actions">
-            <button v-if="canDeleteCalendar" type="button" class="danger-button" :disabled="userStore.isLoading" @click="removeCalendar">カレンダーを削除</button>
-            <button v-else-if="canRemoveFromCalendarList" type="button" class="danger-button" :disabled="userStore.isLoading" @click="removeCalendar">リストから削除</button>
+            <button type="button" class="danger-button" :disabled="!canDeleteCalendar || userStore.isLoading" @click="removeCalendar"><IconTrash />カレンダーを削除</button>
+            <button type="button" class="danger-button" :disabled="!canRemoveFromCalendarList || userStore.isLoading" @click="removeCalendar"><IconFileCircleMinus />リストから削除</button>
           </div>
+          <p v-if="!canDeleteCalendar && !canRemoveFromCalendarList">プライマリカレンダーは削除することができません</p>
         </AccordionMenu>
       </form>
     </section>

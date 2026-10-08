@@ -1,10 +1,12 @@
-import { defineStore } from 'pinia';
-import { ref } from 'vue';
-import { useAuthStore } from '@/stores/auth.js';
-import { useUserStore } from '@/stores/user.js';
+/**
+ * イベントへの写真アルバム紐づけと Google Photos へのアップロードを担うコンポーザブル。
+ * Google Photos / Picker API の呼び出しとイベント拡張プロパティへの永続化をここに集約する。
+ */
+import dayjs, { toDayjs } from '@/services/dayjs.js';
 import * as gCalAPI from '@/services/google-calendar-api.js';
 import * as photosAPI from '@/services/google-photo-api.js';
-import { toDayjs } from '@/services/dayjs.js';
+import { useAuthStore } from '@/stores/auth.js';
+import { useUserStore } from '@/stores/user.js';
 
 /** イベントの shared 拡張プロパティに保存するキー */
 const ALBUM_ID_PROP = 'photoAlbumId';
@@ -24,14 +26,13 @@ function durationToMs(duration) {
   return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : PICKER_MIN_POLL_MS;
 }
 
-export const usePhotosStore = defineStore('photos', () => {
+/**
+ * 写真共有操作を提供するコンポーザブル
+ * @returns {Object} 写真共有操作関数群
+ */
+export function usePhotos() {
   const authStore = useAuthStore();
   const userStore = useUserStore();
-
-  /** @type {Ref<boolean>} 写真操作を実行中かどうか */
-  const isPhotoBusy = ref(false);
-  /** @type {Ref<string>} 実行中の処理の説明 */
-  const photoStatus = ref('');
 
   /**
    * 写真共有機能が利用可能かどうか（設定で有効化済み + OAuth 認証済み + オンライン）
@@ -43,7 +44,7 @@ export const usePhotosStore = defineStore('photos', () => {
 
   /**
    * イベントに紐づいたアルバム情報を返す
-   * @param {HandyCalendarEvent|null} evt
+   * @param {HandyCalendarEvent|null} evt 対象イベント
    * @returns {OrbitEventPhotoAlbum|null}
    */
   function bindingOf(evt) {
@@ -58,8 +59,8 @@ export const usePhotosStore = defineStore('photos', () => {
 
   /**
    * アルバム情報をイベントの shared 拡張プロパティへ書き込む（他のプロパティは保持）
-   * @param {HandyCalendarEvent} evt
-   * @param {OrbitEventPhotoAlbum} binding
+   * @param {HandyCalendarEvent} evt 対象イベント
+   * @param {OrbitEventPhotoAlbum} binding アルバム紐づけ情報
    * @returns {Promise<void>}
    */
   async function persistBinding(evt, binding) {
@@ -78,7 +79,7 @@ export const usePhotosStore = defineStore('photos', () => {
   /**
    * イベントにアルバムを紐づける。未作成ならアルバムを作成する。
    * アルバムは作成者の Google フォトに保存され、共有は Google フォト側で行う。
-   * @param {HandyCalendarEvent} evt
+   * @param {HandyCalendarEvent} evt 対象イベント
    * @returns {Promise<OrbitEventPhotoAlbum>} 紐づけ情報
    */
   async function ensureEventAlbum(evt) {
@@ -86,7 +87,7 @@ export const usePhotosStore = defineStore('photos', () => {
     if (existing) return existing;
     if (!canUsePhotoSharing()) throw new Error('写真共有が有効になっていません。ユーザー設定で認証してください。');
 
-    photoStatus.value = 'アルバムを作成しています...';
+    userStore.setLoading(true, 'アルバムを作成しています...');
     const album = await photosAPI.createAlbum(authStore.photoToken, `${evt.summary ?? '予定'} (${evt.startDateTime?.format?.('YYYY-MM-DD') ?? ''})`);
     if (!album?.id) throw new Error('アルバムを作成できませんでした。');
 
@@ -101,7 +102,7 @@ export const usePhotosStore = defineStore('photos', () => {
   /**
    * フォームの送信ペイロードを既存イベントへ反映したイベントオブジェクトを組み立てる。
    * ensureEventAlbum のアルバム名（summary / 日付）に保存した最新の入力を使うためのヘルパー。
-   * @param {HandyCalendarEvent|null} evt
+   * @param {HandyCalendarEvent|null} evt 対象イベント
    * @param {Record<string, any>} body 送信したイベントペイロード
    * @returns {HandyCalendarEvent|null}
    */
@@ -126,14 +127,14 @@ export const usePhotosStore = defineStore('photos', () => {
   /**
    * アルバム情報を取得する。API で読めるのは自分のアプリ作成アルバムのみのため、
    * 他の参加者が開く場合は 403/404 を分かりやすいメッセージに変換する。
-   * @param {OrbitEventPhotoAlbum} binding
+   * @param {OrbitEventPhotoAlbum} binding アルバム紐づけ情報
    * @returns {Promise<GooglePhotosAlbum>}
    */
   async function openAlbum(binding) {
     try {
       return await photosAPI.getAlbum(authStore.photoToken, binding.albumId);
     } catch (error) {
-      if (error?.status === 403 || error?.status === 404) {
+      if (/** @type {any} */ (error)?.status === 403 || /** @type {any} */ (error)?.status === 404) {
         throw new Error('このアルバムは作成者の Google フォトにあります。開くには作成者から共有してもらってください。');
       }
       throw error;
@@ -142,7 +143,7 @@ export const usePhotosStore = defineStore('photos', () => {
 
   /**
    * アルバム内の写真一覧を取得する
-   * @param {OrbitEventPhotoAlbum} binding
+   * @param {OrbitEventPhotoAlbum} binding アルバム紐づけ情報
    * @returns {Promise<GooglePhotosMediaItem[]>}
    */
   function listAlbumPhotos(binding) {
@@ -151,23 +152,24 @@ export const usePhotosStore = defineStore('photos', () => {
 
   /**
    * ファイルをアルバムへアップロードする（アルバム未作成なら自動で作成・共有される）
-   * @param {HandyCalendarEvent} evt
+   * @param {HandyCalendarEvent} evt 対象イベント
    * @param {{blob: Blob, fileName: string, mimeType: string}[]} files アップロードするファイル
-   * @returns {Promise<OrbitEventPhotoAlbum>} 紐づけ情報
+   * @returns {Promise<OrbitEventPhotoAlbum|null>} 紐づけ情報
    */
   async function uploadFiles(evt, files) {
     if (!files.length) return bindingOf(evt);
     if (!canUsePhotoSharing()) throw new Error('写真共有が有効になっていません。ユーザー設定で認証してください。');
-    isPhotoBusy.value = true;
+    userStore.setLoading(true);
     try {
       const binding = await ensureEventAlbum(evt);
+      /** @type {{uploadToken: string, fileName: string}[]} */
       const uploadTokens = [];
       for (const [index, file] of files.entries()) {
-        photoStatus.value = `写真をアップロードしています... (${index + 1}/${files.length})`;
+        userStore.setLoading(true, `写真をアップロードしています... (${index + 1}/${files.length})`);
         const uploadToken = await photosAPI.uploadMediaBytes(authStore.photoToken, file.blob, file.fileName, file.mimeType);
         if (uploadToken) uploadTokens.push({ uploadToken, fileName: file.fileName });
       }
-      photoStatus.value = 'アルバムに追加しています...';
+      userStore.setLoading(true, 'アルバムに追加しています...');
       await photosAPI.batchCreateMediaItems(
         authStore.photoToken,
         uploadTokens.map((item) => ({ simpleMediaItem: { uploadToken: item.uploadToken, fileName: item.fileName } })),
@@ -175,15 +177,14 @@ export const usePhotosStore = defineStore('photos', () => {
       );
       return binding;
     } finally {
-      isPhotoBusy.value = false;
-      photoStatus.value = '';
+      userStore.setLoading(false);
     }
   }
 
   /**
    * Google Photos Picker で選択した写真をアルバムへコピーする。
    * Picker API の選択結果は既存ライブラリ内のため、アルバム追加には再アップロードが必要。
-   * @param {HandyCalendarEvent} evt
+   * @param {HandyCalendarEvent} evt 対象イベント
    * @param {Window|null} pickerWindow 事前に開いたウィンドウ（ポップアップブロック回避用）
    * @returns {Promise<OrbitEventPhotoAlbum|null>} 紐づけ情報（キャンセル時は null）
    */
@@ -198,10 +199,10 @@ export const usePhotosStore = defineStore('photos', () => {
     try {
       const pollInterval = Math.max(PICKER_MIN_POLL_MS, durationToMs(session.pollingConfig?.pollInterval));
       const timeoutMs = Math.max(pollInterval, durationToMs(session.pollingConfig?.timeoutIn) || PICKER_TIMEOUT_MS);
-      const deadline = Date.now() + timeoutMs;
+      const deadline = dayjs().valueOf() + timeoutMs;
       let current = session;
       while (!current.mediaItemsSet) {
-        if (Date.now() > deadline) throw new Error('写真の選択がタイムアウトしました。');
+        if (dayjs().valueOf() > deadline) throw new Error('写真の選択がタイムアウトしました。');
         await new Promise((resolve) => window.setTimeout(resolve, pollInterval));
         current = await photosAPI.getPickerSession(authStore.photoToken, session.id);
       }
@@ -209,9 +210,10 @@ export const usePhotosStore = defineStore('photos', () => {
       const pickedItems = await photosAPI.listPickedMediaItems(authStore.photoToken, session.id);
       if (!pickedItems.length) return null;
 
+      /** @type {{blob: Blob, fileName: string, mimeType: string}[]} */
       const files = [];
       for (const [index, item] of pickedItems.entries()) {
-        photoStatus.value = `選択した写真を取得しています... (${index + 1}/${pickedItems.length})`;
+        userStore.setLoading(true, `選択した写真を取得しています... (${index + 1}/${pickedItems.length})`);
         if (!item.mediaFile?.baseUrl) continue;
         const blob = await photosAPI.downloadMediaFile(authStore.photoToken, item.mediaFile.baseUrl);
         files.push({ blob, fileName: item.mediaFile.filename ?? `photo-${index + 1}`, mimeType: item.mediaFile.mimeType ?? 'application/octet-stream' });
@@ -223,8 +225,6 @@ export const usePhotosStore = defineStore('photos', () => {
   }
 
   return {
-    isPhotoBusy,
-    photoStatus,
     canUsePhotoSharing,
     bindingOf,
     ensureEventAlbum,
@@ -234,4 +234,4 @@ export const usePhotosStore = defineStore('photos', () => {
     uploadFiles,
     uploadPickedPhotos,
   };
-});
+}

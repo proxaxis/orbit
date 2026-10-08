@@ -1,0 +1,63 @@
+/**
+ * カレンダーごとの公開状態（private / shared / unknown）を判定するコンポーザブル。
+ * ACL 一覧から所有者以外の共有ルールの有無を算出する。
+ */
+import { ref } from 'vue';
+import { useCalendars } from '@/composables/useCalendars.js';
+import { useAuthStore } from '@/stores/auth.js';
+import { useCalendarStore } from '@/stores/calendar.js';
+
+/** @type {Set<string>} Google Calendar がプライベートカレンダーの ACL に返すシステム主体 */
+const SYSTEM_CALENDAR_PRINCIPALS = new Set(['badd9bc48b578d2e8be8a95d2afabc3e4024e4876ab49d7cb0bd8e244f591ec9@group.calendar.google.com']);
+
+/**
+ * ACL 主体の値を比較用に正規化する
+ * @param {unknown} value ACL 主体の値
+ * @returns {string} 比較用に正規化した値
+ */
+function normalizePrincipal(value) {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+/**
+ * カレンダー公開状態の判定を提供するコンポーザブル
+ * @returns {Object} 共有状態の参照と読み込み関数
+ */
+export function useSharingStates() {
+  const calendars = useCalendars();
+  const authStore = useAuthStore();
+  const calendarStore = useCalendarStore();
+
+  /** @type {Ref<Record<string, 'private'|'shared'|'unknown'>>} カレンダーの共有状態 */
+  const sharingStates = ref({});
+
+  /**
+   * カレンダーの ACL を取得し、所有者以外の共有ルールがあるか判定する
+   * @returns {Promise<void>}
+   */
+  async function loadSharingStates() {
+    if (!authStore.token || !calendarStore.list.length) return;
+    const primaryCalendar = calendarStore.list.find((calendar) => calendar.primary);
+    const knownOwnerPrincipals = new Set([normalizePrincipal(primaryCalendar?.id), normalizePrincipal(primaryCalendar ? /** @type {{ dataOwner?: string }} */ (/** @type {unknown} */ (primaryCalendar)).dataOwner : undefined)].filter(Boolean));
+    const entries = await Promise.all(
+      calendarStore.list.map(async (calendar) => {
+        if (calendar.accessRole !== 'owner' && !calendar.primary) return [calendar.id, 'unknown'];
+        try {
+          const rules = await calendars.listAclRules(calendar.id);
+          const systemPrincipals = new Set([normalizePrincipal(calendar.id), normalizePrincipal(/** @type {{ dataOwner?: string }} */ (/** @type {unknown} */ (calendar)).dataOwner), ...SYSTEM_CALENDAR_PRINCIPALS]);
+          const dataOwner = normalizePrincipal(/** @type {{ dataOwner?: string }} */ (/** @type {unknown} */ (calendar)).dataOwner);
+          const belongsToAnotherOwner = Boolean(dataOwner && knownOwnerPrincipals.size && !knownOwnerPrincipals.has(dataOwner));
+          const relevantRules = rules.filter((rule) => !systemPrincipals.has(normalizePrincipal(rule.scope.value)));
+          const ownerCount = relevantRules.filter((rule) => rule.role === 'owner').length;
+          const hasSharingRule = belongsToAnotherOwner || ownerCount > 1 || relevantRules.some((rule) => rule.role !== 'owner' && ['user', 'group', 'domain'].includes(rule.scope.type));
+          return [calendar.id, hasSharingRule ? 'shared' : 'private'];
+        } catch {
+          return [calendar.id, 'unknown'];
+        }
+      }),
+    );
+    sharingStates.value = Object.fromEntries(entries);
+  }
+
+  return { sharingStates, loadSharingStates };
+}

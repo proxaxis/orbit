@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue';
 import emojiData from '@/assets/emoji-data.json';
-import { readOffline, writeOffline } from '@/services/offline-storage.js';
+import { CACHE_KEYS, readCache, writeCache } from '@/composables/useCache.js';
 import IconXMark from '@/components/icons/IconXMark.vue';
 import InlineEmoji from '@/components/InlineEmoji.vue';
 
@@ -23,32 +23,36 @@ const categories = [{ id: 'history', label: '履歴' }, ...Object.keys(emojiData
 const categoryLabelMap = Object.fromEntries(categories.map((category) => [category.id, category.label]));
 const editableCategoryIds = new Set(categories.filter((category) => category.id !== 'history').map((category) => category.id));
 const defaultCategoryId = categories.find((category) => category.id !== 'history').id;
-const historyKey = 'emoji-history';
-const storageKey = 'emoji-category-overrides';
+const historyKey = CACHE_KEYS.EMOJI_HISTORY;
+const storageKey = CACHE_KEYS.EMOJI_CATEGORY_OVERRIDES;
 const maxHistory = 48;
 const historyList = ref([]);
 const pickedEmoji = ref(null);
 const activeCategory = ref('history');
 
+/** カテゴリー上書き設定をキャッシュから読み込む */
 const loadOverrides = async () => {
-  const saved = await readOffline(storageKey, {});
+  const saved = await readCache(storageKey, {});
   categoryOverrides.value = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
 };
 
+/** カテゴリー上書き設定をキャッシュへ保存する */
 const persistOverrides = async () => {
-  await writeOffline(storageKey, categoryOverrides.value);
+  await writeCache(storageKey, categoryOverrides.value);
 };
 
+/** 絵文字の使用履歴をキャッシュから読み込む */
 const loadHistory = async () => {
-  const saved = await readOffline(historyKey, []);
+  const saved = await readCache(historyKey, []);
   historyList.value = Array.isArray(saved) ? saved : [];
   if (!historyList.value.length && activeCategory.value === 'history') {
     activeCategory.value = defaultCategoryId;
   }
 };
 
+/** 絵文字の使用履歴をキャッシュへ保存する */
 const persistHistory = async () => {
-  await writeOffline(historyKey, historyList.value);
+  await writeCache(historyKey, historyList.value);
 };
 
 Promise.all([loadOverrides(), loadHistory()]);
@@ -72,6 +76,7 @@ const normalizedItems = computed(() => {
   );
 });
 
+/** @param {string} emoji 使用履歴へ追加する絵文字 */
 const addToHistory = (emoji) => {
   if (!emoji) return;
   const exists = normalizedItems.value.some((item) => item.char === emoji);
@@ -81,12 +86,14 @@ const addToHistory = (emoji) => {
   historyList.value = nextList.slice(0, maxHistory);
 };
 
+/** @param {Object} item 絵文字データ @param {string} query 検索クエリ @returns {boolean} クエリに一致するか */
 const matchesQuery = (item, query) => {
   if (!query) return true;
   const haystack = [item.name, categoryLabelMap[item.category] || item.category].join(' ').toLowerCase();
   return query.split(/\s+/).every((token) => haystack.includes(token));
 };
 
+/** @param {Object[]} items 絵文字データ @returns {Object[]} 文字重複を除いた一覧 */
 const uniqueByChar = (items) => {
   return [...new Map(items.map((item) => [item.char, item])).values()];
 };
@@ -114,23 +121,27 @@ const previewCodepoints = computed(() => {
   return [...props.modelValue].map((char) => `U+${char.codePointAt(0).toString(16).toUpperCase()}`).join(' ');
 });
 
+/** @param {string} emoji 選択された絵文字を確定する */
 const selectEmoji = (emoji) => {
   addToHistory(emoji);
   emit('update:modelValue', emoji);
   closeModal();
 };
 
+/** @param {Event} event カテゴリー選択の変更イベント */
 const updateCategory = (event) => {
   if (!selectedItem.value) return;
   const nextCategory = event.target.value;
   categoryOverrides.value[selectedItem.value.char] = nextCategory;
 };
 
+/** 選択したカテゴリー上書きをリセットする */
 const resetCategory = () => {
   if (!selectedItem.value) return;
   delete categoryOverrides.value[selectedItem.value.char];
 };
 
+/** ランダムな絵文字を選択する */
 const randomEmoji = () => {
   const list = flatEmojiItems.value;
   if (!list.length) return;
@@ -141,6 +152,7 @@ const randomEmoji = () => {
   emit('update:modelValue', picked);
 };
 
+/** 絵文字選択モーダルを開く */
 const openModal = async () => {
   isOpen.value = true;
   await nextTick();
@@ -149,16 +161,19 @@ const openModal = async () => {
   }
 };
 
+/** 絵文字選択モーダルを閉じる */
 const closeModal = () => {
   isOpen.value = false;
 };
 
+/** @param {MouseEvent} event オーバーレイクリックでモーダルを閉じる */
 const handleOverlayClick = (event) => {
   if (event.target === event.currentTarget) {
     closeModal();
   }
 };
 
+/** @param {KeyboardEvent} event Esc キーでモーダルを閉じる */
 const handleKeydown = (event) => {
   if (event.key === 'Escape') {
     closeModal();

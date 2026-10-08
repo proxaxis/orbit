@@ -4,6 +4,7 @@ import IconGoogle from '@/components/icons/IconGoogle.vue';
 
 const authStore = useAuthStore();
 
+/** Google ログインへリダイレクトする */
 function handleLogin() {
   window.location.href = `${BFF_BASE_URL}/auth/login`;
 }

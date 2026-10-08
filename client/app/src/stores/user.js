@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import dayjs from '@/services/dayjs';
-import { readOffline, writeOffline, USER_SETTINGS_KEY } from '@/services/offline-storage.js';
+import { CACHE_KEYS, readCache, writeCache } from '@/composables/useCache.js';
 
 export const USER_FONT_FAMILIES = Object.freeze({
   SYSTEM: 'system-ui, sans-serif',
@@ -24,7 +24,7 @@ export const DEFAULT_THEME_COLOR = '#ff3434';
 /**
  * @typedef {'LIGHT' | 'DARK' | 'SYSTEM'} UserAvailableTheme ユーザが選択可能なテーマ設定
  * @typedef {'LIGHT' | 'DARK'} ResolvedTheme 実際に画面へ適用される解決済みテーマ
- * @typedef {'MOBILE' | 'TABLET' | 'DESKTOP'} DeviceType 画面幅に基づくデバイス種別
+ * @typedef {'MOBILE' | 'TABLET' | 'DESKTOP'} DeviceType デバイス種別（タッチ入力の有無と画面幅で判定）
  */
 
 export const useUserStore = defineStore('user', () => {
@@ -65,6 +65,26 @@ export const useUserStore = defineStore('user', () => {
       if (err instanceof Error) error.value = err;
       else error.value = new Error(String(err));
     }
+  }
+
+  /** @type {Ref<string>} @description トーストで表示するフィードバックメッセージ */
+  const toastMessage = ref('');
+
+  /**
+   * トーストメッセージを表示する
+   * @param {string} message 表示するメッセージ
+   * @returns {void}
+   */
+  function showToast(message) {
+    toastMessage.value = String(message ?? '');
+  }
+
+  /**
+   * 表示中のトーストメッセージを消去する
+   * @returns {void}
+   */
+  function clearToast() {
+    toastMessage.value = '';
   }
 
   /** @type {Ref<boolean>} @description ユーザーダイアログを表示しているかどうか */
@@ -178,30 +198,25 @@ export const useUserStore = defineStore('user', () => {
   });
 
   /**
-   * テーマを更新して DOM に反映する
+   * テーマ設定を更新して永続化する（DOM への反映は useTheme が担当）
    * @param {UserAvailableTheme} newTheme 適用するテーマ
    * @returns {void}
    */
-  function applyTheme(newTheme) {
+  function setTheme(newTheme) {
+    if (!['LIGHT', 'DARK', 'SYSTEM'].includes(newTheme)) return;
     userSelectedTheme.value = newTheme;
     saveSettings();
-
-    if (typeof document === 'undefined') return console.warn('applyTheme called in a non-browser environment. DOM manipulation is skipped.');
-
-    // Tailwind CSS 等の 'dark' クラス運用に対応
-    if (theme.value === 'DARK') document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
-
-    document.documentElement.setAttribute('data-theme', theme.value.toLowerCase());
   }
 
-  /** テーマカラーを CSS 変数へ反映します。 */
-  function applyThemeColor() {
-    if (typeof document === 'undefined') return;
-    const color = /^#[0-9a-fA-F]{6}$/.test(themeColor.value) ? themeColor.value : DEFAULT_THEME_COLOR;
-    document.documentElement.style.setProperty('--primary', color);
-    document.documentElement.style.setProperty('--primary-light', `color-mix(in srgb, ${color} 55%, transparent)`);
-    document.documentElement.style.setProperty('--selected', `color-mix(in srgb, ${color} 35%, transparent)`);
+  /**
+   * テーマカラーを更新して永続化する（DOM への反映は useTheme が担当）
+   * @param {string} color HEX 形式のテーマカラー
+   * @returns {void}
+   */
+  function setThemeColor(color) {
+    if (typeof color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(color)) return;
+    themeColor.value = color;
+    saveSettings();
   }
 
   // #endregion
@@ -220,6 +235,9 @@ export const useUserStore = defineStore('user', () => {
   /** @type {Ref<string[]>} @description 非表示にするカレンダー ID */
   const hiddenCalendarIds = ref([]);
 
+  /** @type {Ref<string[]>} @description カレンダービューに明示的に表示する期間指定共有カレンダー ID（既定は非表示） */
+  const visibleShareCalendarIds = ref([]);
+
   /** @type {Ref<string>} @description 予定作成時に使用するデフォルトカレンダー ID */
   const defaultCalendarId = ref('');
 
@@ -234,6 +252,12 @@ export const useUserStore = defineStore('user', () => {
     { index: 6, color: '#0a0dd6' },
     { index: 0, color: '#d32f2f' },
   ]);
+
+  /** @type {Ref<string>} @description カスタム休日（日付セルから登録する休日）の日付文字色 */
+  const customHolidayColor = ref('#d32f2f');
+
+  /** @type {Ref<string>} @description 日本の祝日の日付文字色 */
+  const holidayColor = ref('#d32f2f');
 
   /**
    * 色を白方向へ補間
@@ -263,8 +287,32 @@ export const useUserStore = defineStore('user', () => {
     return color && isOtherMonth ? lightenColor(color) : color;
   }
 
-  /** @type {Ref<boolean>} @description 小型カレンダーの表示有無（デフォルト: true）*/
-  const useMiniCalendar = ref(true);
+  /** @param {boolean} [isOtherMonth=false] 他月の日付かどうか @returns {string} カスタム休日の日付文字色 */
+  function getCustomHolidayColor(isOtherMonth = false) {
+    return isOtherMonth ? lightenColor(customHolidayColor.value) : customHolidayColor.value;
+  }
+
+  /** @param {boolean} [isOtherMonth=false] 他月の日付かどうか @returns {string} 祝日の日付文字色 */
+  function getHolidayColor(isOtherMonth = false) {
+    return isOtherMonth ? lightenColor(holidayColor.value) : holidayColor.value;
+  }
+
+  /** @param {string} color HEX 形式の祝日色 */
+  function setHolidayColor(color) {
+    if (typeof color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(color)) return;
+    holidayColor.value = color;
+    saveSettings();
+  }
+
+  /** @param {string} color HEX 形式のカスタム休日色 */
+  function setCustomHolidayColor(color) {
+    if (typeof color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(color)) return;
+    customHolidayColor.value = color;
+    saveSettings();
+  }
+
+  /** @type {Ref<boolean>} @description 小型カレンダーの表示有無（デフォルト: false）*/
+  const useMiniCalendar = ref(false);
 
   /** @type {Ref<boolean>} @description カレンダーのホイール操作で月を移動するかどうか */
   const useWheelMonthNavigation = ref(true);
@@ -274,6 +322,12 @@ export const useUserStore = defineStore('user', () => {
 
   /** @type {Ref<'FIXED'|'VARIABLE'>} @description 月表示のカレンダーセル高さ */
   const calendarCellHeightMode = ref('VARIABLE');
+
+  /** @type {Ref<'FILL'|'DOT'>} @description 終日イベントのバー表示方法（塗りつぶし / ドット） */
+  const allDayEventBarStyle = ref('FILL');
+
+  /** @type {Ref<'FILL'|'DOT'>} @description 時間指定イベントのバー表示方法（塗りつぶし / ドット） */
+  const timedEventBarStyle = ref('FILL');
 
   /** @type {Ref<'MONTH'|'WEEK'>} @description メインカレンダーの表示モード */
   const mainCalendarView = ref('MONTH');
@@ -293,20 +347,6 @@ export const useUserStore = defineStore('user', () => {
   /** @type {Ref<keyof typeof USER_TEXT_SIZE_VALUES>} @description カレンダー UI の文字サイズ */
   const calendarTextSize = ref('MEDIUM');
 
-  /** 選択中のフォントを CSS 変数へ反映します。 */
-  function applyFonts() {
-    if (typeof document === 'undefined') return;
-    document.documentElement.style.setProperty('--ui-font-family', USER_FONT_FAMILIES[uiFontFamily.value]);
-    document.documentElement.style.setProperty('--calendar-font-family', USER_FONT_FAMILIES[calendarFontFamily.value]);
-  }
-
-  /** 選択中の通常 UI の文字サイズを CSS 変数へ反映します。 */
-  function applyTextSizes() {
-    if (typeof document === 'undefined') return;
-    const sizes = USER_TEXT_SIZE_VALUES[uiTextSize.value];
-    Object.entries(sizes).forEach(([name, value]) => document.documentElement.style.setProperty(`--text-size-${name}`, value));
-  }
-
   /** @type {Ref<string[]>} 最近使ったイベントタイトル */
   const recentEventTitles = ref([]);
 
@@ -315,7 +355,7 @@ export const useUserStore = defineStore('user', () => {
     const normalizedTitle = title.trim();
     if (!normalizedTitle) return;
     recentEventTitles.value = [normalizedTitle, ...recentEventTitles.value.filter((item) => item !== normalizedTitle)].slice(0, 30);
-    writeOffline('recent-event-titles', recentEventTitles.value);
+    writeCache(CACHE_KEYS.RECENT_EVENT_TITLES, recentEventTitles.value);
   }
 
   /** @param {string} query @returns {string[]} 入力に一致するタイトル候補 */
@@ -325,16 +365,45 @@ export const useUserStore = defineStore('user', () => {
     return recentEventTitles.value.filter((title) => title.toLowerCase().includes(normalizedQuery)).slice(0, 8);
   }
 
+  /** @type {Ref<string[]>} 最近使ったイベントタグ */
+  const recentEventTags = ref([]);
+
+  /** @param {string[]} tags 保存するイベントタグ */
+  function rememberEventTags(tags) {
+    const normalized = (Array.isArray(tags) ? tags : []).map((tag) => String(tag).trim()).filter(Boolean);
+    if (!normalized.length) return;
+    const merged = [...normalized];
+    for (const tag of recentEventTags.value) {
+      if (!merged.includes(tag)) merged.push(tag);
+    }
+    recentEventTags.value = merged.slice(0, 50);
+    writeCache(CACHE_KEYS.RECENT_EVENT_TAGS, recentEventTags.value);
+  }
+
+  /** @param {string} query @returns {string[]} 入力に一致するタグ候補 */
+  function getRecentEventTagSuggestions(query) {
+    const normalizedQuery = String(query ?? '')
+      .trim()
+      .toLowerCase();
+    if (!normalizedQuery) return recentEventTags.value.slice(0, 8);
+    return recentEventTags.value.filter((tag) => tag.toLowerCase().includes(normalizedQuery)).slice(0, 8);
+  }
+
+  /** 現在の設定をキャッシュへ保存する */
   async function saveSettings() {
-    await writeOffline(USER_SETTINGS_KEY, {
+    await writeCache(CACHE_KEYS.USER_SETTINGS, {
       theme: userSelectedTheme.value,
       themeColor: themeColor.value,
       firstDayOfWeek: firstDayOfWeek.value,
       weekendDays: weekendDays.value,
+      customHolidayColor: customHolidayColor.value,
+      holidayColor: holidayColor.value,
       useMiniCalendar: useMiniCalendar.value,
       useWheelMonthNavigation: useWheelMonthNavigation.value,
       maxEventBarsPerCell: maxEventBarsPerCell.value,
       calendarCellHeightMode: calendarCellHeightMode.value,
+      allDayEventBarStyle: allDayEventBarStyle.value,
+      timedEventBarStyle: timedEventBarStyle.value,
       mainCalendarView: mainCalendarView.value,
       usePhotoSharing: usePhotoSharing.value,
       uiFontFamily: uiFontFamily.value,
@@ -344,21 +413,25 @@ export const useUserStore = defineStore('user', () => {
       weekdayLabels: weekdayLabels.value,
       calendarOrder: calendarOrder.value,
       hiddenCalendarIds: hiddenCalendarIds.value,
+      visibleShareCalendarIds: visibleShareCalendarIds.value,
       defaultCalendarId: defaultCalendarId.value,
       navPaneWidth: navPaneWidth.value,
       subPaneWidth: subPaneWidth.value,
     });
   }
 
+  /** キャッシュから設定を読み込み state に反映する */
   async function loadSettings() {
     try {
-      const saved = await readOffline(USER_SETTINGS_KEY, {});
+      const saved = await readCache(CACHE_KEYS.USER_SETTINGS, {});
       if (['LIGHT', 'DARK', 'SYSTEM'].includes(saved.theme)) userSelectedTheme.value = saved.theme;
       if (typeof saved.themeColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(saved.themeColor)) themeColor.value = saved.themeColor;
       if (Number.isInteger(saved.firstDayOfWeek) && saved.firstDayOfWeek >= 0 && saved.firstDayOfWeek <= 6) firstDayOfWeek.value = saved.firstDayOfWeek;
       if (Array.isArray(saved.weekendDays)) {
         weekendDays.value = saved.weekendDays.filter((/** @type {{ index?: number, color?: unknown }} */ day) => typeof day.index === 'number' && Number.isInteger(day.index) && day.index >= 0 && day.index <= 6 && typeof day.color === 'string');
       }
+      if (typeof saved.customHolidayColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(saved.customHolidayColor)) customHolidayColor.value = saved.customHolidayColor;
+      if (typeof saved.holidayColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(saved.holidayColor)) holidayColor.value = saved.holidayColor;
       if (typeof saved.useMiniCalendar === 'boolean') useMiniCalendar.value = saved.useMiniCalendar;
       if (typeof saved.useWheelMonthNavigation === 'boolean') useWheelMonthNavigation.value = saved.useWheelMonthNavigation;
       if (Number.isInteger(saved.maxEventBarsPerCell) && saved.maxEventBarsPerCell >= 1 && saved.maxEventBarsPerCell <= 10) {
@@ -367,7 +440,9 @@ export const useUserStore = defineStore('user', () => {
       if (saved.calendarCellHeightMode === 'FIXED' || saved.calendarCellHeightMode === 'VARIABLE') {
         calendarCellHeightMode.value = saved.calendarCellHeightMode;
       }
-      if (saved.mainCalendarView === 'MONTH' || saved.mainCalendarView === 'WEEK') mainCalendarView.value = saved.mainCalendarView;
+      if (saved.allDayEventBarStyle === 'FILL' || saved.allDayEventBarStyle === 'DOT') allDayEventBarStyle.value = saved.allDayEventBarStyle;
+      if (saved.timedEventBarStyle === 'FILL' || saved.timedEventBarStyle === 'DOT') timedEventBarStyle.value = saved.timedEventBarStyle;
+      if (saved.mainCalendarView === 'MONTH' || saved.mainCalendarView === 'MONTH_VERTICAL' || saved.mainCalendarView === 'WEEK') mainCalendarView.value = saved.mainCalendarView;
       if (typeof saved.usePhotoSharing === 'boolean') usePhotoSharing.value = saved.usePhotoSharing;
       if (typeof saved.uiFontFamily === 'string' && Object.hasOwn(USER_FONT_FAMILIES, saved.uiFontFamily)) {
         uiFontFamily.value = saved.uiFontFamily;
@@ -386,6 +461,7 @@ export const useUserStore = defineStore('user', () => {
       }
       if (Array.isArray(saved.calendarOrder)) calendarOrder.value = saved.calendarOrder.filter((/** @type {unknown} */ id) => typeof id === 'string');
       if (Array.isArray(saved.hiddenCalendarIds)) hiddenCalendarIds.value = [...new Set(saved.hiddenCalendarIds.filter((/** @type {unknown} */ id) => typeof id === 'string'))];
+      if (Array.isArray(saved.visibleShareCalendarIds)) visibleShareCalendarIds.value = [...new Set(saved.visibleShareCalendarIds.filter((/** @type {unknown} */ id) => typeof id === 'string'))];
       if (typeof saved.defaultCalendarId === 'string') defaultCalendarId.value = saved.defaultCalendarId;
       if (Number.isInteger(saved.navPaneWidth) && saved.navPaneWidth >= 260 && saved.navPaneWidth <= 600) navPaneWidth.value = saved.navPaneWidth;
       if (Number.isInteger(saved.subPaneWidth) && saved.subPaneWidth >= 260 && saved.subPaneWidth <= 600) subPaneWidth.value = saved.subPaneWidth;
@@ -438,6 +514,13 @@ export const useUserStore = defineStore('user', () => {
     saveSettings();
   }
 
+  /** @param {string} calendarId @param {boolean} isVisible */
+  function setShareCalendarVisibility(calendarId, isVisible) {
+    if (typeof calendarId !== 'string') return;
+    visibleShareCalendarIds.value = isVisible ? [...new Set([...visibleShareCalendarIds.value, calendarId])] : visibleShareCalendarIds.value.filter((id) => id !== calendarId);
+    saveSettings();
+  }
+
   /** @param {string} calendarId */
   function setDefaultCalendar(calendarId) {
     if (typeof calendarId !== 'string') return;
@@ -459,9 +542,9 @@ export const useUserStore = defineStore('user', () => {
     saveSettings();
   }
 
-  /** @param {'MONTH'|'WEEK'} mode メインカレンダーの表示モード */
+  /** @param {'MONTH'|'MONTH_VERTICAL'|'WEEK'} mode メインカレンダーの表示モード */
   function setMainCalendarView(mode) {
-    if (mode !== 'MONTH' && mode !== 'WEEK') return;
+    if (mode !== 'MONTH' && mode !== 'MONTH_VERTICAL' && mode !== 'WEEK') return;
     mainCalendarView.value = mode;
     saveSettings();
   }
@@ -473,12 +556,24 @@ export const useUserStore = defineStore('user', () => {
   }
 
   const settingsReady = loadSettings();
-  readOffline('recent-event-titles', []).then((titles) => {
+  readCache(CACHE_KEYS.RECENT_EVENT_TITLES, []).then((titles) => {
     if (Array.isArray(titles)) recentEventTitles.value = titles.filter((title) => typeof title === 'string').slice(0, 30);
+  });
+  readCache(CACHE_KEYS.RECENT_EVENT_TAGS, []).then((tags) => {
+    if (Array.isArray(tags)) recentEventTags.value = tags.filter((tag) => typeof tag === 'string').slice(0, 50);
   });
 
   /** @type {Ref<import('dayjs').Dayjs>} @description 現在表示している日付 */
   const nowUsingDate = ref(dayjs());
+
+  /**
+   * 表示中の日付を設定する（月の1日へ正規化する）
+   * @param {import('dayjs').Dayjs} date 設定する日付
+   * @returns {void}
+   */
+  function setNowUsingDate(date) {
+    nowUsingDate.value = date.startOf('month');
+  }
 
   /** 現在表示中の月から前月の1日へ移動 */
   function goPrevMonth() {
@@ -548,13 +643,31 @@ export const useUserStore = defineStore('user', () => {
     nowSelectedEvent.value = { eid: event.eid, cid: event.cid };
   }
 
-  /** @param {string} text @description クリップボードにテキストをコピー */
-  function writeClipboard(text) {
-    if (typeof navigator === 'undefined' || !navigator.clipboard) {
-      setError(true, new Error('Clipboard API is not available in this environment.'));
-      return;
-    }
-    navigator.clipboard.writeText(text).catch((err) => setError(true, err));
+  /** @type {Ref<{target: 'eventForm'|'shareForm', field: string}|null>} @description フォームがメインカレンダーに要求している日付選択（非 null の間カレンダーは日付ピックモード） */
+  const formDatePick = ref(null);
+
+  /** @type {Ref<{target: 'eventForm'|'shareForm', field: string, start: string, end: string}|null>} @description カレンダーで確定された日付選択結果（フォームが消費したら null に戻す） */
+  const formPickResult = ref(null);
+
+  /**
+   * @param {'eventForm'|'shareForm'} target 要求元フォーム
+   * @param {string} field 更新対象フィールド
+   * @description フォームからの日付選択要求を開始する
+   */
+  function beginFormDatePick(target, field) {
+    formPickResult.value = null;
+    formDatePick.value = { target, field };
+  }
+
+  /** @param {{target: 'eventForm'|'shareForm', field: string, start: string, end: string}} result @description 日付選択結果を確定してピックモードを終了する */
+  function resolveFormDatePick(result) {
+    formPickResult.value = result;
+    formDatePick.value = null;
+  }
+
+  /** @description 日付選択要求をキャンセルしてピックモードを終了する */
+  function cancelFormDatePick() {
+    formDatePick.value = null;
   }
 
   // #endregion
@@ -562,22 +675,34 @@ export const useUserStore = defineStore('user', () => {
   // #region 画面サイズ判定処理
 
   /** @type {Ref<number>} @description 現在のウィンドウ幅 */
-  const winInnerWidth = ref(typeof window !== undefined ? window.innerWidth : 1024);
+  const winInnerWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024);
 
-  /** @type {ComputedRef<DeviceType>} @description 現在のデバイス種別 */
+  /** @type {Ref<boolean>} @description タッチ操作が主入力のデバイスかどうか（hover 不可 + 粗いポインタ） */
+  const hasCoarsePointer = ref(typeof window !== 'undefined' ? window.matchMedia('(hover: none) and (pointer: coarse)').matches : false);
+
+  /**
+   * タッチデバイスかどうかを最新値で返す。
+   * `hasCoarsePointer` は useAppBootstrap が matchMedia の change を購読して更新するため、ここでは初期値として利用する。
+   * @returns {boolean} タッチ操作が主入力なら true
+   */
+  function checkCoarsePointer() {
+    return typeof window !== 'undefined' ? window.matchMedia('(hover: none) and (pointer: coarse)').matches : false;
+  }
+
+  /** @type {ComputedRef<DeviceType>} @description 現在のデバイス種別（タッチ入力なし: デスクトップ、タッチ入力あり + 狭い画面: モバイル、タッチ入力あり + 広い画面: タブレット） */
   const device = computed(() => {
+    if (!hasCoarsePointer.value) return 'DESKTOP';
     if (winInnerWidth.value < 768) return 'MOBILE';
-    if (winInnerWidth.value < 1024) return 'TABLET';
-    return 'DESKTOP';
+    return 'TABLET';
   });
 
-  /** @type {ComputedRef<boolean>} @description モバイル表示判定 ( < 768px) */
+  /** @type {ComputedRef<boolean>} @description モバイル判定（タッチデバイスかつ画面幅 < 768px） */
   const isMobile = computed(() => device.value === 'MOBILE');
 
-  /** @type {ComputedRef<boolean>} @description タブレット表示判定 (768px <= 幅 < 1024px) */
+  /** @type {ComputedRef<boolean>} @description タブレット判定（タッチデバイスかつ画面幅 >= 768px） */
   const isTablet = computed(() => device.value === 'TABLET');
 
-  /** @type {ComputedRef<boolean>} @description デスクトップ表示判定 (>= 1024px) */
+  /** @type {ComputedRef<boolean>} @description デスクトップ判定（タッチ操作が主入力でない環境） */
   const isDesktop = computed(() => device.value === 'DESKTOP');
 
   // #endregion
@@ -599,15 +724,24 @@ export const useUserStore = defineStore('user', () => {
     weekdayLabels,
     calendarOrder,
     hiddenCalendarIds,
+    visibleShareCalendarIds,
     defaultCalendarId,
     navPaneWidth,
     subPaneWidth,
     weekendDays,
+    customHolidayColor,
+    holidayColor,
+    getHolidayColor,
+    setHolidayColor,
     getWeekendColor,
+    getCustomHolidayColor,
+    setCustomHolidayColor,
     useMiniCalendar,
     useWheelMonthNavigation,
     maxEventBarsPerCell,
     calendarCellHeightMode,
+    allDayEventBarStyle,
+    timedEventBarStyle,
     mainCalendarView,
     usePhotoSharing,
     uiFontFamily,
@@ -617,7 +751,12 @@ export const useUserStore = defineStore('user', () => {
     recentEventTitles,
     rememberEventTitle,
     getRecentEventTitleSuggestions,
+    recentEventTags,
+    rememberEventTags,
+    getRecentEventTagSuggestions,
     winInnerWidth,
+    hasCoarsePointer,
+    checkCoarsePointer,
     device,
     isMobile,
     isTablet,
@@ -627,18 +766,27 @@ export const useUserStore = defineStore('user', () => {
     isCellClicked,
     daysMap,
     nowSelectedEvent,
+    formDatePick,
+    formPickResult,
+    beginFormDatePick,
+    resolveFormDatePick,
+    cancelFormDatePick,
     isOffline,
     timeZone,
+    setNowUsingDate,
     goPrevMonth,
     goNextMonth,
     goToday,
     setNowSelectedDate,
     setLoading,
     setError,
+    toastMessage,
+    showToast,
+    clearToast,
     setNowSelectedEvent,
     saveSettings,
-    applyFonts,
-    applyTextSizes,
+    setTheme,
+    setThemeColor,
     settingsReady,
     loadSettings,
     setFirstDayOfWeek,
@@ -647,6 +795,7 @@ export const useUserStore = defineStore('user', () => {
     setWeekdayLabels,
     setCalendarOrder,
     setCalendarVisibility,
+    setShareCalendarVisibility,
     setDefaultCalendar,
     setNavPaneWidth,
     setSubPaneWidth,
@@ -656,10 +805,7 @@ export const useUserStore = defineStore('user', () => {
     confirm,
     resolveConfirm,
     closeUserDialog,
-    applyTheme,
-    applyThemeColor,
     checkUserEnvironment,
     isAppInstalled,
-    writeClipboard,
   };
 });

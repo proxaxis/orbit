@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth.js';
 import { useCalendarStore } from '@/stores/calendar.js';
 import { useUserStore } from '@/stores/user.js';
-import * as gCalAPI from '@/services/google-calendar-api.js';
+import { useCalendars } from '@/composables/useCalendars.js';
 import MenuBar from '@/components/MenuBar.vue';
 import ColorPicker from '@/components/ColorPicker.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
@@ -14,6 +14,7 @@ import { getRandomCalendarListColorId } from '@/services/google-calendar-colors.
 const router = useRouter();
 const authStore = useAuthStore();
 const calendarStore = useCalendarStore();
+const calendars = useCalendars();
 const userStore = useUserStore();
 
 /** @type {Ref<string | null>} @description 入力されたカレンダー ID に関するエラー */
@@ -56,8 +57,7 @@ async function submit() {
       colorRgbFormat: true,
       selected: true,
     };
-    const entry = /** @type {GoogleCalendarListEntry} */ (await gCalAPI.insertCalendarListEntry(authStore.token, body));
-    calendarStore.addCalendar(entry);
+    await calendars.addCalendarListEntry(body);
     router.push({ name: 'Home' });
   } catch (err) {
     userStore.setError(true, err);

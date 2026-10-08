@@ -12,6 +12,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue']);
 
+/** ボタンのクリックで ON/OFF を切り替える */
 const handleToggle = () => {
   emit('update:modelValue', !props.modelValue);
 };

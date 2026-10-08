@@ -1,4 +1,8 @@
 <script setup>
+import { useUserStore } from '@/stores/user.js';
+
+const userStore = useUserStore();
+
 const props = defineProps({
   activePane: { type: String, required: true },
   mobileSubPaneHeight: { type: Number, required: true },
@@ -72,7 +76,7 @@ function setMobileSubContent(element) {
       </div>
     </main>
 
-    <aside class="sub-pane" :class="{ 'is-collapsing': props.isCollapsingMobileSub }" :style="{ flexBasis: `${props.mobileSubPaneHeight}px` }" @touchstart="onSubTouchStart" @touchmove="onSubTouchMove" @touchend="onSubTouchEnd" @touchcancel="onSubTouchEnd">
+    <aside class="sub-pane" v-show="!userStore.formDatePick" :class="{ 'is-collapsing': props.isCollapsingMobileSub }" :style="{ flexBasis: `${props.mobileSubPaneHeight}px` }" @touchstart="onSubTouchStart" @touchmove="onSubTouchMove" @touchend="onSubTouchEnd" @touchcancel="onSubTouchEnd">
       <div :ref="setMobileSubContent" class="aside-content sub-pane-content" @touchstart="onContentTouchStart">
         <router-view name="sub" v-slot="{ Component }">
           <component :is="Component" :select-pane="props.selectPane" :collapse-mobile-sub-pane="props.collapseMobileSubPane" />

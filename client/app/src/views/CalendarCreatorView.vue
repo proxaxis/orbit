@@ -2,9 +2,8 @@
 import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth.js';
-import { useCalendarStore } from '@/stores/calendar.js';
 import { useUserStore } from '@/stores/user.js';
-import * as gCalAPI from '@/services/google-calendar-api.js';
+import { useCalendars } from '@/composables/useCalendars.js';
 import { getRandomCalendarListColorId } from '@/services/google-calendar-colors.js';
 import MenuBar from '@/components/MenuBar.vue';
 import ColorPicker from '@/components/ColorPicker.vue';
@@ -15,7 +14,7 @@ import AskLoginMessage from '@/components/AskLoginMessage.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
-const calendarStore = useCalendarStore();
+const calendars = useCalendars();
 const userStore = useUserStore();
 
 /** @type {Ref<string | null>} */
@@ -29,6 +28,7 @@ const vmForm = reactive({
   colorId: getRandomCalendarListColorId().colorId,
 });
 
+/** @returns {boolean} フォーム入力が正当かどうか */
 function checkFormInput() {
   formErrorMessage.value = null;
   if (!vmForm.summary.trim()) {
@@ -50,27 +50,8 @@ async function submit() {
       location: vmForm.location.trim() || undefined,
       timeZone: vmForm.timeZone,
     };
-    const resource = /** @type {GoogleCalendarResource} */ (await gCalAPI.insertCalendar(authStore.token, body));
+    const resource = await calendars.createCalendar(body, vmForm.colorId);
     if (!resource?.id) throw new Error('Failed to create calendar. No calendar ID returned.');
-    /** @type {GoogleCalendarListEntry} */
-    const returnEntry = await gCalAPI.patchCalendarListEntry(authStore.token, resource.id, { colorId: vmForm.colorId });
-    /** @type {GoogleCalendarListEntry} */
-    const entry = {
-      kind: 'calendar#calendarListEntry',
-      etag: returnEntry.etag ?? '',
-      id: returnEntry.id,
-      summary: returnEntry.summary,
-      description: returnEntry.description,
-      location: returnEntry.location,
-      timeZone: returnEntry.timeZone,
-      colorId: vmForm.colorId,
-      backgroundColor: returnEntry.backgroundColor,
-      foregroundColor: returnEntry.foregroundColor,
-      accessRole: 'owner',
-      defaultReminders: [],
-      autoAcceptInvitations: false,
-    };
-    calendarStore.addCalendar(entry);
     router.push({ name: 'Home' });
   } catch (err) {
     userStore.setError(true, err);

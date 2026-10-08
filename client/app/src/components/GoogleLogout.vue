@@ -1,8 +1,10 @@
 <script setup>
 import { useAuthStore } from '@/stores/auth.js';
+import { useAuth } from '@/composables/useAuth.js';
 import { useUserStore } from '@/stores/user.js';
 
 const authStore = useAuthStore();
+const auth = useAuth();
 const userStore = useUserStore();
 
 /**
@@ -12,7 +14,7 @@ const userStore = useUserStore();
 async function handleLogout() {
   userStore.setLoading(true, 'Logging out...');
   try {
-    await authStore.logout();
+    await auth.logout();
   } finally {
     userStore.setLoading(false);
   }

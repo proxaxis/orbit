@@ -3,37 +3,53 @@ import { computed, reactive, ref, onMounted, onUnmounted, watch } from 'vue';
 import dayjs, { toDayjs } from '@/services/dayjs.js';
 import { useUserStore } from '@/stores/user.js';
 import { useCalendarStore } from '@/stores/calendar.js';
-import { useEventStore } from '@/stores/event.js';
 import { usePeopleStore } from '@/stores/people.js';
-import { useAuthStore } from '@/stores/auth.js';
-import { usePhotosStore } from '@/stores/photos.js';
+import { useEvents } from '@/composables/useEvents.js';
+import { usePeople } from '@/composables/usePeople.js';
+import { usePhotos } from '@/composables/usePhotos.js';
+import { useAuth } from '@/composables/useAuth.js';
 import TimezoneSelecter from '@/components/TimezoneSelecter.vue';
 import CalendarRibbon from '@/components/CalendarRibbon.vue';
 import EmojiSelecter from '@/components/EmojiSelecter.vue';
 import IconAnglesDown from '@/components/icons/IconAnglesDown.vue';
-import IconXMark from '@/components/icons/IconXMark.vue';
-import { WEEKDAYS, buildRecurrence, parseRecurrence } from '@/services/rrule.js';
-import { ensureNotificationPermission, notificationPermission, rescheduleNotifications } from '@/services/notifications.js';
+import { buildRecurrence, parseRecurrence } from '@/services/rrule.js';
+import { focusNextOnEnter } from '@/services/form-focus.js';
+import { ensureNotificationPermission, rescheduleNotifications } from '@/composables/useNotifications.js';
 import IconCalendar from '@/components/icons/IconCalendar.vue';
-import IconBell from '@/components/icons/IconBell.vue';
-import DatePicker from '@/components/DatePicker.vue';
+import SuggestPulldown from '@/components/SuggestPulldown.vue';
 import AccordionMenu from '@/components/AccordionMenu.vue';
-import IconPlus from '@/components/icons/IconPlus.vue';
-import IconImage from '@/components/icons/IconImage.vue';
-import IconArrowUpRightFromSquare from '@/components/icons/IconArrowUpRightFromSquare.vue';
+import EventFormAttendeeField from '@/components/items/EventFormAttendeeField.vue';
+import EventFormRecurrenceField from '@/components/items/EventFormRecurrenceField.vue';
+import EventFormReminderField from '@/components/items/EventFormReminderField.vue';
+import EventFormPhotoAlbumField from '@/components/items/EventFormPhotoAlbumField.vue';
+import EventFormColorField from '@/components/items/EventFormColorField.vue';
+import EventFormTemplateSaveDialog from '@/components/items/EventFormTemplateSaveDialog.vue';
+import { useEventTemplates, createEventTemplate } from '@/composables/useEventTemplates.js';
+import { normalizeTags, appendTagsToDescription, TAGS_SHARED_PROPERTY } from '@/services/event-tags.js';
+import IconFloppyDisk from '@/components/icons/IconFloppyDisk.vue';
+import IconRotateLeft from '@/components/icons/IconRotateLeft.vue';
+import IconFileCirclePlus from '@/components/icons/IconFileCirclePlus.vue';
 
 const props = defineProps({
   submitLabel: { type: String, default: '保存' },
+  /** @type {boolean} 複製モード（選択中のイベントの内容をフォームへ複写し、新規作成として送信する） */
+  clone: { type: Boolean, default: false },
+  /** @type {OrbitEventTemplate|null} 適用するイベントテンプレート（日時はフォームの既定値を維持する） */
+  template: { type: Object, default: null },
+  /** @type {{start: string, end: string, isAllDay: boolean}|null} カレンダーのドラッグ選択などから引き継ぐ初期日時（終日の end は含む側の日付） */
+  initialRange: { type: Object, default: null },
 });
 
 const emit = defineEmits(['submit', 'cancel']);
 
 const userStore = useUserStore();
 const calendarStore = useCalendarStore();
-const eventStore = useEventStore();
 const peopleStore = usePeopleStore();
-const authStore = useAuthStore();
-const photosStore = usePhotosStore();
+const events = useEvents();
+const people = usePeople();
+const photos = usePhotos();
+const auth = useAuth();
+const eventTemplates = useEventTemplates();
 
 // #region State
 /** @type {Ref<boolean>} カレンダーセレクターが開いているかどうか */
@@ -42,18 +58,14 @@ const isOpenCalendarSelecter = ref(false);
 const isSearchingPeople = ref(false);
 /** @type {Ref<string[]>} 最近使ったタイトル候補 */
 const titleSuggestions = ref([]);
-/** @type {Ref<string|null>} フォームの日付と時間に関するエラーメッセージ */
-const dateTimeError = ref(null);
 /** @type {Ref<HandyCalendarEvent|null>} オリジナルのイベントデータ */
 const originalEvent = ref(null);
 /** @type {Ref<string>} 出席者の検索クエリ */
 const attendeeQuery = ref('');
 /** @type {Ref<Array<GoogleCalendarAttendee & { email: string }>>} 招待済み参加者 */
 const attendees = ref([]);
-/** @type {Ref<string[]>} People 登録チェックが入った未知メールアドレス */
-const peopleRegistrationEmails = ref([]);
-/** @type {Ref<'startDate'|'endDate'|null>} 開いている日付ピッカーの対象 */
-const openDatePicker = ref(null);
+/** @type {Ref<string>} タグ入力欄（空白・カンマ区切り） */
+const eventTagsInput = ref('');
 /** @type {number|null} People API 検索のデバウンスタイマー */
 let peopleSearchTimer = null;
 /** @type {number} People API 検索の世代 */
@@ -62,12 +74,16 @@ let peopleSearchGeneration = 0;
 const dateFields = reactive({ startDate: '', endDate: '', startTime: '', endTime: '' });
 /** @type {Ref<{value: number, unit: 'minute'|'hour'|'day'}[]>} イベント開始前に送る通知の一覧 */
 const reminders = ref([]);
+/** @type {Ref<string>} イベント個別のカラー ID（'' はカレンダーの色を使う） */
+const eventColorId = ref('');
 /** @type {Ref<boolean>} 保存時に写真共有アルバムを作成するか */
 const createPhotoAlbum = ref(false);
+/** @type {Ref<boolean>} テンプレート保存ダイアログを開いているか */
+const isTemplateSaveDialogOpen = ref(false);
 /** 写真共有機能が利用可能かどうか（設定で有効化済み + OAuth 認証済み + オンライン） */
-const photoAlbumAvailable = computed(() => photosStore.canUsePhotoSharing());
-/** @type {ComputedRef<OrbitEventPhotoAlbum|null>} 編集中のイベントに紐づく既存の共有アルバム */
-const existingPhotoAlbum = computed(() => photosStore.bindingOf(originalEvent.value));
+const photoAlbumAvailable = computed(() => photos.canUsePhotoSharing());
+/** @type {ComputedRef<OrbitEventPhotoAlbum|null>} 編集中のイベントに紐づく既存の共有アルバム（複製時は元の紐づけを引き継がない） */
+const existingPhotoAlbum = computed(() => (props.clone ? null : photos.bindingOf(originalEvent.value)));
 /** 通知設定の初期値スナップショット（変更検知用） */
 let initialReminderKey = '[]';
 /** popup 以外（email など）の既存リマインダー（編集 UI 対象外のため送信時にそのまま保持する） */
@@ -125,19 +141,12 @@ function updateDateTimeField(field, event) {
   dateFields[field] = input.value.replace(/\D/g, '').slice(0, maxLength);
 }
 
-/** @param {'startDate'|'endDate'} field */
+/** @param {'startDate'|'endDate'} field 日付ボタン押下でメインカレンダーからの日付選択を開始する */
 function openDatePickerFor(field) {
-  openDatePicker.value = field;
-}
-
-/** @param {'startDate'|'endDate'} field @returns {string} DatePicker 用の ISO 日付 */
-function datePickerValue(field) {
-  const value = dateFields[field];
-  const today = dayjs();
-  if (value.length === 8) return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
-  if (value.length === 6) return `20${value.slice(0, 2)}-${value.slice(2, 4)}-${value.slice(4, 6)}`;
-  if (value.length === 4) return `${today.year()}-${value.slice(0, 2)}-${value.slice(2, 4)}`;
-  return today.format('YYYY-MM-DD');
+  // 対象フィールドの月がカレンダーに表示されるようにする
+  const base = field === 'startDate' ? formData.startDateTime : formData.endDateTime;
+  if (base?.isValid?.()) userStore.nowUsingDate = base;
+  userStore.beginFormDatePick('eventForm', field);
 }
 
 /** @param {'startDate'|'endDate'} field @param {string} value */
@@ -148,8 +157,22 @@ function selectDate(field, value) {
   const updated = selectedDate.hour(current.hour()).minute(current.minute()).second(current.second()).millisecond(current.millisecond());
   if (field === 'startDate') formData.startDateTime = updated;
   else formData.endDateTime = updated;
-  openDatePicker.value = null;
 }
+
+// メインカレンダーで確定された日付選択をフォームへ反映する（単日クリックは対象フィールドのみ、範囲ドラッグは開始日と終了日の両方）
+watch(
+  () => userStore.formPickResult,
+  (result) => {
+    if (!result || result.target !== 'eventForm') return;
+    userStore.formPickResult = null;
+    if (result.end && result.end !== result.start) {
+      selectDate('startDate', result.start);
+      selectDate('endDate', result.end);
+      return;
+    }
+    selectDate(result.field, result.start);
+  },
+);
 
 /**
  * 分数を通知入力行の {value, unit} 形式に変換する
@@ -365,25 +388,32 @@ function selectRecentTitle(title) {
   titleSuggestions.value = [];
 }
 
-/** @param {KeyboardEvent} keyboardEvent Enter で次の入力項目へ移動します。 */
-function focusNextOnEnter(keyboardEvent) {
-  const current = keyboardEvent.currentTarget;
-  if (!(current instanceof HTMLInputElement || current instanceof HTMLTextAreaElement || current instanceof HTMLButtonElement)) return;
-  const form = current.form;
-  if (!form) return;
-  const fields = Array.from(form.querySelectorAll('[data-enter-focus]'));
-  const index = fields.indexOf(current);
-  const next = fields[index + 1];
-  if (!next) return;
-  keyboardEvent.preventDefault();
-  /** @type {HTMLElement} */ (next).focus();
+/** @type {ComputedRef<string>} タグ入力欄の末尾トークン（サジェストの検索クエリ） */
+const tagInputFragment = computed(() => {
+  const parts = eventTagsInput.value.split(/[\s,]+/);
+  return parts[parts.length - 1] ?? '';
+});
+
+/** @type {ComputedRef<string[]>} 過去に使ったタグの候補（入力済みのタグは除く） */
+const tagSuggestions = computed(() => {
+  const existing = new Set(normalizeTags(eventTagsInput.value));
+  return userStore.getRecentEventTagSuggestions(tagInputFragment.value).filter((tag) => !existing.has(tag));
+});
+
+/** @param {string} tag 候補から選択したタグ（末尾トークンを置き換える） */
+function selectTagSuggestion(tag) {
+  eventTagsInput.value = eventTagsInput.value.replace(/[^\s,]*$/, `${tag} `);
 }
 
+/** @returns {boolean} 日時入力が正当かどうか */
 function validateDateTime() {
-  dateTimeError.value = null;
-
+  // 終日イベントは「終了日（含む）」が開始日より前にならないよう矯正する
+  if (formData.isAllDay && formData.endDateTime.isBefore(formData.startDateTime, 'day')) {
+    formData.endDateTime = formData.startDateTime;
+    dateFields.endDate = dateFields.startDate;
+  }
   if (!formData.isAllDay && formData.endDateTime.toDate() <= formData.startDateTime.toDate()) {
-    dateTimeError.value = 'Set the end date or time after the start date or time.';
+    userStore.showToast('Set the end date or time after the start date or time.');
     return false;
   }
   return true;
@@ -391,6 +421,7 @@ function validateDateTime() {
 // #endregion
 
 // #region Form submission and attendees
+/** フォームを検証して送信イベントを発行する */
 function submitForm() {
   if (!validateDateTime()) return;
   const recurrenceData = buildRecurrence(
@@ -403,23 +434,30 @@ function submitForm() {
     }),
   );
   const shared = { ...(formData.icon ? { icon: formData.icon } : {}), ...recurrenceData.shared };
+  // タグは shared 拡張プロパティへ保持し、検索に効くよう description 末尾にも #tag として付与する
+  const tags = normalizeTags(eventTagsInput.value);
+  if (tags.length) shared[TAGS_SHARED_PROPERTY] = JSON.stringify(tags);
   const privateProperties = { ...(originalEvent.value?.raw?.extendedProperties?.private ?? {}) };
   if (formData.privacyNote.trim()) privateProperties.privacyNote = formData.privacyNote.trim();
   else delete privateProperties.privacyNote;
   const body = {
     summary: formData.summary.trim(),
-    description: formData.description.trim() || undefined,
+    // イベント個別の色。未選択で編集中のイベントに色が設定済みなら明示的にクリアする（PUT は完全置換のため省略でも解除される）
+    ...(eventColorId.value ? { colorId: eventColorId.value } : originalEvent.value?.eventColorId ? { colorId: null } : {}),
+    description: appendTagsToDescription(formData.description.trim(), tags) || undefined,
     location: formData.location.trim() || undefined,
     ...(attendees.value.length ? { attendees: attendees.value } : {}),
     ...(Object.keys(shared).length || Object.keys(privateProperties).length ? { extendedProperties: { ...(Object.keys(shared).length ? { shared } : {}), ...(Object.keys(privateProperties).length ? { private: privateProperties } : { private: {} }) } } : {}),
     ...(recurrenceData.recurrence ? { recurrence: recurrenceData.recurrence } : {}),
     start: formData.isAllDay ? { date: formData.startDateTime.format('YYYY-MM-DD') } : { dateTime: formData.startDateTime.toISOString(), timeZone: formData.timeZone },
-    end: formData.isAllDay ? { date: formData.endDateTime.format('YYYY-MM-DD') } : { dateTime: formData.endDateTime.toISOString(), timeZone: formData.timeZone },
+    // 終日イベントの end.date は排他のため、フォームで扱う「終了日（含む）」の翌日を送る
+    end: formData.isAllDay ? { date: formData.endDateTime.add(1, 'day').format('YYYY-MM-DD') } : { dateTime: formData.endDateTime.toISOString(), timeZone: formData.timeZone },
   };
   const reminderMinutes = reminderMinutesList();
   const reminderKey = JSON.stringify([...reminderMinutes].sort((a, b) => a - b));
-  if (reminderKey !== initialReminderKey) {
-    // 通知設定が変更された場合のみ reminders を送信する（未変更ならカレンダー既定値のまま）
+  if (props.clone || props.template || reminderKey !== initialReminderKey) {
+    // 通知設定が変更された場合のみ reminders を送信する（未変更ならカレンダー既定値のまま）。
+    // 複製時は元のイベントの通知設定を引き継ぐため常に送信する。
     const overrides = [...preservedReminderOverrides, ...reminderMinutes.map((minutes) => ({ method: 'popup', minutes }))];
     body.reminders = overrides.length ? { useDefault: false, overrides } : { useDefault: false };
     if (reminderMinutes.length) {
@@ -431,17 +469,9 @@ function submitForm() {
   emit('submit', {
     body,
     calendarId: formData.calendarId,
-    peopleToCreate: peopleRegistrationEmails.value,
     attendees: attendees.value,
     createPhotoAlbum: createPhotoAlbum.value && !existingPhotoAlbum.value,
   });
-}
-
-/** @param {KeyboardEvent} keyboardEvent 招待先入力の Enter 処理 */
-function addUnknownAttendee(keyboardEvent) {
-  if (keyboardEvent.key !== 'Enter') return;
-  keyboardEvent.preventDefault();
-  addUnknownEmail();
 }
 
 /** 入力中のメールアドレスを未知の招待先として追加します。 */
@@ -449,7 +479,6 @@ function addUnknownEmail() {
   const email = attendeeQuery.value.trim();
   if (!email || email.startsWith('@') || !email.includes('@') || attendees.value.some((attendee) => attendee.email === email)) return;
   attendees.value.push({ email, responseStatus: 'needsAction' });
-  peopleRegistrationEmails.value.push(email);
   attendeeQuery.value = '';
   peopleStore.clearSuggestions();
 }
@@ -466,18 +495,75 @@ function addAttendee(person) {
 /** @param {string} email 招待先メールアドレスを削除します。 */
 function removeAttendee(email) {
   attendees.value = attendees.value.filter((attendee) => attendee.email !== email);
-  peopleRegistrationEmails.value = peopleRegistrationEmails.value.filter((item) => item !== email);
-}
-
-/** @param {string} email People 登録対象を切り替えます。 */
-function togglePeopleRegistration(email) {
-  if (peopleRegistrationEmails.value.includes(email)) peopleRegistrationEmails.value = peopleRegistrationEmails.value.filter((item) => item !== email);
-  else peopleRegistrationEmails.value.push(email);
 }
 
 /** 入力欄からフォーカスが外れた後、候補選択の時間を確保して一覧を閉じます。 */
 function clearPeopleSuggestionsLater() {
   window.setTimeout(() => peopleStore.clearSuggestions(), 150);
+}
+// #endregion
+
+// #region Event templates
+
+/**
+ * テンプレートの内容をフォームへ反映する。
+ * 日時は保持しないため、開始日は選択中の日付、終了日時はテンプレートの所要時間から再構成する。
+ * @param {OrbitEventTemplate} template 適用するテンプレート
+ */
+function applyTemplate(template) {
+  const event = template.event ?? {};
+  formData.endDateTime = formData.startDateTime.add(event.durationMinutes ?? 60, 'minute');
+  Object.assign(formData, {
+    summary: event.summary ?? '',
+    description: event.description ?? '',
+    location: event.location ?? '',
+    privacyNote: event.privacyNote ?? '',
+    calendarId: calendarStore.listWritableCalendars.some((calendar) => calendar.id === event.calendarId) ? event.calendarId : formData.calendarId,
+    icon: event.icon ?? '',
+    isAllDay: Boolean(event.isAllDay),
+    timeZone: event.timeZone || userStore.timeZone,
+  });
+  if (event.recurrence) Object.assign(recurrence, event.recurrence);
+  attendees.value = (event.attendees ?? []).filter((attendee) => typeof attendee.email === 'string').map((attendee) => ({ email: attendee.email, ...(attendee.displayName ? { displayName: attendee.displayName } : {}), responseStatus: 'needsAction' }));
+  reminders.value = (event.reminders ?? []).map((reminder) => ({ ...reminder }));
+  preservedReminderOverrides = (event.preservedReminderOverrides ?? []).map((override) => ({ ...override }));
+  createPhotoAlbum.value = Boolean(event.createPhotoAlbum);
+  eventColorId.value = event.eventColorId ?? '';
+  eventTagsInput.value = normalizeTags(event.tags ?? []).join(' ');
+}
+
+/**
+ * 現在のフォーム内容をイベントテンプレートとして保存する
+ * @param {{name: string, description: string}} meta テンプレートの名前と説明
+ */
+async function saveAsTemplate({ name, description }) {
+  isTemplateSaveDialogOpen.value = false;
+  await eventTemplates.ensureLoaded();
+  await eventTemplates.addTemplate(
+    createEventTemplate({
+      name,
+      description,
+      snapshot: {
+        summary: formData.summary,
+        description: formData.description,
+        location: formData.location,
+        privacyNote: formData.privacyNote,
+        calendarId: formData.calendarId,
+        icon: formData.icon,
+        isAllDay: formData.isAllDay,
+        durationMinutes: formData.endDateTime.diff(formData.startDateTime, 'minute'),
+        timeZone: formData.timeZone,
+        attendees: attendees.value,
+        reminders: reminders.value,
+        preservedReminderOverrides,
+        recurrence: { ...recurrence },
+        createPhotoAlbum: createPhotoAlbum.value,
+        eventColorId: eventColorId.value,
+        tags: normalizeTags(eventTagsInput.value),
+      },
+    }),
+  );
+  userStore.showToast('テンプレートを保存しました');
 }
 // #endregion
 
@@ -495,7 +581,7 @@ watch(attendeeQuery, (query, _previousQuery, onCleanup) => {
   isSearchingPeople.value = true;
   peopleSearchTimer = window.setTimeout(async () => {
     try {
-      await peopleStore.search(normalizedQuery);
+      await people.search(normalizedQuery);
     } finally {
       if (searchGeneration === peopleSearchGeneration) isSearchingPeople.value = false;
       peopleSearchTimer = null;
@@ -520,10 +606,16 @@ onMounted(async () => {
   try {
     await userStore.settingsReady;
     // 写真共有が有効ならトークンを復元してアルバム作成セクションを表示できるようにする
-    if (userStore.usePhotoSharing) authStore.ensurePhotoToken().catch(() => null);
+    if (userStore.usePhotoSharing) auth.ensurePhotoToken().catch(() => null);
     // 編集対象のイベントが選択されていない場合は新規作成
     if (!userStore.nowSelectedEvent) {
       originalEvent.value = null;
+      // ドラッグ選択などから渡された初期範囲。終日の end は「含む側」の日付として受け取る
+      const range = props.initialRange;
+      const rangeStart = range ? toDayjs(range.start) : null;
+      const rangeEnd = range ? toDayjs(range.end) : null;
+      const hasRange = Boolean(rangeStart?.isValid?.());
+      const isAllDay = range ? Boolean(range.isAllDay) : true;
       Object.assign(formData, {
         summary: '',
         description: '',
@@ -531,23 +623,27 @@ onMounted(async () => {
         privacyNote: '',
         calendarId: initialCalendarId.value,
         icon: '',
-        isAllDay: true,
-        startDateTime: userStore.nowSelectedDate ? toDayjs(userStore.nowSelectedDate) : toDayjs(),
-        endDateTime: userStore.nowSelectedDate ? toDayjs(userStore.nowSelectedDate).add(1, 'hour') : toDayjs().add(1, 'hour'),
+        isAllDay,
+        startDateTime: hasRange ? rangeStart : userStore.nowSelectedDate ? toDayjs(userStore.nowSelectedDate) : toDayjs(),
+        endDateTime: rangeEnd?.isValid?.() ? rangeEnd : userStore.nowSelectedDate ? toDayjs(userStore.nowSelectedDate).add(1, 'hour') : toDayjs().add(1, 'hour'),
         timeZone: userStore.timeZone,
       });
       Object.assign(recurrence, { frequency: '', interval: 1, weekdays: [], monthDay: '', month: '', count: '', until: '', exclusions: '', holidayAdjustment: '' });
+      eventColorId.value = '';
+      eventTagsInput.value = '';
+      // テンプレート適用時は日時以外の全項目をテンプレートの値で上書きする
+      if (props.template) applyTemplate(props.template);
       Object.assign(dateFields, {
         startDate: formData.startDateTime.format('MMDD'),
         endDate: formData.endDateTime.format('MMDD'),
         startTime: formData.startDateTime.format('HHmm'),
         endTime: formData.endDateTime.format('HHmm'),
       });
-      initReminders(null, formData.calendarId);
+      if (!props.template) initReminders(null, formData.calendarId);
     }
     // 編集対象のイベントが選択されている場合は、イベントを取得してフォームに反映
     else {
-      originalEvent.value = await eventStore.getEventById(userStore.nowSelectedEvent.eid, userStore.nowSelectedEvent.cid);
+      originalEvent.value = await events.getEventById(userStore.nowSelectedEvent.eid, userStore.nowSelectedEvent.cid);
 
       Object.assign(formData, {
         summary: originalEvent.value?.summary ?? '',
@@ -558,7 +654,8 @@ onMounted(async () => {
         icon: originalEvent.value?.icon ?? '',
         isAllDay: !!originalEvent.value?.isAllDay,
         startDateTime: originalEvent.value?.startDateTime,
-        endDateTime: originalEvent.value?.endDateTime,
+        // 終日イベントの raw end は排他のため、フォームでは「終了日（含む）」へ変換する
+        endDateTime: originalEvent.value?.isAllDay ? originalEvent.value?.endDateTime?.subtract(1, 'day') : originalEvent.value?.endDateTime,
         timeZone: originalEvent.value?.timeZone ?? userStore.timeZone,
       });
       const parsedRecurrence = parseRecurrence(originalEvent.value?.raw?.recurrence, originalEvent.value?.raw?.extendedProperties?.shared);
@@ -571,6 +668,8 @@ onMounted(async () => {
         endTime: formData.endDateTime.format('HHmm'),
       });
       initReminders(originalEvent.value, formData.calendarId);
+      eventColorId.value = originalEvent.value?.eventColorId ?? '';
+      eventTagsInput.value = (originalEvent.value?.tags ?? []).join(' ');
       attendees.value = (originalEvent.value?.raw?.attendees ?? []).reduce((result, attendee) => {
         if (typeof attendee.email === 'string') result.push({ ...attendee, email: attendee.email });
         return result;
@@ -597,12 +696,7 @@ watch(() => formData.summary, updateTitleSuggestions);
       </label>
       <label>
         <span>タイトル</span>
-        <input v-model="formData.summary" autofocus required placeholder="このイベントのタイトルを入力" data-enter-focus @keydown.enter="focusNextOnEnter" @focus="updateTitleSuggestions" />
-        <ul v-if="titleSuggestions.length">
-          <li v-for="title in titleSuggestions" :key="title">
-            <button type="button" @mousedown.prevent="selectRecentTitle(title)">{{ title }}</button>
-          </li>
-        </ul>
+        <SuggestPulldown v-model="formData.summary" :suggestions="titleSuggestions" placeholder="このイベントのタイトルを入力" aria-label="タイトル" required autofocus enter-focus @select="selectRecentTitle" @focus="updateTitleSuggestions" @enter="focusNextOnEnter" />
       </label>
     </section>
     <!-- 保存先カレンダー -->
@@ -635,7 +729,6 @@ watch(() => formData.summary, updateTitleSuggestions);
             <IconCalendar />
           </button>
           <input :value="formatDateField(dateFields.startDate)" inputmode="numeric" maxlength="10" placeholder="YYYY MM DD" aria-label="開始年月日" required data-enter-focus @keydown.enter="focusNextOnEnter" @input="updateDateTimeField('startDate', $event)" />
-          <DatePicker v-if="openDatePicker === 'startDate'" :model-value="datePickerValue('startDate')" @update:model-value="selectDate('startDate', $event)" @close="openDatePicker = null" />
         </div>
       </label>
       <label>
@@ -652,7 +745,6 @@ watch(() => formData.summary, updateTitleSuggestions);
             <IconCalendar />
           </button>
           <input :value="formatDateField(dateFields.endDate)" inputmode="numeric" maxlength="10" placeholder="YYYY MM DD" aria-label="終了年月日" required data-enter-focus @keydown.enter="focusNextOnEnter" @input="updateDateTimeField('endDate', $event)" />
-          <DatePicker v-if="openDatePicker === 'endDate'" :model-value="datePickerValue('endDate')" @update:model-value="selectDate('endDate', $event)" @close="openDatePicker = null" />
         </div>
       </label>
       <label>
@@ -666,7 +758,6 @@ watch(() => formData.summary, updateTitleSuggestions);
         <span>{{ dateTimeCalculator.start }}</span>
         <IconAnglesDown /><span>{{ dateTimeCalculator.end }}</span>
       </p>
-      <p v-if="dateTimeError">{{ dateTimeError }}</p>
     </section>
     <!-- 場所と説明とノート -->
     <section>
@@ -679,6 +770,10 @@ watch(() => formData.summary, updateTitleSuggestions);
         <textarea v-model="formData.description" rows="5" placeholder="イベントの説明" data-enter-focus @keydown.enter="focusNextOnEnter"></textarea>
       </label>
       <label>
+        <span>タグ</span>
+        <SuggestPulldown v-model="eventTagsInput" :suggestions="tagSuggestions" placeholder="空白またはカンマ区切り (例: 仕事, 買い物)" aria-label="タグ" enter-focus @select="selectTagSuggestion" @enter="focusNextOnEnter" />
+      </label>
+      <label>
         <span>個人用ノート</span>
         <textarea v-model="formData.privacyNote" rows="3" placeholder="自分だけに表示されます" data-enter-focus @keydown.enter="focusNextOnEnter"></textarea>
       </label>
@@ -687,37 +782,7 @@ watch(() => formData.summary, updateTitleSuggestions);
     <AccordionMenu label="詳細設定">
       <div class="accordion-content">
         <!-- 招待するユーザー -->
-        <section>
-          <label for="attendee-query"><span>招待するユーザー</span></label>
-          <div>
-            <span v-for="attendee in attendees" :key="attendee.email">
-              {{ attendee.displayName || attendee.email }}
-              <label v-if="!attendee.displayName"> <input type="checkbox" :checked="peopleRegistrationEmails.includes(attendee.email)" @change="togglePeopleRegistration(attendee.email)" />連絡先に登録 </label>
-              <button type="button" :aria-label="`${attendee.email}を削除`" @click="removeAttendee(attendee.email)">
-                <IconXMark />
-              </button>
-            </span>
-          </div>
-          <input id="attendee-query" v-model="attendeeQuery" autocomplete="off" placeholder="名前またはメールアドレス" data-enter-focus @keydown.enter="focusNextOnEnter" @keydown="addUnknownAttendee" @blur="clearPeopleSuggestionsLater" />
-          <p v-if="attendeeQuery.startsWith('@')">ラベルで検索中</p>
-          <p v-else-if="attendeeQuery.includes('@')">Enter で未知のメールアドレスを追加</p>
-          <ul v-if="isSearchingPeople || peopleStore.suggestions.length || attendeeQuery.includes('@')">
-            <li v-if="isSearchingPeople">検索中...</li>
-            <li v-for="person in peopleStore.suggestions" :key="person.resourceName">
-              <button type="button" @mousedown.prevent="addAttendee(person)">
-                <span>{{ person.names?.[0]?.displayName || '名前なし' }}</span>
-                <small>{{ person.emailAddresses?.[0]?.value }}</small>
-              </button>
-            </li>
-            <li v-if="!isSearchingPeople && !peopleStore.suggestions.length && attendeeQuery.includes('@') && !attendeeQuery.startsWith('@')">
-              <button type="button" @mousedown.prevent="addUnknownEmail">
-                <span>メールアドレスを招待</span>
-                <small>{{ attendeeQuery }}</small>
-              </button>
-            </li>
-            <li v-if="!isSearchingPeople && !peopleStore.suggestions.length && !attendeeQuery.includes('@')">候補が見つかりません</li>
-          </ul>
-        </section>
+        <EventFormAttendeeField v-model="attendeeQuery" :attendees="attendees" :suggestions="peopleStore.suggestions" :is-searching="isSearchingPeople" @add-attendee="addAttendee" @add-unknown-email="addUnknownEmail" @remove-attendee="removeAttendee" @query-blur="clearPeopleSuggestionsLater" />
         <!-- タイムゾーン -->
         <section>
           <label v-if="!formData.isAllDay"
@@ -726,103 +791,28 @@ watch(() => formData.summary, updateTitleSuggestions);
           </label>
         </section>
         <!-- 繰り返し設定 -->
-        <section>
-          <fieldset class="recurrence-fieldset">
-            <legend>繰り返し</legend>
-            <label>
-              <span>頻度</span>
-              <select v-model="recurrence.frequency">
-                <option value="">繰り返さない</option>
-                <option value="DAILY">毎日</option>
-                <option value="WEEKLY">毎週</option>
-                <option value="MONTHLY">毎月</option>
-                <option value="YEARLY">毎年</option>
-              </select>
-            </label>
-            <template v-if="recurrence.frequency">
-              <label
-                ><span>間隔</span>
-                <div class="inline-field">
-                  <input v-model.number="recurrence.interval" type="number" min="1" max="99" />
-                  {{ recurrence.frequency === 'DAILY' ? '日' : recurrence.frequency === 'WEEKLY' ? '週' : recurrence.frequency === 'MONTHLY' ? '月' : '年' }}ごと
-                </div>
-              </label>
-              <div v-if="recurrence.frequency === 'WEEKLY' || recurrence.frequency === 'MONTHLY'" class="weekday-options">
-                <span>曜日</span>
-                <div>
-                  <label v-for="weekday in WEEKDAYS" :key="weekday.value"><input v-model="recurrence.weekdays" type="checkbox" :value="weekday.value" />{{ weekday.label }}</label>
-                </div>
-              </div>
-              <label v-if="recurrence.frequency === 'MONTHLY'"
-                ><span>開始日</span>
-                <div class="inline-field"><input v-model.number="recurrence.monthDay" type="number" min="1" max="31" placeholder="D" /> 日</div>
-              </label>
-              <label v-if="recurrence.frequency === 'YEARLY'"
-                ><span>開始月</span>
-                <div class="inline-field"><input v-model.number="recurrence.month" type="number" min="1" max="12" placeholder="M" /> 月</div>
-              </label>
-              <div class="recurrence-end">
-                <div class="inline-field">
-                  <label><span>回数</span> <input v-model.number="recurrence.count" type="number" min="1" placeholder="無制限" /></label>
-                  <label><span>または期限</span> <input v-model="recurrence.until" type="date" /></label>
-                </div>
-              </div>
-              <label><span>除外日</span> <input v-model="recurrence.exclusions" placeholder="YYYY-MM-DD, YYYY-MM-DD" /></label>
-              <label>
-                <span>休日の扱い</span>
-                <select v-model="recurrence.holidayAdjustment">
-                  <option value="">通常どおり</option>
-                  <option value="NEXT_WEEKDAY">休日なら次の平日</option>
-                  <option value="PREVIOUS_WEEKDAY">休日なら前の平日</option>
-                </select>
-              </label>
-            </template>
-          </fieldset>
-        </section>
+        <EventFormRecurrenceField :recurrence="recurrence" />
 
         <!-- 通知設定 -->
-        <section>
-          <span><IconBell size="0.8rem" /> 通知</span>
-          <div class="notification-rows">
-            <div v-for="(reminder, index) in reminders" :key="index" class="notification-row">
-              <div>
-                <input v-model.number="reminder.value" type="number" min="0" max="40320" :aria-label="`通知${index + 1}の時間`" />
-                <select v-model="reminder.unit" :aria-label="`通知${index + 1}の単位`">
-                  <option value="minute">分</option>
-                  <option value="hour">時間</option>
-                  <option value="day">日</option>
-                </select>
-                <span>前に通知</span>
-              </div>
-              <button type="button" :aria-label="`通知${index + 1}を削除`" @click="removeReminderRow(index)">
-                <IconXMark />
-              </button>
-            </div>
-            <button v-if="reminders.length < 5" type="button" @click="addReminderRow"><IconPlus /> 通知を追加</button>
-            <p v-if="notificationPermission() === 'denied'" class="notification-warning">ブラウザの通知が拒否されています. ブラウザの設定でこのアプリからの通知を許可してください.</p>
-          </div>
-        </section>
+        <EventFormReminderField :reminders="reminders" @add-reminder="addReminderRow" @remove-reminder="removeReminderRow" />
 
         <!-- 写真アルバム -->
-        <section v-if="photoAlbumAvailable">
-          <span><IconImage size="0.8rem" /> 写真アルバム</span>
-          <template v-if="existingPhotoAlbum">
-            <p class="photo-album-hint">この予定にはアルバムが作成されています.</p>
-            <a v-if="existingPhotoAlbum.productUrl" :href="existingPhotoAlbum.productUrl" target="_blank" rel="noopener noreferrer" class="photo-album-link"><IconArrowUpRightFromSquare /> アルバムを開く</a>
-          </template>
-          <template v-else>
-            <label class="photo-album-check"><input v-model="createPhotoAlbum" type="checkbox" />保存時に写真アルバムを作成する</label>
-            <p class="photo-album-hint">この予定の写真をまとめるアルバムを Google フォトに作成します.{{ attendees.length ? ' 参加者と共有するには、作成後に Google フォトで共有設定を行ってください.' : '' }}</p>
-          </template>
-        </section>
+        <EventFormPhotoAlbumField v-if="photoAlbumAvailable" v-model="createPhotoAlbum" :existing-album="existingPhotoAlbum" :attendees-count="attendees.length" />
+
+        <!-- イベントの色 -->
+        <EventFormColorField v-model="eventColorId" :calendar-color="calendarStore.getCalendarColor(formData.calendarId)?.backgroundColor ?? '#2196f3'" />
       </div>
     </AccordionMenu>
 
-    <section>
-      <button data-app-button="secondary" type="button" @click="emit('cancel')">キャンセル</button>
-      <button data-app-button="primary" type="submit" data-enter-focus @keydown.enter.prevent="submitForm">{{ props.submitLabel }}</button>
+    <section class="form-actions">
+        <button data-app-button="secondary" type="button" title="現在の入力内容をテンプレートとして保存" @click="isTemplateSaveDialogOpen = true"><IconFileCirclePlus />テンプレートとして保存</button>
+      <div>
+        <button data-app-button="secondary" type="button" @click="emit('cancel')"><IconRotateLeft />キャンセル</button>
+        <button data-app-button="primary" type="submit" data-enter-focus @keydown.enter.prevent="submitForm"><IconFloppyDisk />{{ props.submitLabel }}</button>
+      </div>
     </section>
   </form>
+  <EventFormTemplateSaveDialog v-if="isTemplateSaveDialogOpen" @save="saveAsTemplate" @cancel="isTemplateSaveDialogOpen = false" />
 </template>
 
 <style lang="scss" scoped>
@@ -834,7 +824,7 @@ form {
 }
 
 // アイコンとタイトルの入力欄
-form > section:nth-child(1) {
+form > section:nth-of-type(1) {
   width: 100%;
   display: flex;
   gap: var(--space-xs);
@@ -856,7 +846,7 @@ form > section:nth-child(1) {
 }
 
 // 保存先の設定
-form > section:nth-child(2) {
+form > section:nth-of-type(2) {
   display: flex;
   gap: var(--space-xs);
   flex-direction: column;
@@ -909,7 +899,7 @@ form > section:nth-child(2) {
 }
 
 // 終日の入力欄
-form > section:nth-child(3) {
+form > section:nth-of-type(3) {
   display: flex;
   align-items: center;
 
@@ -921,8 +911,8 @@ form > section:nth-child(3) {
 }
 
 // 日付と時間の入力欄
-form > section:nth-child(4),
-form > section:nth-child(5) {
+form > section:nth-of-type(4),
+form > section:nth-of-type(5) {
   width: 100%;
   display: flex;
   gap: var(--space-xs);
@@ -961,15 +951,15 @@ form > section:nth-child(5) {
   }
 }
 
-form > section:nth-child(4) > label:nth-child(2),
-form > section:nth-child(5) > label:nth-child(2) {
+form > section:nth-of-type(4) > label:nth-child(2),
+form > section:nth-of-type(5) > label:nth-child(2) {
   > input {
     width: 4rem; // 時間入力欄の幅は小さく
   }
 }
 
 // 日付と時間の計算結果
-form > section:nth-child(6) > p {
+form > section:nth-of-type(6) > p {
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--border-radius);
   background: var(--bg-2);
@@ -988,7 +978,7 @@ form > section:nth-child(6) > p {
 }
 
 // 場所と説明とノートの入力欄
-form > section:nth-child(7) {
+form > section:nth-of-type(7) {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
@@ -1024,95 +1014,6 @@ form .accordion-content {
     }
   }
 
-  // 招待先
-  > section:nth-child(1) {
-    > div {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--space-xs);
-
-      > span {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--space-xs);
-        max-width: 100%;
-        padding: var(--space-xs) var(--space-sm);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        background: var(--bg-2);
-        overflow-wrap: anywhere;
-
-        > label {
-          display: inline-flex;
-          align-items: center;
-          gap: var(--space-xxs);
-          white-space: nowrap;
-          font-size: var(--text-size-xs);
-        }
-
-        > button {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          padding: var(--space-xxs);
-          border: 0;
-          background: transparent;
-
-          &:hover {
-            color: var(--danger);
-          }
-
-          svg {
-            width: 0.8rem;
-            height: 0.8rem;
-          }
-        }
-      }
-    }
-
-    > input {
-      width: 100%;
-    }
-
-    > p {
-      margin: 0;
-      color: var(--text-light);
-      font-size: var(--text-size-xs);
-    }
-
-    > ul {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-xxs);
-      margin: 0;
-      padding: var(--space-xs);
-      border: 1px solid var(--border);
-      border-radius: var(--border-radius);
-      background: var(--bg-2);
-      list-style: none;
-
-      button {
-        display: flex;
-        flex-direction: column;
-        width: 100%;
-        align-items: flex-start;
-        padding: var(--space-xs) var(--space-sm);
-        border: 0;
-        background: transparent;
-        text-align: left;
-
-        &:hover {
-          background: var(--bg-3);
-        }
-
-        small {
-          color: var(--text-light);
-          overflow-wrap: anywhere;
-        }
-      }
-    }
-  }
-
   // タイムゾーン
   > section:nth-child(2) {
     > label {
@@ -1125,187 +1026,24 @@ form .accordion-content {
   // 繰り返し設定
   > section:nth-child(3) {
     gap: var(--space-xs);
-
-    .recurrence-fieldset {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-sm);
-      padding: 0 var(--space-sm) var(--space-sm) var(--space-sm);
-      min-width: 0;
-      border: 1px solid var(--border);
-      border-radius: var(--border-radius);
-
-      legend {
-        font-size: var(--text-size-xxs);
-        padding: 0 var(--space-xs);
-      }
-
-      > label {
-        display: flex;
-        flex-direction: column;
-
-        > span {
-          font-size: var(--text-size-xxs);
-        }
-      }
-
-      .inline-field {
-        display: flex;
-        align-items: center;
-        gap: var(--space-xs);
-
-        > label > span {
-          font-size: var(--text-size-xxs);
-        }
-      }
-
-      .weekday-options {
-        display: flex;
-        flex-direction: column;
-
-        > div {
-          display: flex;
-          flex-wrap: wrap;
-          gap: var(--space-sm);
-
-          > label {
-            display: flex;
-            align-items: center;
-            gap: var(--space-xs);
-          }
-        }
-      }
-
-      .recurrence-end {
-        .inline-field {
-          display: flex;
-          flex-wrap: wrap;
-          label:nth-child(1) {
-            width: 6rem;
-            input {
-              width: calc(100% - var(--space-xs) * 2 - 2px);
-            }
-          }
-          label:nth-child(2) {
-            flex-grow: 1;
-            input {
-              width: calc(100% - var(--space-xs) * 2 - 2px);
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // 通知設定
-  > section:nth-child(4) {
-    > span {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-xs);
-      * {
-        font-size: var(--font-size-xxs);
-      }
-    }
-
-    > .notification-rows {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-xs);
-
-      .notification-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        padding: var(--space-xs) var(--space-sm);
-
-        > div {
-          display: flex;
-          align-items: center;
-          gap: var(--space-xs);
-
-          > span {
-            font-size: var(--font-size-xxs);
-          }
-
-          input[type='number'] {
-            width: 3rem;
-          }
-        }
-
-        // 通知削除ボタン
-        > button {
-          background: var(--bg-1);
-
-          &:hover {
-            background: var(--bg-2);
-          }
-        }
-      }
-
-      // 通知追加ボタン
-      > button {
-        align-self: flex-start;
-        width: calc(100% - 2px);
-        font-size: var(--font-size-xxs);
-        padding: var(--space-xs) 0;
-        background-color: var(--bg-1);
-        border: 1px solid var(--border);
-        &:hover {
-          background-color: var(--bg-2);
-        }
-      }
-
-      .notification-warning {
-        font-size: var(--font-size-xxs);
-        color: var(--danger);
-      }
-    }
   }
 
   // 写真共有アルバム
   > section:nth-child(5) {
     gap: var(--space-xs);
-
-    > span {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-xs);
-    }
-
-    .photo-album-check {
-      display: flex;
-      align-items: center;
-      gap: var(--space-sm);
-    }
-
-    .photo-album-hint {
-      margin: 0;
-      color: var(--text-light);
-      font-size: var(--text-size-xs);
-    }
-
-    .photo-album-link {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-xxs);
-      width: fit-content;
-      font-size: var(--text-size-xs);
-
-      svg {
-        width: 0.8rem;
-        height: 0.8rem;
-      }
-    }
   }
 }
 
 // アクションボタン
-form > section:nth-child(9) {
+form > section.form-actions {
   display: flex;
+  flex-direction: column;
   gap: var(--space-sm);
-  justify-content: flex-end;
+
+  div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-sm);
+  }
 }
 </style>

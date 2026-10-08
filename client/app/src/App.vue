@@ -1,30 +1,14 @@
 <script setup>
 import { onMounted, onUnmounted, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth.js';
-import { useCalendarStore } from '@/stores/calendar.js';
 import { useUserStore } from '@/stores/user.js';
 import UserDialog from '@/components/UserDialog.vue';
-import { initEventNotifications } from '@/services/notifications.js';
-import { useShareStore } from '@/stores/share.js';
+import ToastMessage from '@/components/ToastMessage.vue';
+import { useAppBootstrap } from '@/composables/useAppBootstrap.js';
 
 const authStore = useAuthStore();
-const calendarStore = useCalendarStore();
 const userStore = useUserStore();
-const shareStore = useShareStore();
-
-/** @type {MediaQueryList|null} @description システムテーマの変更を監視するためのオブジェクト */
-let mQueryList = null;
-
-/** @description ウィンドウリサイズ時のイベントハンドラ */
-function handleWindowResize() {
-  userStore.winInnerWidth = window.innerWidth;
-}
-
-/** @param {MediaQueryListEvent} evt メディアクエリの変更イベント @description システムテーマ変更時のイベントハンドラ */
-function handleSystemThemeChange(evt) {
-  userStore.isSystemPrefersDark = evt.matches;
-  if (userStore.userSelectedTheme === 'SYSTEM') userStore.applyTheme('SYSTEM');
-}
+const bootstrap = useAppBootstrap();
 
 watch(
   () => userStore.hasError,
@@ -47,46 +31,14 @@ watch(
   },
 );
 
-onMounted(async () => {
-  if (!userStore.checkUserEnvironment()) return;
-
-  await userStore.settingsReady;
-
-  // ユーザ設定の適用
-  userStore.applyTheme(userStore.userSelectedTheme);
-  userStore.applyThemeColor();
-  userStore.applyFonts();
-  userStore.applyTextSizes();
-  window.addEventListener('resize', handleWindowResize);
-  initEventNotifications();
-  shareStore.initShareSync();
-  mQueryList = window.matchMedia('(prefers-color-scheme: dark)');
-  mQueryList.addEventListener('change', handleSystemThemeChange);
-
-  // Google ログイン状態の確認とトークンの取得
-  const token = await authStore.fetchToken();
-  if (token) {
-    if (userStore.usePhotoSharing) authStore.ensurePhotoToken();
-    await calendarStore.loadCalendars();
-  }
-  if (!token && !authStore.isAuthenticated) {
-    userStore.openUserDialog({
-      title: 'Login Required',
-      message: 'Login with your Google account to synchronize your calendar.',
-    });
-  }
-});
-
-onUnmounted(() => {
-  if (!userStore.checkUserEnvironment()) return;
-  window.removeEventListener('resize', handleWindowResize);
-  if (mQueryList) mQueryList.removeEventListener('change', handleSystemThemeChange);
-});
+onMounted(bootstrap.start);
+onUnmounted(bootstrap.stop);
 </script>
 
 <template>
   <router-view />
   <UserDialog />
+  <ToastMessage />
 </template>
 
 <style lang="scss">
@@ -177,6 +129,10 @@ button {
     background-color: var(--primary);
     min-width: 6rem;
 
+    .icons {
+      fill: var(--text);
+    }
+
     &:hover {
       background-color: var(--primary-light);
     }
@@ -187,9 +143,17 @@ button {
     background-color: transparent;
     min-width: 6rem;
     border: 1px solid var(--primary-light);
+
+    .icons {
+      fill: var(--primary-light);
+    }
+    
     &:hover {
       color: var(--primary);
       border: 1px solid var(--primary);
+      .icons {
+        fill: var(--primary);
+      }
     }
   }
 }

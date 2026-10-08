@@ -1,4 +1,8 @@
 <script setup>
+import { useUserStore } from '@/stores/user.js';
+
+const userStore = useUserStore();
+
 const props = defineProps({
   navWidth: { type: Number, required: true },
   subWidth: { type: Number, required: true },
@@ -39,9 +43,9 @@ function handleResizeSub(evt) {
       </div>
     </main>
 
-    <div class="resize-handle" @pointerdown.prevent="handleResizeSub"></div>
+    <div class="resize-handle" v-show="!userStore.formDatePick" @pointerdown.prevent="handleResizeSub"></div>
 
-    <aside :style="{ width: `${props.subWidth}px` }">
+    <aside :style="{ width: `${props.subWidth}px` }" v-show="!userStore.formDatePick">
       <div class="aside-content sub-pane-content">
         <router-view name="sub" v-slot="{ Component }">
           <component :is="Component" :select-pane="props.selectPane" :collapse-mobile-sub-pane="props.collapseMobileSubPane" />

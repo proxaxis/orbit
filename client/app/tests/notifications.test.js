@@ -4,13 +4,24 @@ import dayjs from '@/services/dayjs.js';
 const readOfflineMock = vi.fn(async () => []);
 const writeOfflineMock = vi.fn(async () => {});
 
-vi.mock('@/services/offline-storage.js', () => ({
-  readOffline: (...args) => readOfflineMock(...args),
-  writeOffline: (...args) => writeOfflineMock(...args),
+vi.mock('@/composables/useCache.js', () => ({
+  CACHE_KEYS: {
+    EVENTS: 'events',
+    CALENDARS: 'calendars',
+    NOTIFIED_EVENTS: 'notified-events',
+    NOTIFICATION_SCHEDULE: 'notification-schedule',
+  },
+  SYNC_TAGS: {
+    NOTIFICATIONS: 'orbit-notifications',
+  },
+  readCache: (...args) => readOfflineMock(...args),
+  writeCache: (...args) => writeOfflineMock(...args),
+  registerBackgroundSync: vi.fn(async () => false),
+  registerPeriodicBackgroundSync: vi.fn(async () => false),
 }));
 
 // モックを仕込んでから対象モジュールを読み込む
-const notifications = await import('@/services/notifications.js');
+const notifications = await import('@/composables/useNotifications.js');
 const { reminderMinutesOf, eventStartOf, occurrenceStarts, rescheduleNotifications, initEventNotifications } = notifications;
 
 class MockNotification {

@@ -3,10 +3,10 @@ import { createPinia, setActivePinia } from 'pinia';
 
 const storage = vi.hoisted(() => ({ data: {} }));
 
-vi.mock('@/services/offline-storage.js', () => ({
-  USER_SETTINGS_KEY: 'orbit-user-settings',
-  readOffline: vi.fn(async (key, fallback) => storage.data[key] ?? fallback),
-  writeOffline: vi.fn(async (key, value) => {
+vi.mock('@/composables/useCache.js', () => ({
+  CACHE_KEYS: { USER_SETTINGS: 'orbit-user-settings', RECENT_EVENT_TITLES: 'recent-event-titles' },
+  readCache: vi.fn(async (key, fallback) => storage.data[key] ?? fallback),
+  writeCache: vi.fn(async (key, value) => {
     storage.data[key] = JSON.parse(JSON.stringify(value));
   }),
 }));
