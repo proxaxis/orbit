@@ -126,9 +126,9 @@ defineExpose({ reload });
       <p class="hint">写真を選択してアップロードすると、このイベント専用のアルバムが Google フォトに作成されます. {{ hasOtherAttendees ? '参加者と共有するには、作成後に Google フォトで共有設定を行ってください.' : '' }}</p>
     </template>
     <template v-else-if="!userStore.usePhotoSharing">
-      <p class="hint">写真共有は無効です. アルバムを利用するには、ユーザー設定で有効化してください.</p>
+      <p class="hint">写真共有は無効です. アルバムを利用するには、個人設定で有効化してください.</p>
     </template>
-    <p v-else class="hint">Google アカウントの認証が必要です. ユーザー設定から認証してください.</p>
+    <p v-else class="hint">Google アカウントの認証が必要です. 個人設定から認証してください.</p>
 
     <div v-if="photoApiReady" class="photo-actions">
       <input ref="rfFileInput" type="file" accept="image/*,video/*" multiple hidden @change="onSelectLocalFiles" />

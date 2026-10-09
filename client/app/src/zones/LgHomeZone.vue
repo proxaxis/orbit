@@ -1,4 +1,5 @@
 <script setup>
+import IconEllipsisVertical from '@/components/icons/IconEllipsisVertical.vue';
 import { useUserStore } from '@/stores/user.js';
 
 const userStore = useUserStore();
@@ -33,7 +34,7 @@ function handleResizeSub(evt) {
       </div>
     </aside>
 
-    <div class="resize-handle" @pointerdown.prevent="handleResizeNav"></div>
+    <div class="resize-handle" @pointerdown.prevent="handleResizeNav"><icon-ellipsis-vertical /></div>
 
     <main>
       <div class="main-content">
@@ -43,7 +44,7 @@ function handleResizeSub(evt) {
       </div>
     </main>
 
-    <div class="resize-handle" v-show="!userStore.formDatePick" @pointerdown.prevent="handleResizeSub"></div>
+    <div class="resize-handle" v-show="!userStore.formDatePick" @pointerdown.prevent="handleResizeSub"><icon-ellipsis-vertical /></div>
 
     <aside :style="{ width: `${props.subWidth}px` }" v-show="!userStore.formDatePick">
       <div class="aside-content sub-pane-content">

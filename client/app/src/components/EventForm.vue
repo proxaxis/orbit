@@ -362,20 +362,31 @@ const dateTimeCalculator = computed(() => {
   if (sYear < 0 || sMonth < 0 || sDate < 0 || sHour < 0 || sMinute < 0) sFormatString = sFormatString.replace(/(YYYY|M|D|ddd|HH:mm)/g, '--').replace(/今年\s/g, '');
   if (eYear < 0 || eMonth < 0 || eDate < 0 || eHour < 0 || eMinute < 0) eFormatString = eFormatString.replace(/(YYYY|M|D|ddd|HH:mm)/g, '--');
 
+  const parsedStart = dayjs(`${sYear}-${sMonth}-${sDate} ${sHour}:${sMinute}`, 'YYYY-M-D H:m');
+  const parsedEnd = dayjs(`${eYear}-${eMonth}-${eDate} ${eHour}:${eMinute}`, 'YYYY-M-D H:m');
   let resultStartString = '';
   let resultEndString = '';
-  if (dayjs(`${sYear}-${sMonth}-${sDate} ${sHour}:${sMinute}`, 'YYYY-M-D H:m').isValid()) {
-    resultStartString = dayjs(`${sYear}-${sMonth}-${sDate} ${sHour}:${sMinute}`, 'YYYY-M-D H:m')?.format(sFormatString) ?? '--年 --月 --日 (--) --:--';
+  if (parsedStart.isValid()) {
+    resultStartString = parsedStart.format(sFormatString) ?? '--年 --月 --日 (--) --:--';
   } else {
     resultStartString = '--年 --月 --日 (--) --:--';
   }
-  if (dayjs(`${eYear}-${eMonth}-${eDate} ${eHour}:${eMinute}`, 'YYYY-M-D H:m').isValid()) {
-    resultEndString = dayjs(`${eYear}-${eMonth}-${eDate} ${eHour}:${eMinute}`, 'YYYY-M-D H:m')?.format(eFormatString) ?? '--年 --月 --日 (--) --:--';
+  if (parsedEnd.isValid()) {
+    resultEndString = parsedEnd.format(eFormatString) ?? '--年 --月 --日 (--) --:--';
   } else {
     resultEndString = '--年 --月 --日 (--) --:--';
   }
-  return { start: resultStartString, end: resultEndString };
+  return { start: resultStartString, end: resultEndString, startDateTime: parsedStart.isValid() ? parsedStart : null, endDateTime: parsedEnd.isValid() ? parsedEnd : null };
 });
+
+// 入力された日時を実データへ反映する（入力途中の不完全な値では既存値を維持する）
+watch(
+  () => dateTimeCalculator.value,
+  ({ startDateTime, endDateTime }) => {
+    if (startDateTime) formData.startDateTime = startDateTime;
+    if (endDateTime) formData.endDateTime = endDateTime;
+  },
+);
 
 /** タイトル入力に対応する履歴候補を更新します。 */
 function updateTitleSuggestions() {
@@ -407,6 +418,11 @@ function selectTagSuggestion(tag) {
 
 /** @returns {boolean} 日時入力が正当かどうか */
 function validateDateTime() {
+  // 入力欄が途中・不正のままだと直近の有効値が残るため送信を止める
+  if (!dateTimeCalculator.value.startDateTime || !dateTimeCalculator.value.endDateTime) {
+    userStore.showToast('日時を正しく入力してください.');
+    return false;
+  }
   // 終日イベントは「終了日（含む）」が開始日より前にならないよう矯正する
   if (formData.isAllDay && formData.endDateTime.isBefore(formData.startDateTime, 'day')) {
     formData.endDateTime = formData.startDateTime;
@@ -513,6 +529,12 @@ function clearPeopleSuggestionsLater() {
 function applyTemplate(template) {
   const event = template.event ?? {};
   formData.endDateTime = formData.startDateTime.add(event.durationMinutes ?? 60, 'minute');
+  // 入力欄を新しい日時へ合わせる（欄と formData がずれると同期 watcher が値を戻してしまう）
+  Object.assign(dateFields, {
+    endDate: formData.endDateTime.format(dateFields.startDate.length === 8 ? 'YYYYMMDD' : 'MMDD'),
+    startTime: formData.startDateTime.format('HHmm'),
+    endTime: formData.endDateTime.format('HHmm'),
+  });
   Object.assign(formData, {
     summary: event.summary ?? '',
     description: event.description ?? '',
@@ -805,7 +827,7 @@ watch(() => formData.summary, updateTitleSuggestions);
     </AccordionMenu>
 
     <section class="form-actions">
-        <button data-app-button="secondary" type="button" title="現在の入力内容をテンプレートとして保存" @click="isTemplateSaveDialogOpen = true"><IconFileCirclePlus />テンプレートとして保存</button>
+      <button data-app-button="secondary" type="button" title="現在の入力内容をテンプレートとして保存" @click="isTemplateSaveDialogOpen = true"><IconFileCirclePlus />テンプレートとして保存</button>
       <div>
         <button data-app-button="secondary" type="button" @click="emit('cancel')"><IconRotateLeft />キャンセル</button>
         <button data-app-button="primary" type="submit" data-enter-focus @keydown.enter.prevent="submitForm"><IconFloppyDisk />{{ props.submitLabel }}</button>

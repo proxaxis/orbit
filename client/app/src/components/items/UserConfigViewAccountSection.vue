@@ -9,6 +9,7 @@ import { useAuth } from '@/composables/useAuth.js';
 import GoogleLogin from '@/components/GoogleLogin.vue';
 import IconArrowsRotate from '@/components/icons/IconArrowsRotate.vue';
 import IconArrowRightFromBracket from '@/components/icons/IconArrowRightFromBracket.vue';
+import AccordionMenu from '@/components/AccordionMenu.vue';
 
 const authStore = useAuthStore();
 const userStore = useUserStore();
@@ -48,23 +49,32 @@ async function switchAccount() {
 </script>
 
 <template>
-  <section class="config-section">
-    <h2>アカウント</h2>
-    <template v-if="authStore.isAuthenticated">
-      <p class="hint">Google アカウントでログイン中です.</p>
-      <div class="account-actions">
-        <button type="button" class="clear-cache-button" @click="switchAccount"><IconArrowsRotate />アカウントを変更</button>
-        <button type="button" class="clear-cache-button" @click="handleLogout"><IconArrowRightFromBracket />ログアウト</button>
-      </div>
-    </template>
-    <template v-else>
-      <p class="hint">カレンダーの同期や写真共有を利用するには、Google アカウントでログインしてください.</p>
-      <GoogleLogin />
-    </template>
-  </section>
+  <AccordionMenu label="アカウント">
+    <section class="config-section">
+      <template v-if="authStore.isAuthenticated">
+        <p class="hint">Google アカウントでログイン中です.</p>
+        <div class="account-actions">
+          <button type="button" class="clear-cache-button" @click="switchAccount"><IconArrowsRotate />アカウントを変更</button>
+          <button type="button" class="clear-cache-button" @click="handleLogout"><IconArrowRightFromBracket />ログアウト</button>
+        </div>
+      </template>
+      <template v-else>
+        <p class="hint">カレンダーの同期や写真共有を利用するには、Google アカウントでログインしてください.</p>
+        <div class="account-actions">
+          <GoogleLogin />
+        </div>
+      </template>
+    </section>
+  </AccordionMenu>
 </template>
 
 <style lang="scss" scoped>
+
+.hint {
+  font-size: var(--text-size-sm);
+  margin-bottom: var(--space-sm);
+}
+
 .account-actions {
   display: flex;
   gap: var(--space-xs);

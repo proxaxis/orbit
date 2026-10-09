@@ -106,7 +106,7 @@ async function onSelectContextMenu(action, evt) {
     </MenuBar>
 
     <ul>
-      <DateEventsViewEventCard v-for="evt in events" :key="evt.id" :event="evt" @open="openEventDetail" @select="onSelectContextMenu" />
+      <DateEventsViewEventCard v-for="evt in events" :key="`${evt.calendarId}:${evt.id}`" :event="evt" @open="openEventDetail" @select="onSelectContextMenu" />
       <li v-if="events.length === 0" class="no-event">予定はありません</li>
     </ul>
   </div>

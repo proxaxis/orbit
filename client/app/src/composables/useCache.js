@@ -19,7 +19,7 @@ const CACHE_STORE_NAME = 'settings';
  * @enum {string}
  */
 export const CACHE_KEYS = Object.freeze({
-  /** ユーザー設定の保存キー */
+  /** 個人設定の保存キー */
   USER_SETTINGS: 'orbit-user-settings',
   /** イベント一覧（オフライン用）の保存キー */
   EVENTS: 'events',
@@ -47,6 +47,10 @@ export const CACHE_KEYS = Object.freeze({
   ACCESS_TOKEN: 'orbit-access-token',
   /** イベントテンプレート一覧の保存キー */
   EVENT_TEMPLATES: 'event-templates',
+  /** 前回ログインしていたアカウント（プライマリカレンダー ID）の保存キー */
+  ACCOUNT_ID: 'orbit-account-id',
+  /** リモート変更チェックを最後に実行した時刻（updatedMin 差分クエリの起点）の保存キー */
+  REMOTE_SYNC_CHECKED_AT: 'orbit-remote-sync-checked-at',
 });
 
 /**

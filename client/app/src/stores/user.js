@@ -389,6 +389,12 @@ export const useUserStore = defineStore('user', () => {
     return recentEventTags.value.filter((tag) => tag.toLowerCase().includes(normalizedQuery)).slice(0, 8);
   }
 
+  /** イベント入力履歴（タイトル・タグ）を破棄する（アカウント切替時などに使用） */
+  function clearEventInputHistories() {
+    recentEventTitles.value = [];
+    recentEventTags.value = [];
+  }
+
   /** 現在の設定をキャッシュへ保存する */
   async function saveSettings() {
     await writeCache(CACHE_KEYS.USER_SETTINGS, {
@@ -754,6 +760,7 @@ export const useUserStore = defineStore('user', () => {
     recentEventTags,
     rememberEventTags,
     getRecentEventTagSuggestions,
+    clearEventInputHistories,
     winInnerWidth,
     hasCoarsePointer,
     checkCoarsePointer,

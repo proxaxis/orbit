@@ -131,6 +131,60 @@ async function syncSharedCalendars() {
 }
 
 /**
+ * 通知キーを通知済みとして記録し、スケジュールから除去する（二重通知の防止）
+ * @param {string} key 通知キー
+ * @returns {Promise<void>}
+ */
+async function markNotifiedAndPrune(key) {
+  if (!key) return;
+  const [notified, schedule] = await Promise.all([readCache(CACHE_KEYS.NOTIFIED_EVENTS, []), readCache(CACHE_KEYS.NOTIFICATION_SCHEDULE, [])]);
+  await writeCache(CACHE_KEYS.NOTIFIED_EVENTS, [...new Set([...(Array.isArray(notified) ? notified : []), key])]);
+  await writeCache(
+    CACHE_KEYS.NOTIFICATION_SCHEDULE,
+    (Array.isArray(schedule) ? schedule : []).filter((entry) => entry?.key !== key),
+  );
+}
+
+/**
+ * プッシュメッセージを処理する。
+ * ペイロードに通知内容があればそのまま表示し、起き上がり処理として
+ * 通知スケジュール消化・オフラインキュー再送・クライアントへの更新通知も行う。
+ * @param {any} event PushEvent
+ * @returns {Promise<void>}
+ */
+async function handlePushMessage(event) {
+  /** @type {any} */
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    try {
+      payload = { title: event.data?.text() };
+    } catch {
+      payload = {};
+    }
+  }
+  // { notification: {title, options} } とフラット形式の両方を受け付ける
+  const notification = payload?.notification && typeof payload.notification === 'object' ? payload.notification : payload;
+  const key = payload?.key ?? notification?.data?.key ?? notification?.options?.data?.key ?? '';
+  if (notification?.title) {
+    await markNotifiedAndPrune(key);
+    const options = typeof notification.options === 'object' ? notification.options : {};
+    const data = options.data ?? {};
+    await self.registration.showNotification(notification.title, {
+      ...options,
+      icon: options.icon ?? '/icon-192.png',
+      badge: options.badge ?? '/icon-192.png',
+      data: { ...data, url: data.url ?? eventDetailUrl(data.eid, data.cid) },
+    });
+  }
+  // プッシュを起き上がりの合図としても使い、期限の通知消化・キュー再送・画面更新通知を行う
+  await deliverDueNotifications();
+  await processOfflineEventQueue();
+  await broadcastToClients({ type: 'orbit-remote-changed' });
+}
+
+/**
  * 同期タグに応じたバックグラウンド処理を実行する
  * @param {string} tag 同期タグ（SYNC_TAGS の値）
  * @returns {Promise<void>}
@@ -158,6 +212,16 @@ self.addEventListener('sync', (/** @type {any} */ event) => {
 
 self.addEventListener('periodicsync', (/** @type {any} */ event) => {
   event.waitUntil(runSyncTask(event.tag));
+});
+
+// Web Push: アプリ・ブラウザが閉じていてもモバイル端末へ通知を届ける経路
+self.addEventListener('push', (/** @type {any} */ event) => {
+  event.waitUntil(handlePushMessage(event));
+});
+
+// 購読の失効・更新時はページ側へ再購読を促す
+self.addEventListener('pushsubscriptionchange', (/** @type {any} */ event) => {
+  event.waitUntil(broadcastToClients({ type: 'orbit-push-resubscribe' }));
 });
 
 self.addEventListener('notificationclick', (/** @type {any} */ event) => {

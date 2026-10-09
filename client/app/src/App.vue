@@ -70,28 +70,26 @@ html {
   font-family: var(--ui-font-family);
   scroll-behavior: smooth;
   user-select: none;
-  // PC ようにスクロールバーを表示する
   scrollbar-width: thin;
-  scrollbar-color: var(--bg-4) transparent; /* つまみ色 / 背景色 */
+  scrollbar-color: var(--bg-4) transparent; // つまみ色と背景色
 }
 
-/* Chrome, Safari, Edge用 */
 ::-webkit-scrollbar {
-  width: 6px; /* 縦スクロールバーの太さ */
-  height: 6px; /* 横スクロールバーの太さ */
+  width: 6px; // 縦スクロールバーの太さ
+  height: 6px; // 横スクロールバーの太さ
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent; /* 背景を透明にしてコンテンツと一体化 */
+  background: transparent; // 背景を透明にしてコンテンツと一体化
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.25); /* 半透明のグレー */
-  border-radius: 9999px; /* スマホ風の完全な角丸 */
+  background-color: rgba(0, 0, 0, 0.25); // 半透明のグレー
+  border-radius: 9999px; // スマホ風の完全な角丸
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(0, 0, 0, 0.5); /* ホバー時に少し濃くする */
+  background-color: rgba(0, 0, 0, 0.5); // ホバー時に少し濃くする
 }
 
 body {
@@ -110,8 +108,8 @@ button {
   align-items: center;
   cursor: pointer;
   gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-sm);
-  font-size: var(--text-size-lg);
+  padding: var(--space-sm) var(--space-xs);
+  font-size: var(--text-size-md);
   border-radius: var(--border-radius);
   transition: background-color 0.2s ease-in-out;
   color: var(--text);
@@ -119,6 +117,7 @@ button {
   outline: none;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+  background-color: var(--bg-3);
 
   &:disabled {
     opacity: 0.5;
@@ -147,10 +146,12 @@ button {
     .icons {
       fill: var(--primary-light);
     }
-    
+
     &:hover {
       color: var(--primary);
       border: 1px solid var(--primary);
+      background-color: var(--bg-2);
+
       .icons {
         fill: var(--primary);
       }
@@ -201,7 +202,7 @@ select {
 }
 
 input[type='checkbox'] {
-  accent-color: var(--accent);
+  accent-color: var(--primary);
   transform: scale(1.5);
   cursor: pointer;
   margin-left: 4px;

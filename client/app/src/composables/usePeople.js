@@ -38,6 +38,11 @@ function filterConnections(connections, needle) {
   return connections.filter((person) => matchesSearchText(person, needle)).slice(0, 10);
 }
 
+/** 検索結果のメモリキャッシュを全て破棄する（アカウント切替時などに使用） */
+export function resetSearchCache() {
+  searchCache.clear();
+}
+
 /**
  * 連絡先の検索を提供するコンポーザブル
  * @returns {Object} 連絡先検索関数群

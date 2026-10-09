@@ -167,7 +167,6 @@ function hideAllCalendars() {
   overflow: visible;
   small {
     display: block;
-    padding: var(--space-xs) var(--space-md);
     color: var(--text-light);
   }
 }
@@ -221,7 +220,7 @@ ul {
 }
 
 .cal-list-menu-open {
-  padding: var(--space-sm);
+  padding: var(--space-sm) calc(var(--space-xs) + var(--space-sm)) var(--space-sm) var(--space-sm);
   background-color: var(--bg-1);
 
   &:hover {

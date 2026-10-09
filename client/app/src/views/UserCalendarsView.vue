@@ -13,7 +13,10 @@ const userStore = useUserStore();
 
 <template>
   <div class="user-calendars-view">
-    <div>
+    <div class="heading">
+      <p>Orbit カレンダー</p>
+    </div>
+
       <MiniCalendar v-if="userStore.useMiniCalendar" />
 
       <AskLoginMessage v-if="!authStore.isAuthenticated">
@@ -25,18 +28,15 @@ const userStore = useUserStore();
 
       <UserCalendarsViewCalendarList />
       <UserCalendarsViewSessionList />
-    </div>
   </div>
 </template>
 
 <style lang="scss" scoped>
+@import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+P+One&display=swap');
 .user-calendars-view {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   gap: var(--space-sm);
-  width: 100%;
-  height: 100%;
 
   > div:nth-child(1) {
     flex-grow: 1;
@@ -49,9 +49,18 @@ const userStore = useUserStore();
     padding-top: var(--space-sm);
   }
 }
+.heading {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  padding: var(--space-sm) 0;
 
-.google-login-wrapper {
-  width: calc(100% - var(--space-sm) * 2);
-  margin: var(--space-sm) auto;
+  p {
+    font-family: "Mochiy Pop P One", sans-serif;
+    padding-left: var(--space-xs);
+    margin: 0;
+    font-size: 1.6rem;
+    font-weight: bold;
+  }
 }
 </style>

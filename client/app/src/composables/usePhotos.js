@@ -85,7 +85,7 @@ export function usePhotos() {
   async function ensureEventAlbum(evt) {
     const existing = bindingOf(evt);
     if (existing) return existing;
-    if (!canUsePhotoSharing()) throw new Error('写真共有が有効になっていません。ユーザー設定で認証してください。');
+    if (!canUsePhotoSharing()) throw new Error('写真共有が有効になっていません. 個人設定で認証してください.');
 
     userStore.setLoading(true, 'アルバムを作成しています...');
     const album = await photosAPI.createAlbum(authStore.photoToken, `${evt.summary ?? '予定'} (${evt.startDateTime?.format?.('YYYY-MM-DD') ?? ''})`);
@@ -158,7 +158,7 @@ export function usePhotos() {
    */
   async function uploadFiles(evt, files) {
     if (!files.length) return bindingOf(evt);
-    if (!canUsePhotoSharing()) throw new Error('写真共有が有効になっていません。ユーザー設定で認証してください。');
+    if (!canUsePhotoSharing()) throw new Error('写真共有が有効になっていません. 個人設定で認証してください.');
     userStore.setLoading(true);
     try {
       const binding = await ensureEventAlbum(evt);
@@ -189,7 +189,7 @@ export function usePhotos() {
    * @returns {Promise<OrbitEventPhotoAlbum|null>} 紐づけ情報（キャンセル時は null）
    */
   async function uploadPickedPhotos(evt, pickerWindow) {
-    if (!canUsePhotoSharing()) throw new Error('写真共有が有効になっていません。ユーザー設定で認証してください。');
+    if (!canUsePhotoSharing()) throw new Error('写真共有が有効になっていません. 個人設定で認証してください.');
     const session = await photosAPI.createPickerSession(authStore.photoToken);
     if (!session?.id || !session.pickerUri) throw new Error('写真の選択画面を作成できませんでした。');
 

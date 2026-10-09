@@ -381,27 +381,27 @@ export function queryFreebusy(token, body) {
 }
 
 /**
- * ユーザー設定の一覧を取得
+ * 個人設定の一覧を取得
  * @param {string} token アクセストークン
  * @param {Record<string, any>} [query={}] クエリパラメータ
- * @returns {Promise<{ kind: 'calendar#settings', items: Array<{ id: string, value: string }> }>} ユーザー設定一覧
+ * @returns {Promise<{ kind: 'calendar#settings', items: Array<{ id: string, value: string }> }>} 個人設定一覧
  */
 export function listSettings(token, query = {}) {
   return fetchCalendarAPI(token, 'GET', `/users/me/settings`, { query });
 }
 
 /**
- * 特定のユーザー設定を取得
+ * 特定の個人設定を取得
  * @param {string} token アクセストークン
  * @param {string} gSettingId 設定 ID (例: 'format24HourTime', 'weekStart')
- * @returns {Promise<{ kind: 'calendar#setting', id: string, value: string }>} ユーザー設定
+ * @returns {Promise<{ kind: 'calendar#setting', id: string, value: string }>} 個人設定
  */
 export function getSetting(token, gSettingId) {
   return fetchCalendarAPI(token, 'GET', `/users/me/settings/$gSettingId`, { params: { gSettingId } });
 }
 
 /**
- * ユーザー設定の変更監視
+ * 個人設定の変更監視
  * @param {string} token アクセストークン
  * @param {{ id: string, type: 'web_hook', address: string, token?: string, expiration?: string }} body 通知チャネル設定
  * @param {Record<string, any>} [query={}] クエリパラメータ

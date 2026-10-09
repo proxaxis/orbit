@@ -20,16 +20,16 @@ onMounted(async () => {
     if (token) {
       userStore.setUsePhotoSharing(true);
       state.value = 'success';
-      message.value = '写真共有機能が有効になりました。';
-      window.setTimeout(() => router.replace({ name: 'UserConfig' }), 1200);
+      message.value = '写真共有機能が有効になりました.';
+      window.setTimeout(() => router.push({ name: 'Home' }), 1200);
       return;
     }
     state.value = 'error';
-    message.value = '写真共有の認証に失敗しました。ユーザー設定から再度お試しください。';
+    message.value = '写真共有の認証に失敗しました. 個人設定から再度お試しください.';
     return;
   }
   state.value = 'error';
-  message.value = '不明な有効化リクエストです。';
+  message.value = '不明な有効化リクエストです. 個人設定から再度お試しください.';
 });
 </script>
 
@@ -37,7 +37,7 @@ onMounted(async () => {
   <section class="enable-view" :data-state="state">
     <h1>機能の有効化</h1>
     <p>{{ message }}</p>
-    <button v-if="state !== 'loading'" @click="router.push({ name: 'UserConfig' })">ユーザー設定へ戻る</button>
+    <button v-if="state !== 'loading'" @click="router.push({ name: 'Home' })">ホームへ戻る</button>
   </section>
 </template>
 

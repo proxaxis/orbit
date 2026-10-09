@@ -153,18 +153,20 @@ defineExpose({
     align-items: center;
     justify-content: space-between;
     gap: var(--space-sm);
-
+    border-radius: var(--border-radius, 6px);
+    &:hover {
+      background-color: var(--bg-2);
+    }
     .toggle-area {
       flex: 1 1 auto;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: var(--space-sm);
-      padding: var(--space-sm) var(--space-md);
+      padding: var(--space-sm) var(--space-xs);
       cursor: pointer;
       user-select: none;
       list-style: none;
-      border-radius: var(--border-radius, 6px);
       transition: background-color 0.15s ease;
 
       &::-webkit-details-marker {
@@ -174,9 +176,11 @@ defineExpose({
       &::marker {
         content: none;
       }
+    }
 
-      &:hover {
-        background-color: var(--bg-2);
+    .menu-area {
+      :deep(button) {
+        background-color: transparent;
       }
     }
   }
@@ -199,10 +203,19 @@ defineExpose({
     height: 0;
     overflow: hidden;
     transition: height 0.25s ease;
+    background-color: var(--bg-2);
+    border-radius: 0 0 var(--border-radius, 6px) var(--border-radius, 6px);
+    padding: var(--space-sm) var(--space-xs);
   }
 
   &[open] > summary {
-    margin-bottom: var(--space-xxs);
+    background-color: var(--bg-3);
+    border-radius: var(--border-radius, 6px) var(--border-radius, 6px) 0 0;
+
+    &:hover {
+      background-color: var(--bg-2);
+      border-radius: var(--border-radius, 6px) var(--border-radius, 6px) 0 0;
+    }
   }
 
   // JS による高さ制御前（初期 open / スクリプト未実行）でも内容が見えるようにする

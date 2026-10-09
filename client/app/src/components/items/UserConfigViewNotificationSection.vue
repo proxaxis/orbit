@@ -18,8 +18,8 @@ async function requestNotificationPermission() {
 
 <template>
   <section class="config-section">
-    <h2>通知</h2>
     <p class="hint">予定の通知にはブラウザの通知機能を使います. 通知タイミングは予定の編集画面で設定できます.</p>
+    <p class="hint">許可するとプッシュ通知が有効になり、アプリを閉じている間もモバイル端末へ通知が届きます.</p>
     <p v-if="notificationPermissionState === 'unsupported'" class="hint">このブラウザーは通知に対応していません.</p>
     <p v-else-if="notificationPermissionState === 'granted'" class="hint">通知は許可されています.</p>
     <p v-else-if="notificationPermissionState === 'denied'" class="hint">通知がブロックされています. ブラウザの設定から許可してください.</p>
@@ -28,6 +28,9 @@ async function requestNotificationPermission() {
 </template>
 
 <style lang="scss" scoped>
+.hint {
+  font-size: var(--text-size-xs);
+}
 .clear-cache-button {
   align-self: flex-start;
   gap: var(--space-xs);

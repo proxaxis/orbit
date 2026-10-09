@@ -6,6 +6,7 @@
 import dayjs from '@/services/dayjs.js';
 import { rrulestr } from 'rrule';
 import { CACHE_KEYS, SYNC_TAGS, readCache, registerBackgroundSync, registerPeriodicBackgroundSync, writeCache } from '@/composables/useCache.js';
+import { ensurePushSubscription, syncPushSchedule } from '@/composables/usePushNotifications.js';
 
 /** スケジュールに保存する通知エントリの上限 */
 const MAX_SCHEDULE_ENTRIES = 200;
@@ -49,10 +50,19 @@ export function notificationPermission() {
  */
 export async function ensureNotificationPermission() {
   if (!notificationsSupported()) return 'unsupported';
-  if (Notification.permission === 'granted') return 'granted';
+  if (Notification.permission === 'granted') {
+    // 許可済みならモバイル向けのプッシュ購読も確保する
+    ensurePushSubscription().then(() => rescheduleNotifications());
+    return 'granted';
+  }
   if (Notification.permission === 'denied') return 'denied';
   try {
-    return await Notification.requestPermission();
+    const result = await Notification.requestPermission();
+    if (result === 'granted') {
+      await ensurePushSubscription();
+      rescheduleNotifications();
+    }
+    return result;
   } catch {
     return Notification.permission;
   }
@@ -245,7 +255,10 @@ export async function rescheduleNotifications() {
   }
 
   scheduleEntries.sort((a, b) => a.fireAt - b.fireAt);
-  await writeCache(CACHE_KEYS.NOTIFICATION_SCHEDULE, scheduleEntries.slice(0, MAX_SCHEDULE_ENTRIES));
+  const limitedEntries = scheduleEntries.slice(0, MAX_SCHEDULE_ENTRIES);
+  await writeCache(CACHE_KEYS.NOTIFICATION_SCHEDULE, limitedEntries);
+  // モバイル端末でアプリが閉じていても届くよう、購読情報とスケジュールを BFF へ送る
+  syncPushSchedule(limitedEntries);
 
   if (nextDelay !== null) {
     scanTimer = window.setTimeout(
@@ -268,6 +281,11 @@ async function registerNotificationBackgroundSync() {
   await registerPeriodicBackgroundSync(SYNC_TAGS.NOTIFICATIONS, PERIODIC_SYNC_INTERVAL_MS);
 }
 
+/** 通知済みイベントの記録を破棄する（アカウント切替時などに使用） */
+export function resetNotificationHistory() {
+  notifiedKeys = new Set();
+}
+
 /** イベント通知のスケジューリングを開始する */
 export function initEventNotifications() {
   if (initialized || !notificationsSupported()) return;
@@ -276,6 +294,8 @@ export function initEventNotifications() {
     notifiedKeys = new Set(Array.isArray(keys) ? keys : []);
     rescheduleNotifications();
   });
+  // 既に通知許可済みならモバイル向けのプッシュ購読を確保する
+  if (notificationPermission() === 'granted') ensurePushSubscription();
   registerNotificationBackgroundSync();
   window.setInterval(rescheduleNotifications, RESCAN_INTERVAL_MS);
   document.addEventListener('visibilitychange', () => {

@@ -8,7 +8,8 @@ import { useUserStore } from '@/stores/user.js';
 import { useAuth, initApiClients } from '@/composables/useAuth.js';
 import { useCalendars } from '@/composables/useCalendars.js';
 import { initEventSync } from '@/composables/useEvents.js';
-import { initEventNotifications } from '@/composables/useNotifications.js';
+import { initEventNotifications, rescheduleNotifications } from '@/composables/useNotifications.js';
+import { initRemoteChangeSync, checkRemoteChanges } from '@/composables/useRemoteSync.js';
 import { initShareSync } from '@/composables/useShare.js';
 import { useTheme } from '@/composables/useTheme.js';
 
@@ -74,6 +75,12 @@ export function useAppBootstrap() {
     } else if (event.data?.type === 'orbit-shares-changed') {
       // バックグラウンドで共有同期が行われた → 共有条件を再読み込み
       initShareSync();
+    } else if (event.data?.type === 'orbit-remote-changed') {
+      // プッシュ受信などバックグラウンドでの起き上がり → リモート変更を即時確認
+      checkRemoteChanges(true);
+    } else if (event.data?.type === 'orbit-push-resubscribe') {
+      // プッシュ購読が更新された → 通知スケジュールを再送して購読を張り直す
+      rescheduleNotifications();
     } else if (event.data?.type === 'orbit-token-expired') {
       // SW 側のトークンが古い → ページ側で再取得してキャッシュへ保存し直す
       auth.fetchToken();
@@ -97,6 +104,7 @@ export function useAppBootstrap() {
     initEventNotifications();
     initShareSync();
     initEventSync();
+    initRemoteChangeSync();
     mQueryList = window.matchMedia('(prefers-color-scheme: dark)');
     mQueryList.addEventListener('change', handleSystemThemeChange);
     mCoarsePointerQuery = window.matchMedia('(hover: none) and (pointer: coarse)');
@@ -108,6 +116,8 @@ export function useAppBootstrap() {
     if (token) {
       if (userStore.usePhotoSharing) auth.ensurePhotoToken();
       await calendars.loadCalendars();
+      // 起動時に他デバイスでの変更をバックグラウンド確認する（UI はブロックしない）
+      checkRemoteChanges();
     }
     if (!token && !authStore.isAuthenticated) {
       userStore.openUserDialog({

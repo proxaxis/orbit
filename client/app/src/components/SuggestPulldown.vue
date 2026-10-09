@@ -147,15 +147,20 @@ function onKeydown(evt) {
 
 <style lang="scss" scoped>
 .suggest-pulldown {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-xxs);
 
   > input {
     width: 100%;
   }
 
   .suggest-list {
+    position: absolute;
+    top: calc(100% + var(--space-xxs));
+    left: 0;
+    right: 0;
+    z-index: 10;
     display: flex;
     flex-direction: column;
     gap: var(--space-xxs);
@@ -164,6 +169,7 @@ function onKeydown(evt) {
     border: 1px solid var(--border);
     border-radius: var(--border-radius);
     background: var(--bg-2);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
     list-style: none;
     max-height: 16rem;
     overflow-y: auto;

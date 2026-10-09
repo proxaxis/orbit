@@ -1,5 +1,5 @@
 /**
- * ユーザー設定に基づくテーマ・フォントの DOM 反映を担うコンポーザブル。
+ * 個人設定に基づくテーマ・フォントの DOM 反映を担うコンポーザブル。
  * 状態の保持は `stores/user.js`、ここでは CSS 変数やクラスへの適用のみを行う。
  */
 import { DEFAULT_THEME_COLOR, USER_FONT_FAMILIES, USER_TEXT_SIZE_VALUES, useUserStore } from '@/stores/user.js';

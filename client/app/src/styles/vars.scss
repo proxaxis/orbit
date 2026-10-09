@@ -14,17 +14,17 @@
 @import url('https://fonts.googleapis.com/css?family=Noto+Sans+JP'); // 'Noto Sans JP'
 
 // カラーコード定数
-$base-color-lt-bg: #dfdfdf;
+$base-color-lt-bg: #ffffff;
 $base-color-dk-bg: #000000;
 $base-color-lt-text: #333333;
 $base-color-dk-text: #ffffff;
 $themes: (
   light: (
     bg-0: $base-color-lt-bg,
-    bg-1: color.scale($base-color-lt-bg, $lightness: -10%),
-    bg-2: color.scale($base-color-lt-bg, $lightness: -20%),
-    bg-3: color.scale($base-color-lt-bg, $lightness: -30%),
-    bg-4: color.scale($base-color-lt-bg, $lightness: -40%),
+    bg-1: color.scale($base-color-lt-bg, $lightness: 0%),
+    bg-2: color.scale($base-color-lt-bg, $lightness: -6%),
+    bg-3: color.scale($base-color-lt-bg, $lightness: -12%),
+    bg-4: color.scale($base-color-lt-bg, $lightness: -18%),
     text: $base-color-lt-text,
     text-light: color.scale($base-color-lt-text, $lightness: 60%),
     border: rgba(0, 0, 0, 0.3),

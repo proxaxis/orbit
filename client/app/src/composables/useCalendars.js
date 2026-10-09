@@ -5,8 +5,27 @@
 import * as gCalAPI from '@/services/google-calendar-api.js';
 import { useAuthStore } from '@/stores/auth.js';
 import { useCalendarStore } from '@/stores/calendar.js';
+import { useEventStore } from '@/stores/event.js';
+import { useShareStore } from '@/stores/share.js';
 import { useUserStore } from '@/stores/user.js';
-import { CACHE_KEYS, readCache } from '@/composables/useCache.js';
+import { CACHE_KEYS, deleteCache, readCache, writeCache } from '@/composables/useCache.js';
+import { resetSharedEventCache } from '@/composables/useCalendarEvents.js';
+import { resetNotificationHistory } from '@/composables/useNotifications.js';
+import { resetSearchCache } from '@/composables/usePeople.js';
+
+/** アカウント切替時に破棄するアカウント由来の IndexedDB キャッシュキー */
+const ACCOUNT_SCOPED_CACHE_KEYS = [
+  CACHE_KEYS.EVENTS,
+  CACHE_KEYS.CALENDARS,
+  CACHE_KEYS.SESSION_CALENDARS,
+  CACHE_KEYS.EVENT_OPERATIONS,
+  CACHE_KEYS.SHARE_SPECS,
+  CACHE_KEYS.NOTIFIED_EVENTS,
+  CACHE_KEYS.NOTIFICATION_SCHEDULE,
+  CACHE_KEYS.RECENT_EVENT_TITLES,
+  CACHE_KEYS.RECENT_EVENT_TAGS,
+  CACHE_KEYS.REMOTE_SYNC_CHECKED_AT,
+];
 
 /**
  * カレンダー操作のコンポーザブル
@@ -15,7 +34,38 @@ import { CACHE_KEYS, readCache } from '@/composables/useCache.js';
 export function useCalendars() {
   const authStore = useAuthStore();
   const calendarStore = useCalendarStore();
+  const eventStore = useEventStore();
+  const shareStore = useShareStore();
   const userStore = useUserStore();
+
+  /** 前アカウント由来の永続キャッシュとメモリキャッシュを全て破棄する */
+  async function resetAccountScopedData() {
+    await Promise.all(ACCOUNT_SCOPED_CACHE_KEYS.map((key) => deleteCache(key)));
+    eventStore.clearEventCache();
+    eventStore.setPendingOperations([]);
+    shareStore.setSpecs([]);
+    calendarStore.setSessionCalendars([]);
+    userStore.clearEventInputHistories();
+    resetSharedEventCache();
+    resetNotificationHistory();
+    resetSearchCache();
+  }
+
+  /**
+   * 取得済みトークンのアカウントと前回ログイン時のアカウントを比較し、
+   * 変わっていれば前アカウント由来のキャッシュを破棄する。
+   * @param {GoogleCalendarListEntry[]} listEntries calendarList の最新一覧
+   * @returns {Promise<void>}
+   */
+  async function syncAccountIdentity(listEntries) {
+    // プライマリカレンダーの ID はアカウントのメールアドレスなので、アカウント識別子として使う
+    const accountId = listEntries.find((entry) => entry.primary)?.id ?? null;
+    if (!accountId) return;
+    const previousAccountId = await readCache(CACHE_KEYS.ACCOUNT_ID, null);
+    if (previousAccountId === accountId) return;
+    if (previousAccountId) await resetAccountScopedData();
+    await writeCache(CACHE_KEYS.ACCOUNT_ID, accountId);
+  }
 
   /**
    * オフラインキャッシュと API からカレンダー一覧を読み込み、ストアへ反映する
@@ -32,6 +82,7 @@ export function useCalendars() {
     try {
       const response = await gCalAPI.listCalendarList(authStore.token);
       const listEntries = Array.isArray(response?.items) ? response.items : [];
+      await syncAccountIdentity(listEntries);
       calendarStore.setCalendars(listEntries);
     } catch (err) {
       userStore.setError(true, err);
@@ -172,6 +223,7 @@ export function useCalendars() {
 
   return {
     loadCalendars,
+    syncAccountIdentity,
     searchSessionCalendar,
     createCalendar,
     addCalendarListEntry,

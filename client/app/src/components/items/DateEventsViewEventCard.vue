@@ -130,7 +130,7 @@ function onSelectContextMenu(action) {
   <li @click.stop="handleCardClick" @contextmenu="handleCardContextMenu" @touchstart="startCardLongPress" @touchmove="handleCardTouchMove" @touchend="finishCardTouch" @touchcancel="cancelCardLongPress">
     <div class="face">
       <CalendarRibbon :cid="event.calendarId" :useLabel="false" />
-      <IconArrowsRotate size="0.7rem" v-if="!!event.raw.recurrence" />
+      <IconArrowsRotate size="0.7rem" v-if="!!event.raw?.recurrence" />
     </div>
     <div class="info">
       <div>

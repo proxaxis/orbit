@@ -22,8 +22,10 @@ import DropdownMenu from '@/components/DropdownMenu.vue';
 import IconClipboard from '@/components/icons/IconClipboard.vue';
 import IconEllipsisVertical from '@/components/icons/IconEllipsisVertical.vue';
 import IconEyeSlash from '@/components/icons/IconEyeSlash.vue';
+import IconEye from '@/components/icons/IconEye.vue';
 import IconTrash from '@/components/icons/IconTrash.vue';
 import IconUserGroup from '@/components/icons/IconUserGroup.vue';
+import IconCloudArrowDown from '../icons/IconCloudArrowDown.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -110,10 +112,11 @@ async function stopShare(spec) {
       <div class="accordion-content">
         <div class="session-calendar-search">
           <div class="session-search-row">
-            <SuggestPulldown v-model="sessionCalendarQuery" :suggestions="peopleStore.suggestions" :item-key="(person) => person.resourceName" placeholder="カレンダーを検索..." @update:model-value="searchPeopleForSessionCalendar" @enter="searchSessionCalendar" @select="selectPersonSuggestion">
+            <SuggestPulldown v-model="sessionCalendarQuery" :suggestions="peopleStore.suggestions" :item-key="(person) => person.resourceName" placeholder="カレンダーを検索..."
+              @update:model-value="searchPeopleForSessionCalendar" @enter="searchSessionCalendar" @select="selectPersonSuggestion">
               <template #suggestion="{ item: person }">{{ person.names?.[0]?.displayName || person.emailAddresses?.[0]?.value }}</template>
             </SuggestPulldown>
-            <button type="button" :disabled="userStore.isLoading" @click="searchSessionCalendar">追加</button>
+            <button type="button" :disabled="userStore.isLoading" @click="searchSessionCalendar"><IconCloudArrowDown />追加</button>
           </div>
         </div>
 
@@ -129,6 +132,7 @@ async function stopShare(spec) {
                           <IconEllipsisVertical />
                         </button>
                       </template>
+                      <button @click="userStore.setCalendarVisibility(c.id, true)"><IconEye />表示</button>
                       <button @click="userStore.setCalendarVisibility(c.id, false)"><IconEyeSlash />非表示</button>
                       <button @click="calendarStore.removeSessionCalendar(c.id)">セッションから削除</button>
                     </DropdownMenu>
@@ -182,7 +186,6 @@ async function stopShare(spec) {
   overflow: visible;
   small {
     display: block;
-    padding: var(--space-xs) var(--space-md);
     color: var(--text-light);
   }
 }
@@ -228,7 +231,7 @@ ul {
 }
 
 .cal-list-menu-open {
-  padding: var(--space-sm);
+  padding: var(--space-sm) calc(var(--space-xs) + var(--space-sm)) var(--space-sm) var(--space-sm);
   background-color: var(--bg-1);
 
   &:hover {
@@ -252,20 +255,23 @@ ul {
 .session-search-row {
   display: flex;
   gap: var(--space-xs);
+  flex-wrap: wrap;
 
   button {
-    background-color: var(--bg-2);
-    border: 1px solid var(--border);
-    border-radius: var(--border-radius);
+    background-color: var(--primary);
 
     &:hover {
-      background-color: var(--bg-3);
+      background-color: var(--primary-light);
     }
   }
 
   .suggest-pulldown {
     flex: 1;
     min-width: 0;
+
+    :deep(input) {
+      height: 100%;
+    }
   }
 }
 

@@ -80,6 +80,7 @@ header {
 
   h2 {
     font-size: var(--text-size-lg);
+    color: var(--text);
   }
 
   button {
@@ -94,6 +95,7 @@ header {
 .dialog-message,
 .dialog-content {
   padding: var(--space-lg) var(--space-md);
+  color: var(--text);
 }
 
 .dialog-actions {

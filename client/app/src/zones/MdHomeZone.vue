@@ -56,7 +56,7 @@ function onSubResizeStart(evt) {
       </div>
     </main>
 
-    <div class="resize-handle" v-show="!userStore.formDatePick" @pointerdown.prevent="onSubResizeStart"></div>
+    <div class="resize-handle" v-show="!userStore.formDatePick" @pointerdown.prevent="onSubResizeStart"><icon-ellipsis-vertical /></div>
 
     <aside class="sub-pane" :style="{ width: `${props.subWidth}px` }" v-show="!userStore.formDatePick">
       <div class="aside-content sub-pane-content">

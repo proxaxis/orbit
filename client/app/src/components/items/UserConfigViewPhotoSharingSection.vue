@@ -43,7 +43,6 @@ async function disablePhotoSharing() {
 
 <template>
   <section class="config-section">
-    <h2>写真共有</h2>
     <p class="hint">イベントに写真の共有アルバムを紐づけます. 有効化にはGoogleアカウントでの追加認証が必要です.</p>
     <p v-if="!authStore.isAuthenticated" class="hint">利用するには Google アカウントでログインしてください.</p>
     <p v-else-if="userStore.isLoading" class="hint">認証状態を確認しています...</p>
@@ -59,6 +58,9 @@ async function disablePhotoSharing() {
 </template>
 
 <style lang="scss" scoped>
+.hint {
+  font-size: var(--text-size-xs);
+}
 .clear-cache-button {
   align-self: flex-start;
   gap: var(--space-xs);

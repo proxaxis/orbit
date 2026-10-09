@@ -220,16 +220,6 @@ onBeforeUnmount(() => {
               <button type="button" class="random-btn" @click="randomEmoji">ランダム</button>
             </div>
 
-            <div v-if="selectedItem" class="category-editor">
-              <label for="emoji-category">カテゴリを選択:</label>
-              <select id="emoji-category" :value="selectedItem.category" @change="updateCategory">
-                <option v-for="category in editableCategories" :key="category.id" :value="category.id">
-                  {{ category.label }}
-                </option>
-              </select>
-              <button type="button" class="reset-btn" @click="resetCategory">デフォルトにする</button>
-            </div>
-
             <template v-if="isSearching">
               <div v-if="flatEmojiItems.length" class="emoji-grid">
                 <button v-for="item in flatEmojiItems" :key="item.char" type="button" class="emoji-btn" :class="{ active: item.char === modelValue }" @click="selectEmoji(item.char)" :aria-label="item.name">

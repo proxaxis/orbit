@@ -16,6 +16,15 @@ const monthEvents = ref(new Map());
 /** @type {Map<string, Promise<void>>} 読み込み中の年月（重複 fetch 抑止用） */
 const inflightMonths = new Map();
 
+/** @type {number} キャッシュ破棄ごとに増える世代番号。破棄前に開始した取得結果がキャッシュを再汚染するのを防ぐ */
+let cacheGeneration = 0;
+
+/** モジュール共有の月イベントキャッシュを全て破棄する（アカウント切替時などに使用） */
+export function resetSharedEventCache() {
+  monthEvents.value = new Map();
+  cacheGeneration += 1;
+}
+
 /**
  * 指定範囲にかかるイベントを購読するコンポーザブル。
  * カスタム休日（'Custom Holiday' 終日イベント）は通常イベントとしては返さず、
@@ -28,10 +37,14 @@ export function useCalendarEvents(range) {
   const calendarStore = useCalendarStore();
   const eventStore = useEventStore();
 
-  /** @type {ComputedRef<{year: number, month: number, key: string}[]>} 表示範囲がまたぐ月の一覧 */
+  // 表示範囲がまたぐ月に前後1か月のバッファを付けて取得・併合する。
+  // 範囲外の月エントリにも範囲内のイベントが含まれ得る（月またぎ・月単位キャッシュのずれ）ため、
+  // 1エントリだけの欠落で表示が崩れないようにする
   const neededMonths = computed(() => {
     const months = [];
-    for (let cursor = range.value.start.startOf('month'); !cursor.isAfter(range.value.end); cursor = cursor.add(1, 'month')) {
+    const fetchStart = range.value.start.startOf('month').subtract(1, 'month');
+    const fetchEnd = range.value.end.endOf('month').add(1, 'month');
+    for (let cursor = fetchStart; !cursor.isAfter(fetchEnd); cursor = cursor.add(1, 'month')) {
       months.push({ year: cursor.year(), month: cursor.month(), key: `${cursor.year()}:${cursor.month()}` });
     }
     return months;
@@ -46,15 +59,26 @@ export function useCalendarEvents(range) {
   function loadMonth(target, { force = false } = {}) {
     if (!force && monthEvents.value.has(target.key)) return;
     if (inflightMonths.has(target.key)) return;
+    const generation = cacheGeneration;
     const task = eventsService
       .listEvents(target.year, target.month)
       .then((items) => {
+        // 取得中にキャッシュが破棄された場合は古い世代の結果を書き戻さない
+        if (generation !== cacheGeneration) return;
         const next = new Map(monthEvents.value);
         next.set(target.key, items);
         monthEvents.value = next;
       })
-      .catch(() => {})
-      .finally(() => inflightMonths.delete(target.key));
+      .catch(() => {
+        // 失敗した月はキャッシュに残さず遅延リトライする（放っておくと範囲が変わるまで空のままになる）
+        window.setTimeout(() => loadMonth(target), 30_000);
+      })
+      .finally(() => {
+        inflightMonths.delete(target.key);
+        // 世代が変わった＝リセット/強制再取得待ち → 取り直す（inflight スキップ分の補填。
+        // 旧エントリが残る場合があるため force で必ず上書きする）
+        if (generation !== cacheGeneration) loadMonth(target, { force: true });
+      });
     inflightMonths.set(target.key, task);
   }
 
@@ -65,6 +89,8 @@ export function useCalendarEvents(range) {
 
   /** 予定データの変更を反映するため、表示中の月を全て再取得する */
   function reloadNeededMonths() {
+    // 世代を進めて実行中の古い取得を無効化し、完了時に取り直させる
+    cacheGeneration += 1;
     neededMonths.value.forEach((target) => loadMonth(target, { force: true }));
   }
 
@@ -75,10 +101,12 @@ export function useCalendarEvents(range) {
   watch(() => eventStore.eventsVersion, reloadNeededMonths);
 
   // 表示中のカレンダー構成が変わったらキャッシュを破棄して取り直す
+  // （カレンダー別月キャッシュも破棄しないと古い月エントリが再利用される）
   watch(
     () => calendarStore.listVisibleCalendars,
     () => {
-      monthEvents.value = new Map();
+      eventStore.clearEventCache();
+      resetSharedEventCache();
       loadNeededMonths();
     },
     { deep: true },
@@ -91,9 +119,11 @@ export function useCalendarEvents(range) {
     const merged = new Map();
     for (const target of neededMonths.value) {
       for (const evt of monthEvents.value.get(target.key) ?? []) {
-        if (evt.startDateTime.isBefore(end) && evt.endDateTime.isAfter(start)) {
-          merged.set(`${evt.calendarId}:${evt.id}:${evt.startDateTime.unix()}`, evt);
-        }
+        if (!evt.startDateTime.isBefore(end) || !evt.endDateTime.isAfter(start)) continue;
+        // 月ごとの取得結果に同一イベントの新旧コピーが混在し得るため、updated が新しい方を採用する
+        const key = `${evt.calendarId}:${evt.id}`;
+        const existing = merged.get(key);
+        if (!existing || String(evt.raw?.updated ?? '') >= String(existing.raw?.updated ?? '')) merged.set(key, evt);
       }
     }
     return [...merged.values()];

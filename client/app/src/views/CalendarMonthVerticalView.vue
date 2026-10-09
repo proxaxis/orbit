@@ -666,7 +666,7 @@ onUnmounted(() => {
           <button type="button" title="タイムライン表示にする" aria-label="タイムライン表示にする" @click="userStore.setMainCalendarView('WEEK')">
             <IconBarsStaggered size="1.25rem" />
           </button>
-          <button type="button" title="ユーザー設定" aria-label="ユーザー設定" @click="router.push({ name: 'UserConfig' })">
+          <button type="button" title="個人設定" aria-label="個人設定" @click="router.push({ name: 'UserConfig' })">
             <IconGear size="1.25rem" />
           </button>
         </template>
@@ -681,7 +681,7 @@ onUnmounted(() => {
           <button type="button" @click="router.push({ name: 'EventQuickAdd' })"><IconWandMagicSparkles size="1rem" />自然言語で登録</button>
           <button type="button" @click="userStore.setMainCalendarView('MONTH')"><IconCalendarDays size="1rem" />月表示にする</button>
           <button type="button" @click="userStore.setMainCalendarView('WEEK')"><IconBarsStaggered size="1rem" />TL表示にする</button>
-          <button type="button" @click="router.push({ name: 'UserConfig' })"><IconGear size="1rem" />ユーザー設定</button>
+          <button type="button" @click="router.push({ name: 'UserConfig' })"><IconGear size="1rem" />個人設定</button>
         </DropdownMenu>
       </div>
     </header>

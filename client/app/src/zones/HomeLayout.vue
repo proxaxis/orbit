@@ -310,13 +310,15 @@ onUnmounted(() => {
 }
 
 .home-zone .resize-handle {
-  width: var(--space-xs);
+  width: var(--space-sm);
   cursor: col-resize;
   touch-action: none;
   background-color: var(--bg-1);
   transition: background-color 0.4s ease;
   flex: 0 0 var(--space-xs);
   z-index: 10;
+  display: flex;
+  align-items: center;
 
   &:hover,
   &:active {

@@ -1,6 +1,6 @@
 /**
  * 予定タイプ（終日 / 時間指定）ごとのイベントバー表示方法の共有ロジック。
- * ユーザー設定（userStore.allDayEventBarStyle / timedEventBarStyle）に応じて、
+ * 個人設定（userStore.allDayEventBarStyle / timedEventBarStyle）に応じて、
  * 背景塗りつぶし（FILL）か背景なし+左のドット表示（DOT）かを判定する。
  */
 import { useUserStore } from '@/stores/user.js';

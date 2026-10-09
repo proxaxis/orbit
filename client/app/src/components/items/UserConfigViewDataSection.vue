@@ -1,7 +1,7 @@
 <script setup>
 /**
  * UserConfigView のデータ管理欄。
- * ユーザー設定とオフラインキャッシュの削除を担う。
+ * 個人設定とオフラインキャッシュの削除を担う。
  */
 import { useUserStore } from '@/stores/user.js';
 import { CACHE_KEYS, clearCache, deleteCache } from '@/composables/useCache.js';
@@ -9,11 +9,11 @@ import IconTrash from '@/components/icons/IconTrash.vue';
 
 const userStore = useUserStore();
 
-/** 保存したユーザー設定を削除して初期設定に戻す */
+/** 保存した個人設定を削除して初期設定に戻す */
 async function clearSettings() {
   const confirmed = await userStore.confirm({
     title: '設定を削除',
-    message: '保存したユーザー設定を削除して初期設定に戻します。続行しますか？',
+    message: '保存した個人設定を削除して初期設定に戻します。続行しますか？',
   });
   if (!confirmed) return;
 
@@ -46,8 +46,7 @@ async function clearAppCache() {
 
 <template>
   <section class="config-section">
-    <h2>データ管理</h2>
-    <p class="hint">設定のデータを削除します。</p>
+    <p class="hint">設定のデータを削除します.</p>
     <button type="button" class="clear-cache-button" @click="clearSettings"><IconTrash />設定を削除</button>
     <p class="hint">設定以外の全てのオフラインデータを削除します.</p>
     <button type="button" class="clear-cache-button" @click="clearAppCache"><IconTrash />キャッシュを削除</button>
@@ -55,6 +54,9 @@ async function clearAppCache() {
 </template>
 
 <style lang="scss" scoped>
+.hint {
+  font-size: var(--text-size-xs);
+}
 .clear-cache-button {
   align-self: flex-start;
   gap: var(--space-xs);

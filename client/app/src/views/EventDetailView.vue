@@ -12,11 +12,13 @@ import IconTrash from '@/components/icons/IconTrash.vue';
 import IconLocationDot from '@/components/icons/IconLocationDot.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
 import { useUserStore } from '@/stores/user.js';
+import { useCalendarStore } from '@/stores/calendar.js';
 import IconClock from '@/components/icons/IconClock.vue';
 import IconAlignLeft from '@/components/icons/IconAlignLeft.vue';
 import IconUserCheck from '@/components/icons/IconUserCheck.vue';
 import IconAnglesDown from '@/components/icons/IconAnglesDown.vue';
 import IconClone from '@/components/icons/IconClone.vue';
+import IconBell from '@/components/icons/IconBell.vue';
 import IconArrowUpRightFromSquare from '@/components/icons/IconArrowUpRightFromSquare.vue';
 import InlineEmoji from '@/components/InlineEmoji.vue';
 import AccordionMenu from '@/components/AccordionMenu.vue';
@@ -24,6 +26,7 @@ import AccordionMenu from '@/components/AccordionMenu.vue';
 const router = useRouter();
 const route = useRoute();
 const userStore = useUserStore();
+const calendarStore = useCalendarStore();
 const eventActions = useEventActions();
 
 /** @type {Ref<HandyCalendarEvent|null>} */
@@ -36,6 +39,23 @@ const rfPhotoAlbum = ref(null);
 const hasOtherAttendees = computed(() => eventActions.hasOtherAttendees(event.value));
 
 const myAttendee = computed(() => event.value?.raw?.attendees?.find((attendee) => attendee.self) ?? null);
+
+/** イベントに有効な通知設定（分）のリスト。カレンダー既定使用時は既定値を展開する */
+const reminderMinutesList = computed(() => {
+  const reminders = event.value?.raw?.reminders;
+  if (!reminders) return [];
+  const overrides = reminders.useDefault ? (calendarStore.list.find((cal) => cal.id === event.value?.calendarId)?.defaultReminders ?? []) : (reminders.overrides ?? []);
+  return overrides.map((override) => override?.minutes ?? 0).sort((a, b) => a - b);
+});
+
+/** @param {number} minutes @returns {string} 通知タイミングの表示文字列 */
+function formatReminderMinutes(minutes) {
+  if (minutes % 1440 === 0) return `${minutes / 1440}日前`;
+  if (minutes % 60 === 0) return `${minutes / 60}時間前`;
+  return `${minutes}分前`;
+}
+
+const reminderText = computed(() => reminderMinutesList.value.map(formatReminderMinutes).join(' / '));
 
 /** @param {'accepted'|'declined'} responseStatus 本人の参加ステータスを更新します。 */
 async function respondToInvitation(responseStatus) {
@@ -176,6 +196,15 @@ watch(
             <small>{{ dateText.duration }}</small>
           </dd>
           <button title="日時をコピー" @click="userStore.writeClipboard(`${dateText.startText} ~ ${dateText.endText}`)">
+            <IconClone size="1rem" />
+          </button>
+        </div>
+        <div class="detail-row" v-if="reminderMinutesList.length">
+          <dt>
+            <IconBell />
+          </dt>
+          <dd>{{ reminderText }}に通知</dd>
+          <button title="通知設定をコピー" @click="userStore.writeClipboard(reminderText)">
             <IconClone size="1rem" />
           </button>
         </div>

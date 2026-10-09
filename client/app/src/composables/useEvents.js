@@ -19,6 +19,29 @@ import { isCustomHolidayEvent } from '@/services/custom-holidays.js';
 /** @type {boolean} オフライン同期の初期化済みフラグ */
 let syncInitialized = false;
 
+/** @type {Promise<void>} 保存イベントへの反映を直列化するキュー（複数月の同時ロードで全体配列を巻き戻さないため） */
+let storedEventsWriteQueue = Promise.resolve();
+
+/** @type {number} カレンダー別月キャッシュの有効期間。期限なしだと他デバイス等での変更がセッション中反映されない */
+const MONTH_CACHE_TTL_MS = 10 * 60 * 1000;
+
+/** @type {Map<string, number>} 直近で削除したイベントキー（calendarId:eventId）と削除時刻。events.list の反映遅れで復活するのを防ぐ */
+const recentlyRemovedEventKeys = new Map();
+
+/** @type {number} 削除ガードの有効期間（この間に届いた API 一覧内の該当イベントを無視する） */
+const REMOVED_EVENT_GUARD_MS = 60 * 1000;
+
+/**
+ * イベントの更新時刻を返す。ローカル保存版はトップレベルの updated、API 版は raw.updated を持つため新しい方を使う
+ * @param {any} event イベント
+ * @returns {string} ISO 形式の更新時刻（無ければ空文字）
+ */
+function updatedStampOf(event) {
+  const raw = String(event?.raw?.updated ?? '');
+  const top = String(event?.updated ?? '');
+  return top > raw ? top : raw;
+}
+
 /**
  * 予定データに関わる副作用（通知リスケジュールと共有カレンダー同期の予約）
  * @returns {void}
@@ -35,7 +58,7 @@ function runEventDataSideEffects() {
  * 取得のたびにバージョンを上げると無限ループになる。
  * @returns {void}
  */
-function notifyEventDataChanged() {
+export function notifyEventDataChanged() {
   useEventStore().bumpEventsVersion();
   runEventDataSideEffects();
 }
@@ -125,19 +148,45 @@ export function useEvents() {
     const pendingEventIds = new Set(eventStore.pendingOperations.map((operation) => operation.eventId ?? operation.localId));
     const gCalendarIdSet = new Set(calendarStore.listVisibleCalendars.map((/** @type {any} */ cal) => cal.id));
 
+    /** @type {Map<string, HandyCalendarEvent[]>} API 取得に成功したカレンダー ID → その月のイベント一覧（保存イベントへまとめて反映するため） */
+    const succeeded = new Map();
+    // フェッチ開始前の保存イベントキー。取得中に保存されたイベント（作成直後で events.list に未反映など）は
+    // 一括書き戻しで消さないために使う
+    const storedBeforeKeys = new Set((await getStoredEvents()).map((/** @type {HandyCalendarEvent} */ event) => eventKey(event)));
+
+    // 削除直後のイベントが events.list の反映遅れで復活するのを防ぐ
+    /** @param {HandyCalendarEvent} event @returns {boolean} 削除ガード期間内か */
+    const isRecentlyRemoved = (event) => {
+      const at = recentlyRemovedEventKeys.get(eventKey(event));
+      if (at === undefined) return false;
+      if (Date.now() - at > REMOVED_EVENT_GUARD_MS) {
+        recentlyRemovedEventKeys.delete(eventKey(event));
+        return false;
+      }
+      return true;
+    };
+
+    // API 版でローカル保存版を上書きしてよいか。
+    // 更新直後のローカル版は updated が新しいため、events.list の反映遅れで古い API 版に戻されるのを防ぐ
+    /** @param {Map<string, HandyCalendarEvent>} target @param {HandyCalendarEvent} event */
+    const mergeApiEvent = (target, event) => {
+      if (pendingEventIds.has(event.id) || isRecentlyRemoved(event)) return;
+      const current = target.get(eventKey(event));
+      if (current && updatedStampOf(current) > updatedStampOf(event)) return;
+      target.set(eventKey(event), event);
+    };
+
     await Promise.all(
       Array.from(gCalendarIdSet).map(async (gCalId) => {
         const key = `${gCalId}:${year}:${monthIndex}`;
-        const cached = eventStore.getCachedEntry(key);
-        if (cached) {
-          cached.forEach((/** @type {HandyCalendarEvent} */ event) => set.set(eventKey(event), event));
-          return;
-        }
-
         const storedItems = await storedEventsForMonth(gCalId, year, monthIndex);
-        if (storedItems.length > 0) {
-          eventStore.setCachedEntry(key, storedItems);
-          storedItems.forEach((/** @type {HandyCalendarEvent} */ event) => set.set(eventKey(event), event));
+        storedItems.forEach((/** @type {HandyCalendarEvent} */ event) => set.set(eventKey(event), event));
+
+        const cached = eventStore.getCachedEntry(key);
+        const cachedItems = cached && Array.isArray(cached.items) && Date.now() - cached.at < MONTH_CACHE_TTL_MS ? cached.items : null;
+        if (cachedItems) {
+          cachedItems.forEach((/** @type {HandyCalendarEvent} */ event) => mergeApiEvent(set, event));
+          return;
         }
         if (userStore.isOffline || !authStore.token) return;
 
@@ -164,17 +213,45 @@ export function useEvents() {
           }
         } while (events?.nextPageToken);
 
-        eventStore.setCachedEntry(key, items);
-        const currentEvents = await getStoredEvents();
-        const monthEvents = await storedEventsForMonth(gCalId, year, monthIndex);
-        const storedEvents = currentEvents.filter((/** @type {HandyCalendarEvent} */ event) => event.calendarId !== gCalId || !monthEvents.some((stored) => stored.id === event.id) || pendingEventIds.has(event.id));
-        await writeCache(CACHE_KEYS.EVENTS, [...storedEvents, ...items]);
-        // キューに残る操作対象はローカル保存版を維持し、それ以外は API の最新データで上書きする
-        items.forEach((event) => {
-          if (!pendingEventIds.has(event.id)) set.set(eventKey(event), event);
-        });
+        const fetched = items.filter((event) => !isRecentlyRemoved(event));
+        eventStore.setCachedEntry(key, { at: Date.now(), items: fetched });
+        succeeded.set(gCalId, fetched);
+        // キューに残る操作対象とローカル新規版は保存版を維持し、それ以外は API の最新データで上書きする
+        fetched.forEach((event) => mergeApiEvent(set, event));
       }),
     );
+
+    // 取得成功カレンダーの当月分を保存イベントへ反映する。
+    // 全体配列の read-modify-write は同時実行で他カレンダー/他月の保存分を巻き戻すため、
+    // 月ロードごとに 1 回の書き込みへまとめた上で直列化する
+    if (succeeded.size > 0) {
+      // API 版イベントの updated を引けるようにする（ローカル新規版の巻き戻し防止）
+      const apiUpdatedByKey = new Map();
+      succeeded.forEach((items) => items.forEach((event) => apiUpdatedByKey.set(eventKey(event), updatedStampOf(event))));
+      storedEventsWriteQueue = storedEventsWriteQueue
+        .then(async () => {
+          const monthStart = dayjs().year(year).month(monthIndex).date(1).startOf('day');
+          const monthEnd = monthStart.add(1, 'month');
+          const currentEvents = await getStoredEvents();
+          const kept = currentEvents.filter((/** @type {HandyCalendarEvent} */ event) => {
+            if (!succeeded.has(event.calendarId)) return true;
+            const overlapsMonth = event.startDateTime.isBefore(monthEnd) && event.endDateTime.isAfter(monthStart);
+            if (!overlapsMonth || pendingEventIds.has(event.id)) return true;
+            // フェッチ中に保存されたイベントは残す（作成直後で list に未反映のイベントを消さない）
+            if (!storedBeforeKeys.has(eventKey(event))) return true;
+            // 直近に削除したイベントは API 一覧の遅延で復活させない
+            if (isRecentlyRemoved(event)) return false;
+            const apiUpdated = apiUpdatedByKey.get(eventKey(event));
+            // API 一覧に無いイベントはサーバ側の削除・月外移動を反映して落とす
+            if (apiUpdated === undefined) return false;
+            // ローカル保存版の方が新しい（更新直後で list 未反映）なら残す
+            return updatedStampOf(event) > apiUpdated;
+          });
+          await writeCache(CACHE_KEYS.EVENTS, [...kept, ...[...succeeded.values()].flat()]);
+        })
+        .catch(() => {});
+      await storedEventsWriteQueue;
+    }
 
     // バージョンは上げず副作用だけ実行する（バージョンを上げるとビューの再取得→再取得の無限ループになる）
     runEventDataSideEffects();
@@ -275,6 +352,9 @@ export function useEvents() {
       if (!event) return localHandyEvent;
       const created = { ...toHandyEvent(event, gCalendarId, calendarColor), timeZone: event.start?.timeZone ?? undefined };
       await upsertStoredEvent(created);
+      // 作成時の通知は insert 前に出ているため、API 版へ差し替えたことを再通知する
+      eventStore.clearEventCache();
+      notifyEventDataChanged();
       return created;
     } catch {
       queueOperation({ type: 'create', calendarId: gCalendarId, localId, body });
@@ -294,6 +374,7 @@ export function useEvents() {
     // body は Google 形式（start/end）なので、保存用モデルの日時フィールドは明示的に上書きする。
     // start/end が含まれない部分更新（参加回答など）では既存値を維持する
     const bodyTags = parseEventTags(body);
+    const now = dayjs().toISOString();
     await upsertStoredEvent({
       ...existing,
       ...body,
@@ -307,7 +388,9 @@ export function useEvents() {
       endDateTime: body.end ? toDayjs(body.end.dateTime ?? body.end.date) : existing.endDateTime,
       isAllDay: body.start ? !!body.start.date : existing.isAllDay,
       eventColorId: body.colorId === undefined ? existing.eventColorId : (body.colorId ?? undefined),
-      updated: dayjs().toISOString(),
+      // raw も更新内容で上書きする。古い raw.updated のままだと鮮度比較で API 版に負けて変更が巻き戻る
+      raw: { ...(existing.raw ?? {}), ...body, id: gEventId, updated: now },
+      updated: now,
     });
     eventStore.clearEventCache();
     notifyEventDataChanged();
@@ -316,7 +399,14 @@ export function useEvents() {
       return true;
     }
     try {
-      await gCalAPI.updateEvent(authStore.token, gCalendarId, gEventId, body);
+      const event = await gCalAPI.updateEvent(authStore.token, gCalendarId, gEventId, body);
+      if (event) {
+        const updated = { ...toHandyEvent(event, gCalendarId, calendarStore.getCalendarColor(gCalendarId)), timeZone: event.start?.timeZone ?? undefined };
+        await upsertStoredEvent(updated);
+      }
+      // 更新前の通知は API 反映前に出ているため、サーバー版へ差し替えたことを再通知する
+      eventStore.clearEventCache();
+      notifyEventDataChanged();
       return true;
     } catch {
       queueOperation({ type: 'update', calendarId: gCalendarId, eventId: gEventId, body });
@@ -386,6 +476,7 @@ export function useEvents() {
    * @returns {Promise<boolean>} 削除に成功したかどうか
    */
   async function removeEvent(gEventId, gCalendarId) {
+    recentlyRemovedEventKeys.set(`${gCalendarId}:${gEventId}`, Date.now());
     await removeStoredEvent(gEventId, gCalendarId);
     eventStore.clearEventCache();
     notifyEventDataChanged();
@@ -395,6 +486,9 @@ export function useEvents() {
     }
     try {
       await gCalAPI.deleteEvent(authStore.token, gCalendarId, gEventId);
+      // 削除前の通知は API 反映前に出ているため、古い一覧で再読込されないよう再通知する
+      eventStore.clearEventCache();
+      notifyEventDataChanged();
       return true;
     } catch {
       queueOperation({ type: 'remove', calendarId: gCalendarId, eventId: gEventId });
