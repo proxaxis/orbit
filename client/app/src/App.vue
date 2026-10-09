@@ -108,7 +108,7 @@ button {
   align-items: center;
   cursor: pointer;
   gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-xs);
+  padding: var(--space-sm);
   font-size: var(--text-size-md);
   border-radius: var(--border-radius);
   transition: background-color 0.2s ease-in-out;

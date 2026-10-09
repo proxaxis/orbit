@@ -609,12 +609,12 @@ onUnmounted(() => {
     <header ref="rfToolbar" class="week-toolbar" :class="{ 'is-compact': isCompactToolbar }">
       <div class="toolbar-left">
         <button v-if="userStore.isMobile || userStore.isTablet" type="button" title="カレンダーを開閉" aria-label="カレンダーを開閉" @click="props.selectPane('nav')">
-          <IconBars />
+          <IconBars size="1.25rem" />
         </button>
-        <button type="button" title="前週へ戻る" aria-label="前週へ戻る" @click="goPreviousWeek">
+        <button type="button" title="前週へ戻る" aria-label="前週へ戻る" v-if="userStore.isDesktop" @click="goPreviousWeek">
           <IconCaretLeft size="1.25rem" />
         </button>
-        <button type="button" title="次週へ進む" aria-label="次週へ進む" @click="goNextWeek">
+        <button type="button" title="次週へ進む" aria-label="次週へ進む" v-if="userStore.isDesktop" @click="goNextWeek">
           <IconCaretRight size="1.25rem" />
         </button>
       </div>
@@ -673,7 +673,7 @@ onUnmounted(() => {
             <div class="allday-label">終日</div>
             <div v-for="day in weekDays" :key="day.format('YYYY-MM-DD')" class="allday-cell" :class="{ 'is-in-drag-range': isInContextRange(day) }" @click="handleDayCellClick(day)" @contextmenu="handleDateContextMenu($event, day)">
               <button v-for="evt in allDayEventsFor(day)" :key="`${evt.calendarId}:${evt.id}`" type="button" class="allday-chip" :class="{ 'is-dot': isDotEventBar(evt) }" :style="getEventBarStyle(evt)" @click="(e) => handleEventClick(e, evt, day)">
-                <i v-if="isDotEventBar(evt)" class="event-dot" :style="{ backgroundColor: getEventDotColor(evt) }"></i><InlineEmoji :emoji="evt.icon ?? '📌'" /> {{ evt.summary }}
+                <i v-if="isDotEventBar(evt)" class="event-dot" :style="{ backgroundColor: getEventDotColor(evt) }"></i><InlineEmoji :emoji="evt.icon" /> {{ evt.summary }}
               </button>
             </div>
           </div>
@@ -710,7 +710,7 @@ onUnmounted(() => {
                 @click="(e) => handleEventClick(e, block.event, day)"
                 @mousedown.stop>
                 <span class="event-time"><i v-if="isDotEventBar(block.event)" class="event-dot" :style="{ backgroundColor: getEventDotColor(block.event) }"></i>{{ getEventTimeText(block.event, day) }}</span>
-                <span class="event-title"><InlineEmoji :emoji="block.event.icon ?? '📌'" /> {{ block.event.summary }}</span>
+                <span class="event-title"><InlineEmoji :emoji="block.event.icon" /> {{ block.event.summary }}</span>
               </button>
               <div v-if="isToday(day)" class="now-line" :style="{ top: nowLineTop }"></div>
             </div>
@@ -722,8 +722,8 @@ onUnmounted(() => {
     <DropdownMenu ref="rfDropdownForContextMenu" @close="contextMenuRange = null">
       <button type="button" @click="onSelectContextMenu('CreateEvent')">予定を作成</button>
       <button type="button" @click="onSelectContextMenu('CreateFromTemplate')">テンプレートから作成</button>
-      <button v-if="isContextRangeHoliday" type="button" @click="onSelectContextMenu('UnsetCustomHoliday')">この日を休日から解除</button>
-      <button v-else type="button" @click="onSelectContextMenu('SetCustomHoliday')">この日を休日にする</button>
+      <button v-if="isContextRangeHoliday" type="button" @click="onSelectContextMenu('UnsetCustomHoliday')">休日から解除</button>
+      <button v-else type="button" @click="onSelectContextMenu('SetCustomHoliday')">休日にする</button>
     </DropdownMenu>
   </div>
 </template>

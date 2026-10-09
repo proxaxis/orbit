@@ -4,8 +4,11 @@
  * 1件の予定の表示・長押し/右クリックでのコンテキストメニュー・
  * 詳細/編集/削除/複製の操作を担う。
  */
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+import dayjs, { toDayjs } from '@/services/dayjs.js';
 import { useEventActions } from '@/composables/useEventActions.js';
+import { useCalendarStore } from '@/stores/calendar.js';
+import { useUserStore } from '@/stores/user.js';
 import DropdownMenu from '@/components/DropdownMenu.vue';
 import CalendarRibbon from '@/components/CalendarRibbon.vue';
 import InlineEmoji from '@/components/InlineEmoji.vue';
@@ -14,10 +17,9 @@ import IconTrash from '@/components/icons/IconTrash.vue';
 import IconCopy from '@/components/icons/IconCopy.vue';
 import IconEllipsisVertical from '@/components/icons/IconEllipsisVertical.vue';
 import IconLocationDot from '@/components/icons/IconLocationDot.vue';
-import IconArrowsRotate from '@/components/icons/IconArrowsRotate.vue';
+import IconArrowUp from '@/components/icons/IconArrowUp.vue';
+import IconArrowDown from '@/components/icons/IconArrowDown.vue';
 import IconCircleInfo from '@/components/icons/IconCircleInfo.vue';
-import IconUserGroup from '@/components/icons/IconUserGroup.vue';
-import IconAnglesRight from '@/components/icons/IconAnglesRight.vue';
 
 const props = defineProps({
   /** @type {import('vue').PropType<HandyCalendarEvent>} 表示するイベント */
@@ -27,6 +29,39 @@ const props = defineProps({
 const emit = defineEmits(['open', 'select']);
 
 const eventActions = useEventActions();
+const calendarStore = useCalendarStore();
+const userStore = useUserStore();
+
+/** @type {ComputedRef<boolean>} イベントの属するカレンダーに書き込み権限があるか（ない場合は編集・削除を表示しない） */
+const canWriteCalendar = computed(() => calendarStore.listWritableCalendars.some((calendar) => calendar.id === props.event.calendarId));
+
+/**
+ * 左側の時間列に上から下へ時間が流れるよう縦積みで表示するパーツ。
+ * 表示中の日付がイベントの開始日・中日・終了日のどれかで構成を変える。
+ * - 終日: 継続を縦バーで示す（開始日=下にバー、中日=上下にバー、終了日=上にバー）
+ * - 時間指定の日またぎ: 前日からの継続を上矢印・翌日への継続を下矢印で示す
+ *   （開始日=「17:00 ↓」、中日=「| 終日 |」、終了日=「↑ 19:00」）
+ * @type {ComputedRef<{type: 'text'|'bar'|'arrow-up'|'arrow-down', value?: string}[]>}
+ */
+const timeParts = computed(() => {
+  const evt = props.event;
+  const day = userStore.nowSelectedDate ? toDayjs(userStore.nowSelectedDate) : dayjs();
+  const text = (/** @type {string} */ value) => ({ type: 'text', value });
+  if (evt.isAllDay) {
+    // 終日イベントの raw end は排他のため、最終表示日は end - 1日
+    const lastDay = evt.endDateTime?.isValid?.() ? evt.endDateTime.subtract(1, 'day') : evt.startDateTime;
+    if (evt.startDateTime.isSame(lastDay, 'day')) return [text('終日')];
+    if (day.isSame(evt.startDateTime, 'day')) return [text('終日'), { type: 'bar' }];
+    if (day.isSame(lastDay, 'day')) return [{ type: 'bar' }, text('終日')];
+    return [{ type: 'bar' }, text('終日'), { type: 'bar' }];
+  }
+  if (evt.startDateTime.isSame(evt.endDateTime, 'day')) return [text(evt.startDateTime.format('HH:mm')), text(evt.endDateTime.format('HH:mm'))];
+  // 0:00 ちょうど終了のイベントはその日付には表示されないため、最終表示日は end - 1日
+  const lastDay = evt.endDateTime.format('HH:mm') === '00:00' ? evt.endDateTime.subtract(1, 'day') : evt.endDateTime;
+  if (day.isSame(evt.startDateTime, 'day')) return [text(evt.startDateTime.format('HH:mm')), { type: 'arrow-down' }];
+  if (day.isSame(lastDay, 'day')) return [{ type: 'arrow-up' }, text(evt.endDateTime.format('HH:mm'))];
+  return [{ type: 'bar' }, text('終日'), { type: 'bar' }];
+});
 
 /** @type {Ref<{ open: (event: MouseEvent) => void, close: () => void }|null>} コンテキストメニュー表示用のドロップダウン */
 const rfDropdownMenu = ref(null);
@@ -128,24 +163,28 @@ function onSelectContextMenu(action) {
 
 <template>
   <li @click.stop="handleCardClick" @contextmenu="handleCardContextMenu" @touchstart="startCardLongPress" @touchmove="handleCardTouchMove" @touchend="finishCardTouch" @touchcancel="cancelCardLongPress">
+    <div class="time-col">
+      <template v-for="(part, i) in timeParts" :key="i">
+        <span v-if="part.type === 'bar'" class="time-bar"></span>
+        <span v-else-if="part.type === 'arrow-up'" class="time-arrow"><IconArrowUp /></span>
+        <span v-else-if="part.type === 'arrow-down'" class="time-arrow"><IconArrowDown /></span>
+        <span v-else class="time-text">{{ part.value }}</span>
+      </template>
+    </div>
     <div class="face">
       <CalendarRibbon :cid="event.calendarId" :useLabel="false" />
-      <IconArrowsRotate size="0.7rem" v-if="!!event.raw?.recurrence" />
     </div>
     <div class="info">
-      <div>
-        <InlineEmoji :emoji="event.icon ?? '📌'" /> {{ event.summary }}
-        <IconUserGroup v-if="eventActions.hasOtherAttendees(event)" size="0.8rem" />
+      <div class="title">
+        <InlineEmoji :emoji="event.icon" />
+        <span class="text">{{ event.summary }}</span>
       </div>
-      <div v-if="eventActions.eventDateText(event).inlineText">
-        <span>{{ eventActions.eventDateText(event).inlineText }}</span>
+      <div v-if="event.description" class="meta">
+        <span class="text">{{ event.description }}</span>
       </div>
-      <div v-else>
-        <span>{{ eventActions.eventDateText(event).startText }}</span> <IconAnglesRight /> <span>{{ eventActions.eventDateText(event).endText }}</span>
-      </div>
-      <div v-if="event.location">
+      <div v-else-if="event.location" class="meta">
         <IconLocationDot size="0.7rem" />
-        <span>{{ event.location }}</span>
+        <span class="text">{{ event.location }}</span>
       </div>
     </div>
 
@@ -156,8 +195,8 @@ function onSelectContextMenu(action) {
         </button>
       </template>
       <button @click="onSelectContextMenu('ShowDetail')"><IconCircleInfo />詳細</button>
-      <button @click="onSelectContextMenu('EditEvent')"><IconPen />編集</button>
-      <button @click="onSelectContextMenu('DeleteEvent')"><IconTrash />削除</button>
+      <button v-if="canWriteCalendar" @click="onSelectContextMenu('EditEvent')"><IconPen />編集</button>
+      <button v-if="canWriteCalendar" @click="onSelectContextMenu('DeleteEvent')"><IconTrash />削除</button>
       <button @click="onSelectContextMenu('CloneEvent')"><IconCopy />複製</button>
     </DropdownMenu>
   </li>
@@ -166,16 +205,62 @@ function onSelectContextMenu(action) {
 <style lang="scss" scoped>
 li {
   border-radius: var(--border-radius);
-  padding: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
   display: flex;
-  gap: var(--space-sm);
-  align-items: flex-start;
+  gap: var(--space-xs);
+  align-items: center;
   cursor: pointer;
   background: var(--bg-2);
-  box-shadow: 0 1px 3px var(--shadow);
+  transition: background-color 0.2s ease;
+  height: 4.2rem;
 
   &:hover {
     background-color: var(--bg-3);
+  }
+}
+
+.time-col {
+  flex: 0 0 3.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.3;
+  overflow: hidden;
+
+  > span {
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .time-text {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .time-bar {
+    width: 1.3px;
+    height: 0.6rem;
+    background: var(--text-light);
+    border-radius: 1px;
+    &:first-child {
+      margin-bottom: 2px;
+    }
+    &:last-child {
+      margin-top: 6px;
+    }
+  }
+
+  .time-arrow {
+    display: flex;
+    line-height: 1;
+    color: var(--text-light);
+
+    svg {
+      fill: var(--text-light);
+      width: 0.8rem;
+      height: 1.4rem;
+    }
   }
 }
 
@@ -183,39 +268,36 @@ li {
   display: flex;
   flex-direction: column;
   align-items: center;
-
-  .calendar-ribbon {
-    margin-top: var(--space-xs);
-  }
-
-  .icon-arrows-rotate {
-    margin-top: var(--space-sm);
-  }
 }
 
 .info {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 
-  // タイトル
-  div:nth-child(1) {
-    font-weight: bold;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: var(--space-xxs);
-  }
-
-  // 時間
-  div:nth-child(2) {
-    font-weight: bold;
+  > div {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: var(--space-xxs);
+    min-width: 0;
   }
 
-  // 場所
-  div:nth-child(3) {
+  .text {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .title {
     font-size: var(--text-size-sm);
+  }
+
+  .meta {
+    font-size: var(--text-size-xs);
+    color: var(--text-light);
   }
 }
 

@@ -124,7 +124,7 @@ ul {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: var(--space-xxs);
 }
 
 li.no-event {

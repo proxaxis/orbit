@@ -59,6 +59,7 @@ const calendar = computed(() => calendarStore.list.find((cal) => cal.id === (pro
   gap: var(--space-sm);
   user-select: none;
   overflow: hidden;
+  transition: background-color 0.2s ease;
 }
 
 .calendar-ribbon.selectable {
@@ -70,6 +71,7 @@ const calendar = computed(() => calendarStore.list.find((cal) => cal.id === (pro
   background: transparent;
   color: var(--text);
   text-align: left;
+  transition: background-color 0.2s ease;
 
   &:hover {
     background: var(--bg-2);

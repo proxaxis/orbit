@@ -449,7 +449,7 @@ function submitForm() {
       timeZone: formData.timeZone,
     }),
   );
-  const shared = { ...(formData.icon ? { icon: formData.icon } : {}), ...recurrenceData.shared };
+  const shared = { ...((formData.icon ?? '') === '' ? {} : { icon: formData.icon }), ...recurrenceData.shared };
   // タグは shared 拡張プロパティへ保持し、検索に効くよう description 末尾にも #tag として付与する
   const tags = normalizeTags(eventTagsInput.value);
   if (tags.length) shared[TAGS_SHARED_PROPERTY] = JSON.stringify(tags);
@@ -672,7 +672,8 @@ onMounted(async () => {
         description: originalEvent.value?.description ?? '',
         location: originalEvent.value?.location ?? '',
         privacyNote: originalEvent.value?.raw?.extendedProperties?.private?.privacyNote ?? '',
-        calendarId: originalEvent.value?.calendarId ?? initialCalendarId.value,
+        // 複製は元カレンダーへの書き込み権限がない場合があるため、常にデフォルトカレンダーを保存先にする
+        calendarId: props.clone ? initialCalendarId.value : (originalEvent.value?.calendarId ?? initialCalendarId.value),
         icon: originalEvent.value?.icon ?? '',
         isAllDay: !!originalEvent.value?.isAllDay,
         startDateTime: originalEvent.value?.startDateTime,

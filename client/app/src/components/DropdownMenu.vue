@@ -32,27 +32,13 @@ const calculatePosition = async (event = null) => {
     left: proposedLeft,
   };
 
-  // 次のフレームでメニューが描画された後、実際の幅を取得
+  // nextTick 後は DOM 反映済み・ブラウザのペイント前なので、実測幅から位置を
+  // 補正しても途中位置が描画されず、右端でも滑らかに正しい位置へ表示される
   await nextTick();
-  await new Promise((resolve) => window.requestAnimationFrame(resolve));
-  await new Promise((resolve) => window.setTimeout(resolve, 120));
-  const menu = rfMenu.value;
-  if (menu) {
-    const menuRect = menu.getBoundingClientRect();
-
-    // メニュー全体が画面内に収まるよう、実測幅から左位置を補正
-    const maxLeft = Math.max(marginRight, window.innerWidth - menuRect.width - marginRight);
-    const clampedLeft = Math.min(Math.max(proposedLeft, marginRight), maxLeft);
-    position.value.left = clampedLeft;
-
-    // transition 後に内容幅が確定した場合も、最終位置を再補正
-    window.setTimeout(() => {
-      if (!isOpen.value || !rfMenu.value) return;
-      const finalRect = rfMenu.value.getBoundingClientRect();
-      const finalMaxLeft = Math.max(marginRight, window.innerWidth - finalRect.width - marginRight);
-      position.value.left = Math.min(Math.max(proposedLeft, marginRight), finalMaxLeft);
-    }, 240);
-  }
+  const menuWidth = rfMenu.value?.getBoundingClientRect().width;
+  if (menuWidth === undefined) return;
+  const maxLeft = Math.max(marginRight, window.innerWidth - menuWidth - marginRight);
+  position.value.left = Math.min(Math.max(proposedLeft, marginRight), maxLeft);
 };
 
 // メニューを開く

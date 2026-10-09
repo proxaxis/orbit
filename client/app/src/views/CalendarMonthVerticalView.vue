@@ -639,12 +639,12 @@ onUnmounted(() => {
     <header ref="rfToolbar" class="month-toolbar" :class="{ 'is-compact': isCompactToolbar }">
       <div class="toolbar-left">
         <button v-if="userStore.isMobile || userStore.isTablet" type="button" title="カレンダーを開閉" aria-label="カレンダーを開閉" @click="props.selectPane('nav')">
-          <IconBars />
+          <IconBars size="1.25rem" />
         </button>
-        <button type="button" title="前月へ戻る" aria-label="前月へ戻る" @click="goPreviousMonth">
+        <button type="button" title="前月へ戻る" aria-label="前月へ戻る" v-if="userStore.isDesktop" @click="goPreviousMonth">
           <IconCaretLeft size="1.25rem" />
         </button>
-        <button type="button" title="次月へ進む" aria-label="次月へ進む" @click="goNextMonth">
+        <button type="button" title="次月へ進む" aria-label="次月へ進む" v-if="userStore.isDesktop" @click="goNextMonth">
           <IconCaretRight size="1.25rem" />
         </button>
       </div>
@@ -724,7 +724,7 @@ onUnmounted(() => {
                   @mousedown.stop>
                   <span v-if="slot.isLabelStart">
                     <i v-if="isDotEventBar(slot.event)" class="event-dot" :style="{ backgroundColor: getEventDotColor(slot.event) }"></i>
-                    <InlineEmoji :emoji="slot.event.icon ?? '📌'" /> {{ slot.event.summary }}
+                    <InlineEmoji :emoji="slot.event.icon" /> {{ slot.event.summary }}
                     <IconUserGroup v-if="hasOtherAttendees(slot.event)" size="0.75rem" />
                   </span>
                 </div>
@@ -739,8 +739,8 @@ onUnmounted(() => {
     <DropdownMenu ref="rfDropdownForContextMenu" @close="contextMenuRange = null">
       <button type="button" @click="onSelectContextMenu('CreateEvent')">予定を作成</button>
       <button type="button" @click="onSelectContextMenu('CreateFromTemplate')">テンプレートから作成</button>
-      <button v-if="isContextRangeHoliday" type="button" @click="onSelectContextMenu('UnsetCustomHoliday')">この日を休日から解除</button>
-      <button v-else type="button" @click="onSelectContextMenu('SetCustomHoliday')">この日を休日にする</button>
+      <button v-if="isContextRangeHoliday" type="button" @click="onSelectContextMenu('UnsetCustomHoliday')">休日から解除</button>
+      <button v-else type="button" @click="onSelectContextMenu('SetCustomHoliday')">休日にする</button>
     </DropdownMenu>
   </div>
 </template>

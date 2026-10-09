@@ -167,7 +167,7 @@ async function deliverNotification(evt, start, minutes, key) {
 
   const minutesLeft = Math.max(0, start.diff(dayjs(), 'minute'));
   const timingText = minutes > 0 ? `${minutes}分前` : '開始時刻';
-  const title = `${evt?.icon ?? '📌'} ${evt?.summary ?? evt?.raw?.summary ?? '予定'}`;
+  const title = `${evt?.icon ?? ''} ${evt?.summary ?? evt?.raw?.summary ?? '予定'}`;
   const body = `${start.format('M月D日 (ddd) HH:mm')} 開始（${timingText} / あと${minutesLeft}分）`;
   const options = {
     body,

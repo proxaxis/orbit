@@ -5,11 +5,11 @@ import twemoji from '@twemoji/api';
 const props = defineProps({
   emoji: {
     type: String,
-    required: true,
+    default: undefined,
   },
 });
 
-const emo = computed(() => twemoji.parse(props.emoji, { size: '72x72', folder: 'svg', ext: '.svg' }));
+const emo = computed(() => props.emoji ? twemoji.parse(props.emoji, { size: '72x72', folder: 'svg', ext: '.svg' }) : '');
 </script>
 
 <template>

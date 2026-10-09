@@ -48,6 +48,11 @@ function isSessionCalendar(calendar) {
   return /** @type {{ session?: boolean }} */ (/** @type {unknown} */ (calendar)).session === true;
 }
 
+/** @param {GoogleCalendarListEntry} calendar @returns {boolean} 書き込み権限を持つカレンダーか（共有設定やデフォルト指定は所有者相当でのみ有効） */
+function isWritableCalendar(calendar) {
+  return calendar.accessRole === 'writer' || calendar.accessRole === 'owner' || calendar.primary === true;
+}
+
 /** @type {Ref<string|null>} @description ドラッグ中のカレンダー ID */
 const draggedCalendarId = ref(null);
 
@@ -145,9 +150,9 @@ function hideAllCalendars() {
                       <button @click="userStore.setCalendarVisibility(c.id, false)"><IconEyeSlash />非表示</button>
                       <button @click="userStore.setCalendarVisibility(c.id, true)"><IconEye />表示</button>
                       <button @click="router.push({ name: 'CalendarDetail', query: { cid: c.id } })"><IconCircleInfo />カレンダーの詳細</button>
-                      <button @click="router.push({ name: 'SharingConfig', query: { cid: c.id } })"><IconUserGroup />共有設定</button>
-                      <button @click="router.push({ name: 'ShareManage', query: { cid: c.id } })"><IconUserPlus />期間を指定して共有</button>
-                      <button @click="userStore.setDefaultCalendar(c.id)"><IconCrown />デフォルトにする</button>
+                      <button v-if="isWritableCalendar(c)" @click="router.push({ name: 'SharingConfig', query: { cid: c.id } })"><IconUserGroup />共有設定</button>
+                      <button v-if="isWritableCalendar(c)" @click="router.push({ name: 'ShareManage', query: { cid: c.id } })"><IconUserPlus />期間を指定して共有</button>
+                      <button v-if="isWritableCalendar(c)" @click="userStore.setDefaultCalendar(c.id)"><IconCrown />デフォルトにする</button>
                     </DropdownMenu>
                   </template>
                 </CalendarRibbon>
@@ -186,7 +191,8 @@ ul {
     gap: var(--space-sm);
 
     &:hover {
-      background-color: var(--bg-2);
+      background-color: var(--bg-3);
+    transition: background-color 0.2s ease;
 
       * {
         cursor: pointer;

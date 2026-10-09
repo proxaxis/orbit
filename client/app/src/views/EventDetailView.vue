@@ -38,6 +38,9 @@ const rfPhotoAlbum = ref(null);
 /** イベントに本人以外の参加者がいるか */
 const hasOtherAttendees = computed(() => eventActions.hasOtherAttendees(event.value));
 
+/** @type {ComputedRef<boolean>} イベントの属するカレンダーに書き込み権限があるか（ない場合は編集・削除を表示しない） */
+const canWriteCalendar = computed(() => calendarStore.listWritableCalendars.some((calendar) => calendar.id === event.value?.calendarId));
+
 const myAttendee = computed(() => event.value?.raw?.attendees?.find((attendee) => attendee.self) ?? null);
 
 /** イベントに有効な通知設定（分）のリスト。カレンダー既定使用時は既定値を展開する */
@@ -158,10 +161,10 @@ watch(
       </template>
       <template #sub>
         <div class="menu-bar-actions">
-          <button title="Delete" :disabled="!event" @click="remove">
+          <button v-if="canWriteCalendar" title="Delete" :disabled="!event" @click="remove">
             <IconTrash size="1.2rem" />
           </button>
-          <button title="Edit" :disabled="!event" @click="edit">
+          <button v-if="canWriteCalendar" title="Edit" :disabled="!event" @click="edit">
             <IconPen size="1.1rem" />
           </button>
           <button title="複製" :disabled="!event" @click="clone">
@@ -176,7 +179,7 @@ watch(
 
     <article v-if="!!event">
       <div class="heading">
-        <h2><InlineEmoji :emoji="event.icon ?? '📌'" /> {{ event?.summary }}</h2>
+        <h2><InlineEmoji :emoji="event.icon" /> {{ event?.summary }}</h2>
         <button title="タイトルをコピー" @click="userStore.writeClipboard(event?.summary ?? '')">
           <IconClone size="1rem" />
         </button>
