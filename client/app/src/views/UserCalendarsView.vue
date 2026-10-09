@@ -32,7 +32,6 @@ const userStore = useUserStore();
 </template>
 
 <style lang="scss" scoped>
-@import url('https://fonts.googleapis.com/css2?family=Mochiy+Pop+P+One&display=swap');
 .user-calendars-view {
   display: flex;
   flex-direction: column;
@@ -56,7 +55,6 @@ const userStore = useUserStore();
   padding: var(--space-sm) 0;
 
   p {
-    font-family: "Mochiy Pop P One", sans-serif;
     padding-left: var(--space-xs);
     margin: 0;
     font-size: 1.6rem;

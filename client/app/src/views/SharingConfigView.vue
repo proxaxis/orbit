@@ -20,7 +20,15 @@ const { loadRules } = useAclRules();
 /** @type {ComputedRef<string>} クエリまたは先頭の書き込み可能カレンダーから決まる設定対象 ID */
 const theCalendarId = computed(() => {
   const requestedId = typeof route.query.cid === 'string' ? route.query.cid : '';
-  return calendarStore.listWritableCalendars.some((cal) => cal.id === requestedId) ? requestedId : (calendarStore.listWritableCalendars[0]?.id ?? '');
+  // cid 指定時は書き込み不可なら空にする。別カレンダーへのサイレント切替だと
+  // そのカレンダーの ACL（所有者ルールを含む）を対象カレンダーのものと誤認させる
+  if (requestedId) return calendarStore.listWritableCalendars.some((cal) => cal.id === requestedId) ? requestedId : '';
+  return calendarStore.listWritableCalendars[0]?.id ?? '';
+});
+/** @type {ComputedRef<boolean>} cid で指定されたカレンダーの共有設定を変更できる権限がないか */
+const requestedCalendarNotEditable = computed(() => {
+  const requestedId = typeof route.query.cid === 'string' ? route.query.cid : '';
+  return Boolean(requestedId) && !theCalendarId.value;
 });
 /** @type {ComputedRef<GoogleCalendarListEntry|undefined>} 設定対象のカレンダー */
 const theCalendar = computed(() => calendarStore.listWritableCalendars.find((cal) => cal.id === theCalendarId.value));
@@ -66,8 +74,9 @@ watch([theCalendarId, () => authStore.token], () => loadRules(theCalendarId.valu
         <p v-else>共有設定を変更できるカレンダーがありません</p>
       </label>
 
-      <p v-if="!calendarStore.listWritableCalendars.length" class="empty-state">共有設定を変更できるカレンダーがありません</p>
-      <template v-else>
+      <p v-if="requestedCalendarNotEditable" class="empty-state">指定されたカレンダーは共有設定を変更できません（書き込み権限がありません）</p>
+      <p v-else-if="!calendarStore.listWritableCalendars.length" class="empty-state">共有設定を変更できるカレンダーがありません</p>
+      <template v-else-if="theCalendarId">
         <SharingConfigViewAddForm :calendar-id="theCalendarId" />
         <SharingConfigViewRuleList :calendar-id="theCalendarId" />
       </template>

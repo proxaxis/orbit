@@ -7,9 +7,6 @@ import { useCalendars } from '@/composables/useCalendars.js';
 import { useAuthStore } from '@/stores/auth.js';
 import { useCalendarStore } from '@/stores/calendar.js';
 
-/** @type {Set<string>} Google Calendar がプライベートカレンダーの ACL に返すシステム主体 */
-const SYSTEM_CALENDAR_PRINCIPALS = new Set(['badd9bc48b578d2e8be8a95d2afabc3e4024e4876ab49d7cb0bd8e244f591ec9@group.calendar.google.com']);
-
 /**
  * ACL 主体の値を比較用に正規化する
  * @param {unknown} value ACL 主体の値
@@ -44,7 +41,7 @@ export function useSharingStates() {
         if (calendar.accessRole !== 'owner' && !calendar.primary) return [calendar.id, 'unknown'];
         try {
           const rules = await calendars.listAclRules(calendar.id);
-          const systemPrincipals = new Set([normalizePrincipal(calendar.id), normalizePrincipal(/** @type {{ dataOwner?: string }} */ (/** @type {unknown} */ (calendar)).dataOwner), ...SYSTEM_CALENDAR_PRINCIPALS]);
+          const systemPrincipals = new Set([normalizePrincipal(calendar.id), normalizePrincipal(/** @type {{ dataOwner?: string }} */ (/** @type {unknown} */ (calendar)).dataOwner)]);
           const dataOwner = normalizePrincipal(/** @type {{ dataOwner?: string }} */ (/** @type {unknown} */ (calendar)).dataOwner);
           const belongsToAnotherOwner = Boolean(dataOwner && knownOwnerPrincipals.size && !knownOwnerPrincipals.has(dataOwner));
           const relevantRules = rules.filter((rule) => !systemPrincipals.has(normalizePrincipal(rule.scope.value)));

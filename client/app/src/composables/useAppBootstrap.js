@@ -111,15 +111,18 @@ export function useAppBootstrap() {
     userStore.hasCoarsePointer = mCoarsePointerQuery.matches;
     mCoarsePointerQuery.addEventListener('change', handleCoarsePointerChange);
 
-    // Google ログイン状態の確認とトークンの取得
-    const token = await auth.fetchToken();
+    // Google ログイン状態の確認とトークンの取得（オフライン起動時はスキップしてキャッシュを使う）
+    const token = userStore.isOffline ? null : await auth.fetchToken();
+    // キャッシュ済みカレンダーを先に読み込む。トークン有無に関わらず呼び、
+    // オフライン・未認証時は loadCalendars 側がキャッシュのみで早期 return する
+    await calendars.loadCalendars();
     if (token) {
       if (userStore.usePhotoSharing) auth.ensurePhotoToken();
-      await calendars.loadCalendars();
       // 起動時に他デバイスでの変更をバックグラウンド確認する（UI はブロックしない）
       checkRemoteChanges();
     }
-    if (!token && !authStore.isAuthenticated) {
+    // オフラインではログインを求めない（オンライン復帰時にトークンは再取得される）
+    if (!token && !authStore.isAuthenticated && !userStore.isOffline) {
       userStore.openUserDialog({
         title: 'Login Required',
         message: 'Login with your Google account to synchronize your calendar.',

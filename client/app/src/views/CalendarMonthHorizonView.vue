@@ -622,10 +622,10 @@ const getDayNumberColor = (day) => {
               </button>
             </template>
             <button type="button" @click="goToday"><IconArrowRotateLeft size="1rem" />今日に戻る</button>
-            <button type="button" @click="router.push({ name: 'EventSearch' })"><IconMagnifyingGlass size="1rem" />イベントを検索</button>
-            <button type="button" @click="router.push({ name: 'EventQuickAdd' })"><IconWandMagicSparkles size="1rem" />自然言語で登録</button>
-            <button type="button" @click="userStore.setMainCalendarView('MONTH_VERTICAL')"><IconArrowsUpDown size="1rem" />縦スクロール表示にする</button>
-            <button type="button" @click="userStore.setMainCalendarView('WEEK')"><IconBarsStaggered size="1rem" />TL表示にする</button>
+            <button type="button" @click="router.push({ name: 'EventSearch' })"><IconMagnifyingGlass size="1rem" />イベント検索</button>
+            <button type="button" @click="router.push({ name: 'EventQuickAdd' })"><IconWandMagicSparkles size="1rem" />自然言語登録</button>
+            <button type="button" @click="userStore.setMainCalendarView('MONTH_VERTICAL')"><IconArrowsUpDown size="1rem" />スクロール表示にする</button>
+            <button type="button" @click="userStore.setMainCalendarView('WEEK')"><IconBarsStaggered size="1rem" />タイムライン表示にする</button>
             <button type="button" @click="router.push({ name: 'UserConfig' })"><IconGear size="1rem" />個人設定</button>
           </DropdownMenu>
         </template>

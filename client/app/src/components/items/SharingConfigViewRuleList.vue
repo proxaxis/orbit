@@ -13,7 +13,7 @@ const props = defineProps({
 
 const { aclRules, savingRuleId, updateRule, removeRule } = useAclRules();
 
-/** 共有対象の権限選択肢 */
+/** 権限の表示名マッピング（owner は Google が報告する所有者ルールの表示専用） */
 const roleOptions = [
   { value: 'none', label: 'アクセス権なし' },
   { value: 'freeBusyReader', label: '予定の有無のみ' },
@@ -22,6 +22,9 @@ const roleOptions = [
   { value: 'writer', label: '予定を変更' },
   { value: 'owner', label: '所有者' },
 ];
+
+/** 権限変更で選択可能な権限（owner は指定できない） */
+const assignableRoleOptions = roleOptions.filter((option) => option.value !== 'owner');
 
 /**
  * ACL 主体の表示名を求める
@@ -78,7 +81,7 @@ function onRuleRoleChange(rule, event) {
         <label>
           <span>権限を変更</span>
           <select :value="rule.role" :disabled="savingRuleId === rule.id || rule.role === 'owner'" @change="onRuleRoleChange(rule, $event)">
-            <option v-for="option in roleOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+            <option v-for="option in assignableRoleOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
           </select>
           <p class="danger" v-if="rule.role === 'owner'">所有者の権限は変更できません</p>
         </label>

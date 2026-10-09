@@ -51,6 +51,11 @@ export function useAclRules() {
       userStore.showToast('メールアドレスまたはドメインを入力してください。');
       return false;
     }
+    // owner 権限は ACL では付与できない（カレンダー作成者のみが持つ）。誤って他ユーザーを所有者にしないためのガード
+    if (input.role === 'owner') {
+      userStore.showToast('所有者権限は共有設定から付与できません。');
+      return false;
+    }
     if (!calendarId) return false;
 
     userStore.setLoading(true, '共有設定を保存しています...');
@@ -80,6 +85,11 @@ export function useAclRules() {
    */
   async function updateRule(calendarId, rule, role) {
     if (rule.role === role || !rule.id) return;
+    // owner への権限変更は許可しない（共有相手を誤って所有者にしないためのガード）
+    if (role === 'owner') {
+      userStore.showToast('所有者権限への変更はできません。');
+      return;
+    }
     savingRuleId.value = rule.id;
     try {
       const updated = await calendars.updateAclRule(calendarId, rule.id, { role });

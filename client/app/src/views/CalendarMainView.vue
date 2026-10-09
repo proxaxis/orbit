@@ -17,6 +17,9 @@ const props = defineProps({
 });
 
 const viewComponent = computed(() => {
+  // 保存済み設定の読み込みが終わるまで待つ。完了前に既定の月表示でレンダリングすると
+  // 前回の表示モードへ一瞬で切り替わるチラつきと不要なイベント取得が発生する
+  if (!userStore.settingsLoaded) return null;
   if (userStore.mainCalendarView === 'WEEK') return CalendarWeekTimelineView;
   if (userStore.mainCalendarView === 'MONTH_VERTICAL') return CalendarMonthVerticalView;
   return CalendarMonthHorizonView;
@@ -24,5 +27,5 @@ const viewComponent = computed(() => {
 </script>
 
 <template>
-  <component :is="viewComponent" :select-pane="props.selectPane" :collapse-mobile-sub-pane="props.collapseMobileSubPane" />
+  <component v-if="viewComponent" :is="viewComponent" :select-pane="props.selectPane" :collapse-mobile-sub-pane="props.collapseMobileSubPane" />
 </template>

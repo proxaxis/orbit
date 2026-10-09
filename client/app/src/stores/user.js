@@ -473,6 +473,8 @@ export const useUserStore = defineStore('user', () => {
       if (Number.isInteger(saved.subPaneWidth) && saved.subPaneWidth >= 260 && saved.subPaneWidth <= 600) subPaneWidth.value = saved.subPaneWidth;
     } catch (error) {
       console.warn('Failed to load user settings.', error);
+    } finally {
+      settingsLoaded.value = true;
     }
   }
 
@@ -561,6 +563,8 @@ export const useUserStore = defineStore('user', () => {
     saveSettings();
   }
 
+  /** @type {Ref<boolean>} @description 永続化された設定の読み込みが完了したか（完了前は初期値で描画しないためのゲート） */
+  const settingsLoaded = ref(false);
   const settingsReady = loadSettings();
   readCache(CACHE_KEYS.RECENT_EVENT_TITLES, []).then((titles) => {
     if (Array.isArray(titles)) recentEventTitles.value = titles.filter((title) => typeof title === 'string').slice(0, 30);
@@ -795,6 +799,7 @@ export const useUserStore = defineStore('user', () => {
     setTheme,
     setThemeColor,
     settingsReady,
+    settingsLoaded,
     loadSettings,
     setFirstDayOfWeek,
     setWeekendDay,

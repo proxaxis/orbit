@@ -16,14 +16,13 @@ const props = defineProps({
 const userStore = useUserStore();
 const { addRule } = useAclRules();
 
-/** 共有対象の権限選択肢 */
+/** 共有対象の権限選択肢（owner は付与できない。所有権はカレンダー作成者のみが持つ） */
 const roleOptions = [
   { value: 'none', label: 'アクセス権なし' },
   { value: 'freeBusyReader', label: '予定の有無のみ' },
   { value: 'reader', label: '予定を閲覧' },
   { value: 'writerWithoutPrivateAccess', label: '非公開情報予定を除く予定を変更' },
   { value: 'writer', label: '予定を変更' },
-  { value: 'owner', label: '所有者' },
 ];
 
 /** 追加フォームの入力値 */
