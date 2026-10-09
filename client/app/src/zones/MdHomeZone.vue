@@ -1,4 +1,5 @@
 <script setup>
+import QuickAddFab from '@/components/QuickAddFab.vue';
 import { useUserStore } from '@/stores/user.js';
 
 const userStore = useUserStore();
@@ -54,6 +55,7 @@ function onSubResizeStart(evt) {
           <component :is="Component" :select-pane="props.selectPane" :collapse-mobile-sub-pane="props.collapseMobileSubPane" />
         </router-view>
       </div>
+      <QuickAddFab />
     </main>
 
     <div class="resize-handle" v-show="!userStore.formDatePick" @pointerdown.prevent="onSubResizeStart"><icon-ellipsis-vertical /></div>
@@ -85,12 +87,14 @@ function onSubResizeStart(evt) {
 
   main {
     display: flex;
+    position: relative;
     flex: 1 1 auto;
     min-width: 0;
   }
 
   .sub-pane {
     display: flex;
+    position: relative;
     width: min(360px, 42vw);
     height: 100%;
   }

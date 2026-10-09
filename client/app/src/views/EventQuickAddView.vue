@@ -1,38 +1,37 @@
 <script setup>
 /**
  * 自然言語によるイベント登録画面。
- * Google Calendar API の events.quickAdd を使い、文章から日時・タイトルを解釈して登録する。
+ * 入力文を正規化 → 日時は正規表現で抽出・意味部分は WebLLM で解析 → イベントフォームへ流し込む。
  */
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user.js';
-import { useEvents } from '@/composables/useEvents.js';
+import { parseScheduleText, setQuickAddDraft, quickAddEngineState } from '@/composables/useQuickAdd.js';
 import MenuBar from '@/components/MenuBar.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
 import IconWandMagicSparkles from '@/components/icons/IconWandMagicSparkles.vue';
 
 const router = useRouter();
 const userStore = useUserStore();
-const eventsService = useEvents();
 
 /** @type {Ref<string>} 自然言語登録の入力 */
 const quickAddText = ref('');
 /** @type {Ref<boolean>} 自然言語登録の実行中かどうか */
 const isQuickAdding = ref(false);
 
-/** 自然言語テキストでイベントを登録する（Google Calendar API events.quickAdd） */
+/**
+ * 自然言語テキストを解析し、結果をドラフトとしてイベント作成フォームへ流し込む。
+ * 直接登録はせず、フォームで内容を確認・修正してから保存する。
+ */
 async function runQuickAdd() {
   const text = quickAddText.value.trim();
   if (!text || isQuickAdding.value) return;
   isQuickAdding.value = true;
   try {
-    const event = await eventsService.quickAddEvent(text);
-    quickAddText.value = '';
-    userStore.showToast('イベントを登録しました');
-    if (event) {
-      userStore.setNowSelectedEvent({ eid: event.id, cid: event.calendarId });
-      router.push({ name: 'EventDetail' });
-    }
+    const { draft, usedFallback } = await parseScheduleText(text);
+    if (usedFallback) userStore.showToast('AI 解析を利用できないため、簡易解析で入力しました');
+    setQuickAddDraft(draft);
+    router.push({ name: 'EventCreator' });
   } catch (err) {
     userStore.setError(true, err);
   } finally {
@@ -60,7 +59,9 @@ async function runQuickAdd() {
       <button type="submit" data-app-button="primary" :disabled="isQuickAdding || !quickAddText.trim()" title="登録" aria-label="登録"><IconWandMagicSparkles /> 登録</button>
     </form>
 
-    <p v-if="isQuickAdding" class="quick-add-status">登録中...</p>
+    <p v-if="isQuickAdding" class="quick-add-status">解析中...</p>
+    <p v-else-if="quickAddEngineState.status === 'loading'" class="quick-add-status">AIモデル読込中: {{ quickAddEngineState.message }}</p>
+    <p v-else-if="quickAddEngineState.status === 'unsupported'" class="quick-add-status">このブラウザは AI 解析（WebGPU）に対応していないため、簡易解析で登録します</p>
   </div>
 </template>
 

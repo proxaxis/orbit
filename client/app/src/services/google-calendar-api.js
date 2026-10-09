@@ -113,19 +113,6 @@ export function importEvent(token, gCalendarId, body, query = {}) {
 }
 
 /**
- * 自然言語テキストから予定を作成する（events.quickAdd）。
- * ※ Google 公式では非推奨 (deprecated) だが現在も動作する自然言語登録エンドポイント。
- * @param {string} token アクセストークン
- * @param {string} gCalendarId カレンダー ID
- * @param {string} text 自然言語の予定テキスト（例: "明日の15時に会議"）
- * @param {Record<string, any>} [query={}] 追加のクエリパラメータ
- * @returns {Promise<GoogleCalendarEvent>} 作成されたイベントデータ
- */
-export function quickAddEvent(token, gCalendarId, text, query = {}) {
-  return fetchCalendarAPI(token, 'POST', `/calendars/$gCalendarId/events/quickAdd`, { params: { gCalendarId }, query: { ...query, text } });
-}
-
-/**
  * 繰り返し予定の各インスタンスを取得
  * @param {string} token アクセストークン
  * @param {string} gCalendarId カレンダー ID

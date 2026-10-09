@@ -451,25 +451,6 @@ export function useEvents() {
   }
 
   /**
-   * 自然言語テキストからイベントを登録する（Google Calendar API events.quickAdd）。
-   * @param {string} text 自然言語の予定テキスト
-   * @param {string} [gCalendarId] 作成先カレンダー ID（省略時はデフォルトカレンダー）
-   * @returns {Promise<HandyCalendarEvent>} 作成されたイベント
-   */
-  async function quickAddEvent(text, gCalendarId = '') {
-    const input = String(text ?? '').trim();
-    if (!input) throw new Error('予定の内容を入力してください');
-    const writable = calendarStore.listWritableCalendars;
-    const calendarId = gCalendarId || (writable.some((/** @type {any} */ cal) => cal.id === userStore.defaultCalendarId) ? userStore.defaultCalendarId : (writable[0]?.id ?? 'primary'));
-    const event = await gCalAPI.quickAddEvent(authStore.token, calendarId, input);
-    const created = { ...toHandyEvent(event, calendarId, calendarStore.getCalendarColor(calendarId)), timeZone: event.start?.timeZone ?? undefined };
-    await upsertStoredEvent(created);
-    eventStore.clearEventCache();
-    notifyEventDataChanged();
-    return created;
-  }
-
-  /**
    * イベントを削除する
    * @param {string} gEventId イベント ID
    * @param {string} gCalendarId カレンダー ID
@@ -500,7 +481,6 @@ export function useEvents() {
     listEvents,
     listEventsByDate,
     searchEvents,
-    quickAddEvent,
     syncEvents,
     getEventById,
     createEvent,

@@ -16,17 +16,24 @@ const isResizingSub = ref(false);
 const subResizeStartX = ref(null);
 const subResizeStartWidth = ref(360);
 const MOBILE_SUB_MIN_HEIGHT = 160;
+/** 収納時にメニューバーの下に残す余白（コンテンツのボーダー・下マージン分） */
+const MOBILE_SUB_COLLAPSED_GAP = 12;
 const mobileSubPaneHeight = ref(typeof window !== 'undefined' ? Math.min(300, Math.max(MOBILE_SUB_MIN_HEIGHT, window.innerHeight * 0.34)) : 300);
 const isCollapsingMobileSub = ref(false);
 const isResizingMobileSub = ref(false);
+const mobileSubResizeStartX = ref(0);
 const mobileSubResizeStartY = ref(0);
 const mobileSubResizeStartHeight = ref(0);
 const mobileSubResizeLastY = ref(0);
+const mobileSubResizeStartTime = ref(0);
 /** @type {import('vue').Ref<HTMLElement|null>} */
 const mobileSubContent = ref(null);
 /** @type {import('vue').Ref<{x: number, y: number}|null>} */
 const navSwipeStart = ref(null);
 const activePane = ref('main');
+
+/** @type {ComputedRef<boolean>} モバイル下部ペインがメニューバーだけ残して収納されているか */
+const isMobileSubCollapsed = computed(() => mobileSubPaneHeight.value < MOBILE_SUB_MIN_HEIGHT);
 
 const layoutComponent = computed(() => {
   if (userStore.isMobile) return SmHomeZone;
@@ -39,11 +46,32 @@ function selectPane(pane) {
   activePane.value = pane;
 }
 
-/** モバイル表示の下部ペインを閉じる */
+/**
+ * 収納時の下部ペインの高さ（MenuBar だけが見える高さ）を実測する
+ * @returns {number} 収納時のペイン高さ(px)
+ */
+function collapsedSubPaneHeight() {
+  const content = mobileSubContent.value;
+  const menuBar = content instanceof HTMLElement ? content.querySelector('.menu-bar') : null;
+  if (!(content instanceof HTMLElement) || !(menuBar instanceof HTMLElement)) return 56;
+  return Math.round(menuBar.getBoundingClientRect().bottom - content.getBoundingClientRect().top + MOBILE_SUB_COLLAPSED_GAP);
+}
+
+/** モバイル表示の下部ペインを MenuBar だけ残して下へ収納する */
 function collapseMobileSubPane() {
-  if (!userStore.isMobile) return;
+  if (!userStore.isMobile || activePane.value === 'sub') return;
   isCollapsingMobileSub.value = true;
-  mobileSubPaneHeight.value = MOBILE_SUB_MIN_HEIGHT;
+  mobileSubPaneHeight.value = collapsedSubPaneHeight();
+  window.setTimeout(() => {
+    isCollapsingMobileSub.value = false;
+  }, 260);
+}
+
+/** 収納中の下部ペインを画面の半分くらいまで再表示する */
+function expandMobileSubPane() {
+  if (!userStore.isMobile || !isMobileSubCollapsed.value) return;
+  isCollapsingMobileSub.value = true;
+  mobileSubPaneHeight.value = Math.round(window.innerHeight * 0.5);
   window.setTimeout(() => {
     isCollapsingMobileSub.value = false;
   }, 260);
@@ -93,9 +121,11 @@ function startMobileSubResize(evt) {
   if (!userStore.isMobile || activePane.value === 'sub' || evt.touches.length !== 1) return;
   const touch = evt.touches[0];
   isResizingMobileSub.value = true;
+  mobileSubResizeStartX.value = touch.clientX;
   mobileSubResizeStartY.value = touch.clientY;
   mobileSubResizeStartHeight.value = mobileSubPaneHeight.value;
   mobileSubResizeLastY.value = touch.clientY;
+  mobileSubResizeStartTime.value = Date.now();
 }
 
 /** @param {TouchEvent} evt */
@@ -105,18 +135,49 @@ function resizeMobileSub(evt) {
   if (evt.cancelable) evt.preventDefault();
   const maxHeight = Math.max(240, window.innerHeight);
   const nextHeight = mobileSubResizeStartHeight.value + mobileSubResizeStartY.value - touch.clientY;
+  // 収納状態からのドラッグは収納高さを下限として自由に動かし、離した時にスナップ判定する
+  const minHeight = isMobileSubCollapsed.value ? mobileSubResizeStartHeight.value : MOBILE_SUB_MIN_HEIGHT;
   if (nextHeight >= maxHeight && mobileSubContent.value instanceof HTMLElement) {
     mobileSubPaneHeight.value = maxHeight;
     mobileSubContent.value.scrollTop += mobileSubResizeLastY.value - touch.clientY;
   } else {
-    mobileSubPaneHeight.value = Math.min(maxHeight, Math.max(MOBILE_SUB_MIN_HEIGHT, nextHeight));
+    mobileSubPaneHeight.value = Math.min(maxHeight, Math.max(minHeight, nextHeight));
   }
   mobileSubResizeLastY.value = touch.clientY;
 }
 
-/** モバイル下部ペインのリサイズを終了する */
-function stopMobileSubResize() {
+/**
+ * モバイル下部ペインのリサイズを終了する。
+ * つまみ（MenuBar）の下方向フリックは収納、収納中のタップは半分まで再表示する。
+ * @param {TouchEvent} [evt] タッチ終了イベント
+ */
+function stopMobileSubResize(evt) {
+  if (!isResizingMobileSub.value) return;
   isResizingMobileSub.value = false;
+  const touch = evt?.changedTouches?.[0];
+  // タップ・フリック判定は touchend のみ（touchcancel では座標が不正確なため何もしない）
+  if (!touch || evt?.type !== 'touchend') return;
+  const deltaX = touch.clientX - mobileSubResizeStartX.value;
+  const deltaY = touch.clientY - mobileSubResizeStartY.value;
+  const elapsed = Date.now() - mobileSubResizeStartTime.value;
+  // 下への素早いフリック → MenuBar だけ残して収納
+  if (deltaY > 40 && elapsed < 350 && Math.abs(deltaY) > Math.abs(deltaX)) {
+    collapseMobileSubPane();
+    return;
+  }
+  // 収納中のタップ → 画面の半分まで再表示
+  if (isMobileSubCollapsed.value && Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10 && elapsed < 400) {
+    expandMobileSubPane();
+    return;
+  }
+  // 収納状態からのドラッグを最小高さ未満で離した → 収納へ戻す
+  if (mobileSubPaneHeight.value < MOBILE_SUB_MIN_HEIGHT) {
+    isCollapsingMobileSub.value = true;
+    mobileSubPaneHeight.value = collapsedSubPaneHeight();
+    window.setTimeout(() => {
+      isCollapsingMobileSub.value = false;
+    }, 260);
+  }
 }
 
 /** @param {unknown} routeName */
@@ -208,6 +269,7 @@ onUnmounted(() => {
     :active-pane="activePane"
     :mobile-sub-pane-height="mobileSubPaneHeight"
     :is-collapsing-mobile-sub="isCollapsingMobileSub"
+    :is-mobile-sub-collapsed="isMobileSubCollapsed"
     :mobile-sub-content="mobileSubContent"
     :select-pane="selectPane"
     :collapse-mobile-sub-pane="collapseMobileSubPane"

@@ -41,8 +41,6 @@ header {
   margin-bottom: var(--space-sm);
 
   &.mobile-padding {
-    padding: 0 0 var(--space-xs) 0;
-    margin: 0;
     border-bottom: none;
   }
 
@@ -69,6 +67,10 @@ header {
 
     .sub {
       justify-content: flex-end;
+    }
+
+    :deep(button) {
+      padding: var(--space-xs) var(--space-sm);
     }
   }
 

@@ -1,4 +1,5 @@
 <script setup>
+import QuickAddFab from '@/components/QuickAddFab.vue';
 import { useUserStore } from '@/stores/user.js';
 
 const userStore = useUserStore();
@@ -7,6 +8,7 @@ const props = defineProps({
   activePane: { type: String, required: true },
   mobileSubPaneHeight: { type: Number, required: true },
   isCollapsingMobileSub: { type: Boolean, required: true },
+  isMobileSubCollapsed: { type: Boolean, required: true },
   mobileSubContent: { type: Object, required: true },
   selectPane: { type: Function, required: true },
   collapseMobileSubPane: { type: Function, required: true },
@@ -74,9 +76,18 @@ function setMobileSubContent(element) {
           <component :is="Component" :select-pane="props.selectPane" :collapse-mobile-sub-pane="props.collapseMobileSubPane" />
         </router-view>
       </div>
+      <QuickAddFab />
     </main>
 
-    <aside class="sub-pane" v-show="!userStore.formDatePick" :class="{ 'is-collapsing': props.isCollapsingMobileSub }" :style="{ flexBasis: `${props.mobileSubPaneHeight}px` }" @touchstart="onSubTouchStart" @touchmove="onSubTouchMove" @touchend="onSubTouchEnd" @touchcancel="onSubTouchEnd">
+    <aside
+      class="sub-pane"
+      v-show="!userStore.formDatePick"
+      :class="{ 'is-collapsing': props.isCollapsingMobileSub, 'is-collapsed': props.isMobileSubCollapsed && props.activePane !== 'sub' }"
+      :style="{ flexBasis: `${props.mobileSubPaneHeight}px` }"
+      @touchstart="onSubTouchStart"
+      @touchmove="onSubTouchMove"
+      @touchend="onSubTouchEnd"
+      @touchcancel="onSubTouchEnd">
       <div :ref="setMobileSubContent" class="aside-content sub-pane-content" @touchstart="onContentTouchStart">
         <router-view name="sub" v-slot="{ Component }">
           <component :is="Component" :select-pane="props.selectPane" :collapse-mobile-sub-pane="props.collapseMobileSubPane" />
@@ -92,6 +103,7 @@ function setMobileSubContent(element) {
 
   main {
     display: flex;
+    position: relative;
     flex: 1 1 auto;
     min-height: 0;
     width: 100%;
@@ -112,10 +124,24 @@ function setMobileSubContent(element) {
 
   .sub-pane {
     display: flex;
+    position: relative;
     flex: 0 0 auto;
     min-height: 0;
     width: 100%;
     height: auto;
+
+    &.is-collapsing {
+      transition: flex-basis 0.22s ease;
+    }
+
+    &.is-collapsed .sub-pane-content {
+      overflow: hidden;
+      padding-bottom: 0;
+
+      :deep(.menu-bar ~ *) {
+        display: none;
+      }
+    }
   }
 
   &.active-pane-sub main {

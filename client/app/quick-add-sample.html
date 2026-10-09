@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>自然言語スケジュール入力アシスタント</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 680px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      color: #333;
+    }
+    .card {
+      background: #fdfdfd;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+    h2, h3 { margin-top: 0; }
+    .input-group { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+    input[type="text"], input[type="date"], input[type="time"] {
+      padding: 0.6rem;
+      font-size: 1rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      outline: none;
+    }
+    input[type="text"]:focus, input[type="date"]:focus, input[type="time"]:focus {
+      border-color: #3b82f6;
+    }
+    button {
+      padding: 0.6rem 1.2rem;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled { background: #94a3b8; cursor: not-allowed; }
+    .status-box {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-top: 0.75rem;
+      min-height: 1.2rem;
+    }
+    .debug-box {
+      background: #f1f5f9;
+      border-radius: 4px;
+      padding: 0.5rem 0.75rem;
+      font-family: monospace;
+      font-size: 0.85rem;
+      color: #334155;
+      margin-top: 0.5rem;
+      word-break: break-all;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    .form-group { display: flex; flex-direction: column; margin-bottom: 1rem; }
+    .form-group.full { grid-column: span 2; }
+    label { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.3rem; color: #475569; }
+  </style>
+</head>
+<body>
+
+  <h2>自然言語スケジュール入力</h2>
+
+  <!-- 1. 自然言語入力エリア -->
+  <div class="card">
+    <label for="prompt-input">予定の指示文を入力</label>
+    <div class="input-group">
+      <input type="text" id="prompt-input" placeholder="例: 来週水曜の14時からZoomで田中さんと商談" style="flex: 1;" disabled>
+      <button id="parse-btn" disabled>解析して反映</button>
+    </div>
+    <div id="status" class="status-box">モデルの初期化待機中...</div>
+
+    <div style="margin-top: 0.8rem; font-size: 0.8rem; color: #64748b;">正規化フィルター適用後のテキスト:</div>
+    <div id="normalized-debug" class="debug-box">(入力後に表示されます)</div>
+  </div>
+
+  <!-- 2. 反映先Webフォーム -->
+  <div class="card">
+    <h3>反映先フォーム</h3>
+    <form id="schedule-form" onsubmit="event.preventDefault();">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="form-date">日付 (YYYY-MM-DD)</label>
+          <input type="date" id="form-date">
+        </div>
+        <div class="form-group">
+          <label for="form-time">開始時刻 (HH:MM)</label>
+          <input type="time" id="form-time">
+        </div>
+        <div class="form-group full">
+          <label for="form-title">予定のタイトル / 用件</label>
+          <input type="text" id="form-title" placeholder="用件が入ります">
+        </div>
+        <div class="form-group">
+          <label for="form-location">場所 / 手段</label>
+          <input type="text" id="form-location" placeholder="会議室、Zoomなど">
+        </div>
+        <div class="form-group">
+          <label for="form-attendees">同席・参加者</label>
+          <input type="text" id="form-attendees" placeholder="参加者名">
+        </div>
+        <div class="form-group full">
+          <label for="form-repeat">繰り返し設定</label>
+          <input type="text" id="form-repeat" placeholder="繰り返しルール">
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- WebLLMエンジンと実行ロジック -->
+  <script type="module">
+    import * as webllm from "https://esm.run/@mlc-ai/web-llm";
+
+    // UI要素の取得
+    const promptInput = document.getElementById("prompt-input");
+    const parseBtn = document.getElementById("parse-btn");
+    const statusEl = document.getElementById("status");
+    const debugEl = document.getElementById("normalized-debug");
+
+    const formDate = document.getElementById("form-date");
+    const formTime = document.getElementById("form-time");
+    const formTitle = document.getElementById("form-title");
+    const formLocation = document.getElementById("form-location");
+    const formAttendees = document.getElementById("form-attendees");
+    const formRepeat = document.getElementById("form-repeat");
+
+    // =========================================================
+    // テスト検証済みの正規化フィルター
+    // =========================================================
+/**
+ * カレンダー入力テキストの網羅的正規化・置換前処理（多義語保護版）
+ * 文脈依存の多義語（お昼、ランチ、夕食など）を保護し、LLMに自然に解釈させます
+ */
+function normalizeCalendarInput(text, baseDate = new Date()) {
+  if (!text) return "";
+
+  let s = text.normalize("NFKC");
+
+  const fmtDate = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  const addDays = (d, n) => {
+    const res = new Date(d);
+    res.setDate(res.getDate() + n);
+    return res;
+  };
+
+  // 1. 和暦・漢数字
+  s = s.replace(/令和([0-9]+|元)年/g, (_, p1) => `${2018 + (p1 === "元" ? 1 : parseInt(p1, 10))}年`);
+  const kanjiDigits = { "〇": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10 };
+  s = s.replace(/([一二三四五六七八九十〇]+)\s*(年|月|日|時|分)/g, (match, kanji, unit) => {
+    let num = 0;
+    if (kanji === "十") num = 10;
+    else if (kanji.startsWith("十")) num = 10 + (kanjiDigits[kanji[1]] || 0);
+    else if (kanji.includes("十")) {
+      const parts = kanji.split("十");
+      num = (kanjiDigits[parts[0]] || 1) * 10 + (kanjiDigits[parts[1]] || 0);
+    } else {
+      num = kanji.split("").reduce((acc, c) => acc * 10 + (kanjiDigits[c] || 0), 0);
+    }
+    return `${num}${unit}`;
+  });
+
+  // 2. 繰り返しの退避
+  const repeatTokens = [];
+  const holdToken = (val) => {
+    const key = `__REPEAT_TOKEN_${repeatTokens.length}__`;
+    repeatTokens.push({ key, val });
+    return key;
+  };
+  s = s.replace(/平日毎日/g, () => holdToken("[繰り返し: 毎週月〜金]"));
+  s = s.replace(/毎週末/g, () => holdToken("[繰り返し: 毎週土日]"));
+  s = s.replace(/毎日/g, () => holdToken("[繰り返し: 毎日]"));
+  s = s.replace(/第([1-5])\s*・?\s*第?([1-5])?\s*([日月火水木金土])曜日?/g, (_, p1, p2, w) => holdToken(`[繰り返し: 第${p1}${p2 || ""}${w}曜]`));
+  s = s.replace(/毎週\s*([日月火水木金土])曜日?/g, (_, w) => holdToken(`[繰り返し: 毎週${w}曜]`));
+  s = s.replace(/隔週\s*([日月火水木金土])曜日?/g, (_, w) => holdToken(`[繰り返し: 隔週${w}曜]`));
+  s = s.replace(/毎月\s*([0-9]{1,2})日/g, (_, d) => holdToken(`[繰り返し: 毎月${d}日]`));
+
+  // 3. 祝日・イベント
+  s = s.replace(/元日/g, "1月1日");
+  s = s.replace(/成人の日/g, "1月の第2月曜日");
+  s = s.replace(/ゴールデンウィーク|GW/gi, "5月3日〜5月5日");
+  s = s.replace(/お盆/g, "8月13日〜8月16日");
+  s = s.replace(/ハロウィン/g, "10月31日");
+  s = s.replace(/クリスマスイブ/g, "12月24日");
+  s = s.replace(/クリスマス/g, "12月25日");
+  s = s.replace(/大晦日/g, "12月31日");
+
+  // 4. 日付相対表現
+  s = s.replace(/明々後日|しあさって/g, fmtDate(addDays(baseDate, 3)));
+  s = s.replace(/明後日|あさって/g, fmtDate(addDays(baseDate, 2)));
+  s = s.replace(/明日|あした|みょうにち/g, fmtDate(addDays(baseDate, 1)));
+  s = s.replace(/一昨日|おととい/g, fmtDate(addDays(baseDate, -2)));
+  s = s.replace(/今日|きょう|本日/g, fmtDate(baseDate));
+  s = s.replace(/昨日|きのう/g, fmtDate(addDays(baseDate, -1)));
+
+  s = s.replace(/([0-9]+)\s*日後/g, (_, n) => fmtDate(addDays(baseDate, parseInt(n, 10))));
+  s = s.replace(/([0-9]+)\s*週(?:間)?後/g, (_, n) => fmtDate(addDays(baseDate, parseInt(n, 10) * 7)));
+  s = s.replace(/([0-9]+)\s*ヶ?月後/g, (_, n) => {
+    const d = new Date(baseDate);
+    d.setMonth(d.getMonth() + parseInt(n, 10));
+    return fmtDate(d);
+  });
+  s = s.replace(/半年後/g, () => {
+    const d = new Date(baseDate);
+    d.setMonth(d.getMonth() + 6);
+    return fmtDate(d);
+  });
+
+  const weekdayMap = { "日": 0, "月": 1, "火": 2, "水": 3, "木": 4, "金": 5, "土": 6 };
+  s = s.replace(/明けの月曜(?:日)?/g, () => fmtDate(addDays(baseDate, (8 - baseDate.getDay()) % 7 || 7)));
+  s = s.replace(/(今週|来週|再来週|次の|今度の)?\s*(の)?\s*([日月火水木金土])曜日?/g, (match, prefix, no, w) => {
+    const targetDay = weekdayMap[w];
+    const currentDay = baseDate.getDay();
+    let offset = (targetDay - currentDay + 7) % 7;
+    if (prefix === "来週") {
+      const daysUntilNextSunday = (7 - currentDay) % 7 || 7;
+      return fmtDate(addDays(addDays(baseDate, daysUntilNextSunday), targetDay === 0 ? 0 : targetDay));
+    } else if (prefix === "再来週") {
+      const daysUntilNextSunday = (7 - currentDay) % 7 || 7;
+      return fmtDate(addDays(addDays(baseDate, daysUntilNextSunday + 7), targetDay === 0 ? 0 : targetDay));
+    } else if (prefix === "今週") {
+      return fmtDate(addDays(baseDate, offset));
+    } else if (prefix === "今度の" || prefix === "次の") {
+      return fmtDate(addDays(baseDate, offset === 0 ? 7 : offset));
+    } else {
+      return fmtDate(addDays(baseDate, offset === 0 ? 7 : offset));
+    }
+  });
+
+  s = s.replace(/今週末/g, () => fmtDate(addDays(baseDate, (6 - baseDate.getDay() + 7) % 7)));
+  s = s.replace(/月末/g, () => fmtDate(new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0)));
+  s = s.replace(/月初/g, () => fmtDate(new Date(baseDate.getFullYear(), baseDate.getMonth(), 1)));
+  s = s.replace(/年度末/g, () => `${baseDate.getMonth() >= 3 ? baseDate.getFullYear() + 1 : baseDate.getFullYear()}-03-31`);
+
+  s = s.replace(/([0-9]{4})[年\/-]([0-9]{1,2})[月\/-]([0-9]{1,2})日?/g, (_, y, m, d) => `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`);
+  s = s.replace(/(?<![0-9\-])([0-9]{1,2})[月\/]([0-9]{1,2})日?(?![0-9\-])/g, (match, m, d) => {
+    if (text.includes("元日") || text.includes("クリスマス") || text.includes("ハロウィン")) return match;
+    return `${baseDate.getFullYear()}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  });
+
+  // 5. 時刻（修飾語が確実に時刻を指している場合のみ処理）
+  s = s.replace(/深夜\s*([0-9]{1,2})時/g, (_, h) => `${String(parseInt(h, 10) % 24).padStart(2, "0")}:00`);
+  s = s.replace(/(?:午前|am)\s*([0-9]{1,2})時(?:([0-9]{1,2})分)?/gi, (_, h, m) => `${String(h).padStart(2, "0")}:${m ? String(m).padStart(2, "0") : "00"}`);
+  s = s.replace(/(?:午後|pm)\s*([0-9]{1,2})時(?:([0-9]{1,2})分)?/gi, (_, h, m) => {
+    const hour = parseInt(h, 10) < 12 ? parseInt(h, 10) + 12 : parseInt(h, 10);
+    return `${String(hour).padStart(2, "0")}:${m ? String(m).padStart(2, "0") : "00"}`;
+  });
+  s = s.replace(/(?:午前|am)\s*([0-9]{1,2}):([0-9]{2})/gi, (_, h, m) => `${String(h).padStart(2, "0")}:${m}`);
+  s = s.replace(/(?:午後|pm)\s*([0-9]{1,2}):([0-9]{2})/gi, (_, h, m) => {
+    const hour = parseInt(h, 10) < 12 ? parseInt(h, 10) + 12 : parseInt(h, 10);
+    return `${String(hour).padStart(2, "0")}:${m}`;
+  });
+
+  // 朝・夜・夕方は「X時」が後続する場合のみ安全に置換
+  s = s.replace(/朝\s*([0-9]{1,2})時(?:([0-9]{1,2})分)?/g, (_, h, m) => `${String(h).padStart(2, "0")}:${m ? String(m).padStart(2, "0") : "00"}`);
+  s = s.replace(/(?:夜|夕方)\s*([0-9]{1,2})時(?:([0-9]{1,2})分)?/g, (_, h, m) => {
+    const hour = parseInt(h, 10) < 12 ? parseInt(h, 10) + 12 : parseInt(h, 10);
+    return `${String(hour).padStart(2, "0")}:${m ? String(m).padStart(2, "0") : "00"}`;
+  });
+
+  s = s.replace(/正午|昼12時/g, "12:00");
+  s = s.replace(/([0-9]{1,2})時半/g, (_, h) => `${String(h).padStart(2, "0")}:30`);
+  s = s.replace(/([0-9]{1,2})時([0-9]{1,2})分/g, (_, h, m) => `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+
+  // 所要時間
+  s = s.replace(/([0-9]{1,2}:[0-9]{2})\s*から\s*([0-9]+)時間(?:間)?/g, (_, startTime, hours) => {
+    const [h, m] = startTime.split(":").map(Number);
+    return `${startTime}〜${String(h + parseInt(hours, 10)).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  });
+
+  // 単独の「X時」
+  s = s.replace(/(?<![:0-9])([1-9]|1[0-2])時(?!間|[:0-9分])/g, (_, h) => {
+    let hour = parseInt(h, 10);
+    if (hour <= 7) hour += 12;
+    return `${String(hour).padStart(2, "0")}:00`;
+  });
+  s = s.replace(/(?<![:0-9])(1[3-9]|2[0-3])時(?!間|[:0-9分])/g, (_, h) => `${h}:00`);
+  s = s.replace(/(?<![:0-9])0?0時(?!間|[:0-9分])/g, "00:00");
+
+  s = s.replace(/([0-9]{1,2}:[0-9]{2})\s*[-~〜]\s*([0-9]{1,2}:[0-9]{2})/g, "$1〜$2");
+  s = s.replace(/([0-9]{1,2}:[0-9]{2})\s*から\s*([0-9]{1,2}:[0-9]{2})(?:まで)?/g, "$1〜$2");
+
+  // ★「お昼」「ランチ」「夕食」などの多義語はあえて置換せず、文脈判別が可能なLLMに委ねる
+  // 誤変換リスクの低い明確なビジネス生活習慣語のみを残す
+  const strictTimes = [
+    { pattern: /始業前/g, replace: "08:45" },
+    { pattern: /定時後|退勤後|終業後/g, replace: "18:00" },
+    { pattern: /寝る前/g, replace: "22:00" },
+  ];
+  strictTimes.forEach(v => { s = s.replace(v.pattern, v.replace); });
+
+  s = s.replace(/丸一日|終日/g, "[終日]");
+
+  // 6. 場所・手段・参加者
+  s = s.replace(/(?:オンライン|Zoom|Google Meet|Teams)/gi, (m) => `[場所/手段: ${m}]`);
+  s = s.replace(/会議室[A-Z0-9\-]+/gi, (m) => `[場所: ${m}]`);
+  s = s.replace(/本社[0-9]+F?にて?/g, (m) => `[場所: ${m.replace(/にて?/, "")}]`);
+  // 「電話」「リモート」は「〜で」が付いている時だけ手段として抽出
+  s = s.replace(/(?:電話で|リモートで|往訪)/g, (m) => `[手段: ${m}] `);
+  s = s.replace(/(?<=[、\sで]|^)([^、\sで]+(?:さん|様|部長|みんな|クライアント))\s*(?:と(?:一緒?に?)?|同席)/g, "[同席: $1] ");
+
+  // 7. アクション・意図・語尾
+  s = s.replace(/することになった|しなきゃ|の約束/g, "");
+  s = s.replace(/\s*しよ(?:う)?\s*$/g, "");
+  s = s.replace(/\s*(?:カレンダーに|予定に)?(?:入れといて|いれといて|入れておいて)\s*$/g, "");
+  s = s.replace(/\s*(?:を)?(?:追加|登録|入れて|セットして|予定に入れて|いれて|カレンダーに入れて)(?:してください|して)?\s*$/g, "");
+  s = s.replace(/\s*(?:が)?(?:ある|の予定|ミーティング|打ち合わせ)\s*$/g, (m) => s.trim() === m.trim() ? m : "");
+
+  s = s.replace(/([0-9]{4}-[0-9]{2}-[0-9]{2})\s*[のに]?\s*/g, "$1 ");
+  s = s.replace(/([0-9]{1,2}:[0-9]{2})\s*から\s*/g, "$1 ");
+
+  // 8. 繰り返し復元
+  repeatTokens.forEach(t => {
+    s = s.replace(new RegExp(`${t.key}\\s*の?\\s*`), `${t.val} `);
+  });
+
+  return s.trim().replace(/\s+/g, " ");
+}
+    // =========================================================
+    // WebLLM エンジンの初期化
+    // =========================================================
+    const selectedModel = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
+    const engine = new webllm.MLCEngine();
+
+    engine.setInitProgressCallback((report) => {
+      statusEl.textContent = `モデル読込中: ${report.text}`;
+    });
+
+    try {
+      if (!navigator.gpu) {
+        statusEl.textContent = "エラー: お使いのブラウザはWebGPUに対応していません。";
+      } else {
+        await engine.reload(selectedModel);
+        statusEl.textContent = "準備完了。指示文を入力してください。";
+        promptInput.disabled = false;
+        parseBtn.disabled = false;
+      }
+    } catch (err) {
+      statusEl.textContent = `ロード失敗: ${err.message}`;
+    }
+
+    // =========================================================
+    // 解析とフォーム自動入力ロジック
+    // =========================================================
+    async function processAndFill() {
+      const rawText = promptInput.value.trim();
+      if (!rawText) return;
+
+      promptInput.disabled = true;
+      parseBtn.disabled = true;
+
+      // 1. 正規化前処理を実行
+      const normalizedText = normalizeCalendarInput(rawText, new Date());
+      debugEl.textContent = normalizedText;
+      statusEl.textContent = "AI解析中...";
+
+      // 2. LLM プロンプトの設計（余分な推論を省きJSONのみを要求）
+const systemPrompt = `
+あなたはスケジュール抽出AIです。
+正規化テキストから各要素を解析し、以下のJSON形式のみを出力してください。
+
+JSONフォーマット:
+{
+  "date": "YYYY-MM-DD",
+  "time": "HH:MM",
+  "title": "予定名・用件",
+  "location": "場所またはオンライン手段",
+  "attendees": "参加者・同席者",
+  "repeat": "繰り返しルール"
+}
+
+文脈判定ルール:
+- 「お昼」「ランチ」「ディナー」などが時間帯を表す文脈（例: 明日のお昼に集合）なら time を 12:00 に設定してください。
+- 食事そのものやイベント名を表す文脈（例: お昼を食べる、ランチミーティング、ディナー予約）なら title（用件）として扱ってください。
+`;
+
+      try {
+        const response = await engine.chat.completions.create({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: normalizedText }
+          ],
+          temperature: 0.1 // 決定論的出力
+        });
+
+        const reply = response.choices[0]?.message?.content || "";
+
+        // 3. 正規表現でJSONブロックを抽出（文法マッチャーエラーの回避）
+        const jsonMatch = reply.match(/\{[\s\S]*?\}/);
+        if (!jsonMatch) {
+          throw new Error("AIからJSON形式の出力を取得できませんでした: " + reply);
+        }
+
+        const data = JSON.parse(jsonMatch[0]);
+
+        // 4. Webフォームの各 input 要素に代入
+        formDate.value = data.date || "";
+        formTime.value = data.time || "";
+        formTitle.value = data.title || "";
+        formLocation.value = data.location || "";
+        formAttendees.value = data.attendees || "";
+        formRepeat.value = data.repeat || "";
+
+        statusEl.textContent = "フォームへの自動反映が完了しました。";
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = `解析エラー: ${err.message}`;
+      } finally {
+        promptInput.disabled = false;
+        parseBtn.disabled = false;
+        promptInput.focus();
+      }
+    }
+
+    parseBtn.addEventListener("click", processAndFill);
+    promptInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") processAndFill();
+    });
+  </script>
+</body>
+</html>

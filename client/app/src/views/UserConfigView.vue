@@ -33,6 +33,7 @@ const draft = reactive({
   calendarFontFamily: userStore.calendarFontFamily,
   uiTextSize: userStore.uiTextSize,
   calendarTextSize: userStore.calendarTextSize,
+  quickAddButtonSide: userStore.quickAddButtonSide,
   labels: [...userStore.weekdayLabels],
   weekendDays: userStore.weekendDays.map((day) => ({ ...day })),
   customHolidayColor: userStore.customHolidayColor,
@@ -82,6 +83,7 @@ function save() {
   userStore.uiTextSize = draft.uiTextSize;
   userStore.calendarTextSize = draft.calendarTextSize;
   theme.applyTextSizes();
+  userStore.setQuickAddButtonSide(draft.quickAddButtonSide);
   userStore.weekendDays = draft.weekendDays.map((day) => ({ ...day }));
   userStore.customHolidayColor = draft.customHolidayColor;
   userStore.holidayColor = draft.holidayColor;
@@ -172,6 +174,13 @@ function save() {
               <option v-for="(size, key) in USER_TEXT_SIZE_VALUES" :key="key" :value="key">{{ key }}</option>
             </select>
           </label>
+          <label
+            >クイック登録ボタンの位置
+            <select v-model="draft.quickAddButtonSide">
+              <option value="right">右下</option>
+              <option value="left">左下</option>
+            </select>
+          </label>
         </section>
       </AccordionMenu>
 
@@ -206,7 +215,7 @@ function save() {
           </label>
           <p class="hint">日付セルの右クリックメニューから "この日を休日にする" で登録した日は、この色で日付が表示されます.</p>
 
-          <p class="sub-title">曜日ラベル<br/><span class="hint">カレンダー上部に表示する曜日名を変更できます.</span></p>
+          <p class="sub-title">曜日ラベル<br /><span class="hint">カレンダー上部に表示する曜日名を変更できます.</span></p>
 
           <div class="labels-grid">
             <label v-for="(day, index) in dayNames" :key="day"
@@ -222,15 +231,15 @@ function save() {
       </AccordionMenu>
 
       <AccordionMenu label="通知設定">
-      <UserConfigViewNotificationSection />
+        <UserConfigViewNotificationSection />
       </AccordionMenu>
 
       <AccordionMenu label="同期設定">
-      <UserConfigViewSyncSection />
+        <UserConfigViewSyncSection />
       </AccordionMenu>
 
       <AccordionMenu label="データ管理">
-      <UserConfigViewDataSection />
+        <UserConfigViewDataSection />
       </AccordionMenu>
 
       <div class="actions">

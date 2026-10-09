@@ -15,6 +15,7 @@ import IconAnglesDown from '@/components/icons/IconAnglesDown.vue';
 import { buildRecurrence, parseRecurrence } from '@/services/rrule.js';
 import { focusNextOnEnter } from '@/services/form-focus.js';
 import { ensureNotificationPermission, rescheduleNotifications } from '@/composables/useNotifications.js';
+import { takeQuickAddDraft, repeatToRecurrence } from '@/composables/useQuickAdd.js';
 import IconCalendar from '@/components/icons/IconCalendar.vue';
 import SuggestPulldown from '@/components/SuggestPulldown.vue';
 import AccordionMenu from '@/components/AccordionMenu.vue';
@@ -632,32 +633,53 @@ onMounted(async () => {
     // 編集対象のイベントが選択されていない場合は新規作成
     if (!userStore.nowSelectedEvent) {
       originalEvent.value = null;
+      // 自然言語クイック登録で解析されたドラフト（1回限り消費）。開始時刻がなければ終日として扱う
+      const draft = takeQuickAddDraft();
+      const draftDateTime = (/** @type {string|undefined} */ date, /** @type {string|undefined} */ time) => {
+        const parsed = toDayjs(date ?? '');
+        if (!parsed.isValid()) return null;
+        const [h, m] = /^\d{1,2}:\d{2}$/.test(time ?? '') ? time.split(':').map(Number) : [0, 0];
+        return parsed.hour(h).minute(m).second(0).millisecond(0);
+      };
+      const draftStart = draft ? draftDateTime(draft.startDate, draft.startTime) : null;
+      let draftEnd = draft ? draftDateTime(draft.endDate || draft.startDate, draft.endTime) : null;
+      const draftAllDay = Boolean(draft && (draft.isAllDay || !draft.startTime));
+      // 時刻なし・逆転している終了は既定値へ矯正する
+      if (draftStart && (!draftEnd || (!draftAllDay && !draftEnd.isAfter(draftStart)) || (draftAllDay && draftEnd.isBefore(draftStart, 'day')))) {
+        draftEnd = draftAllDay ? draftStart : draftStart.add(1, 'hour');
+      }
       // ドラッグ選択などから渡された初期範囲。終日の end は「含む側」の日付として受け取る
       const range = props.initialRange;
       const rangeStart = range ? toDayjs(range.start) : null;
       const rangeEnd = range ? toDayjs(range.end) : null;
       const hasRange = Boolean(rangeStart?.isValid?.());
-      const isAllDay = range ? Boolean(range.isAllDay) : true;
+      const isAllDay = draft ? draftAllDay : range ? Boolean(range.isAllDay) : true;
       Object.assign(formData, {
-        summary: '',
-        description: '',
-        location: '',
+        summary: draft?.summary ?? '',
+        description: draft?.description ?? '',
+        location: draft?.location ?? '',
         privacyNote: '',
         calendarId: initialCalendarId.value,
-        icon: '',
+        icon: draft?.icon ?? '',
         isAllDay,
-        startDateTime: hasRange ? rangeStart : userStore.nowSelectedDate ? toDayjs(userStore.nowSelectedDate) : toDayjs(),
-        endDateTime: rangeEnd?.isValid?.() ? rangeEnd : userStore.nowSelectedDate ? toDayjs(userStore.nowSelectedDate).add(1, 'hour') : toDayjs().add(1, 'hour'),
+        startDateTime: draftStart ?? (hasRange ? rangeStart : userStore.nowSelectedDate ? toDayjs(userStore.nowSelectedDate) : toDayjs()),
+        endDateTime: draftEnd ?? (rangeEnd?.isValid?.() ? rangeEnd : userStore.nowSelectedDate ? toDayjs(userStore.nowSelectedDate).add(1, 'hour') : toDayjs().add(1, 'hour')),
         timeZone: userStore.timeZone,
       });
       Object.assign(recurrence, { frequency: '', interval: 1, weekdays: [], monthDay: '', month: '', count: '', until: '', exclusions: '', holidayAdjustment: '' });
       eventColorId.value = '';
       eventTagsInput.value = '';
+      if (draft?.repeat) {
+        const recur = repeatToRecurrence(draft.repeat);
+        if (recur) Object.assign(recurrence, recur);
+        // フォームで表現できない繰り返しルールは説明文へ退避して情報を失わない
+        else formData.description = [formData.description, `繰り返し: ${draft.repeat}`].filter(Boolean).join('\n');
+      }
       // テンプレート適用時は日時以外の全項目をテンプレートの値で上書きする
       if (props.template) applyTemplate(props.template);
       Object.assign(dateFields, {
-        startDate: formData.startDateTime.format('MMDD'),
-        endDate: formData.endDateTime.format('MMDD'),
+        startDate: formData.startDateTime.format(formData.startDateTime.year() === dayjs().year() ? 'MMDD' : 'YYYYMMDD'),
+        endDate: formData.endDateTime.format(formData.endDateTime.year() === dayjs().year() ? 'MMDD' : 'YYYYMMDD'),
         startTime: formData.startDateTime.format('HHmm'),
         endTime: formData.endDateTime.format('HHmm'),
       });

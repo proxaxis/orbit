@@ -980,6 +980,7 @@ $event-bar-radius: 4px;
         > span {
           height: 100%;
           line-height: 16px;
+          padding-left: 6px;
         }
 
         &.is-label-start {

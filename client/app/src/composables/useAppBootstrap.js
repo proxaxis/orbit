@@ -11,6 +11,7 @@ import { initEventSync } from '@/composables/useEvents.js';
 import { initEventNotifications, rescheduleNotifications } from '@/composables/useNotifications.js';
 import { initRemoteChangeSync, checkRemoteChanges } from '@/composables/useRemoteSync.js';
 import { initShareSync } from '@/composables/useShare.js';
+import { scheduleQuickAddWarmup } from '@/composables/useQuickAdd.js';
 import { useTheme } from '@/composables/useTheme.js';
 
 /**
@@ -105,6 +106,8 @@ export function useAppBootstrap() {
     initShareSync();
     initEventSync();
     initRemoteChangeSync();
+    // PWA インストール済みなら自然言語登録用の LLM をバックグラウンドで事前キャッシュする
+    scheduleQuickAddWarmup();
     mQueryList = window.matchMedia('(prefers-color-scheme: dark)');
     mQueryList.addEventListener('change', handleSystemThemeChange);
     mCoarsePointerQuery = window.matchMedia('(hover: none) and (pointer: coarse)');
