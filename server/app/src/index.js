@@ -25,7 +25,7 @@ import webpush from 'web-push';
  * @property {string} BFF_SESSION_SECRET
  * @property {number} BFF_APP_PORT
  * @property {string} VITE_CLIENT_APP_BASE_URL
- * @property {string} VAPID_PUBLIC_KEY
+ * @property {string} VITE_VAPID_PUBLIC_KEY
  * @property {string} VAPID_PRIVATE_KEY
  * @property {string} VAPID_SUBJECT
  */
@@ -46,7 +46,7 @@ const env = (() => {
     'REDIS_HOST',
     'REDIS_PORT',
     'REALM_PATH',
-    'VAPID_PUBLIC_KEY',
+    'VITE_VAPID_PUBLIC_KEY',
     'VAPID_PRIVATE_KEY',
     'VAPID_SUBJECT',
   ];
@@ -366,13 +366,13 @@ const errMessage = (/** @type {unknown} */ err) =>
 const vapidKeys =
   env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY
     ? {
-        publicKey: env.VAPID_PUBLIC_KEY,
+        publicKey: env.VITE_VAPID_PUBLIC_KEY,
         privateKey: env.VAPID_PRIVATE_KEY,
       }
     : webpush.generateVAPIDKeys();
-if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {
+if (!env.VITE_VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {
   console.warn(
-    'VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY are not set; using ephemeral VAPID keys. ' +
+    'VITE_VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY are not set; using ephemeral VAPID keys. ' +
       'Existing push subscriptions will break on restart.'
   );
 }
