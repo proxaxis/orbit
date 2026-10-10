@@ -8,6 +8,7 @@ RUN npm install
 COPY ./app .
 
 RUN chown -R node:node /app
+RUN chown -R node:node /app/.realm
 
 USER node
 

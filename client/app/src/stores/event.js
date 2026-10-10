@@ -50,6 +50,20 @@ export const useEventStore = defineStore('event', () => {
   }
 
   /**
+   * キャッシュ全件を「期限切れ」にする。表示用の items は保持するため、
+   * 次回の listEvents で古い内容が表示されたままバックグラウンド再取得に入り、
+   * 中間状態による画面のちらつきを防ぐ。アカウント切替など完全な破棄が必要な場合は clearEventCache を使う。
+   * @returns {void}
+   */
+  function invalidateEventCache() {
+    const next = new Map();
+    eventCache.value.forEach((value, key) => {
+      next.set(key, { ...value, at: 0 });
+    });
+    eventCache.value = next;
+  }
+
+  /**
    * 保留中のイベント操作キューを置き換える
    * @param {import('@/services/event-offline.js').EventOperation[]} operations 操作一覧
    * @returns {void}
@@ -76,6 +90,7 @@ export const useEventStore = defineStore('event', () => {
     getCachedEntry,
     setCachedEntry,
     clearEventCache,
+    invalidateEventCache,
     setPendingOperations,
     pushPendingOperation,
   };

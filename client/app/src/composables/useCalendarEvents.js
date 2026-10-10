@@ -5,7 +5,7 @@
  * 月単位のイベントキャッシュはモジュールスコープで共有し、複数ビューで重複取得しない。
  */
 import { computed, ref, watch } from 'vue';
-import { useEvents } from '@/composables/useEvents.js';
+import { useEvents, sameEventItems } from '@/composables/useEvents.js';
 import { useCalendarStore } from '@/stores/calendar.js';
 import { useEventStore } from '@/stores/event.js';
 import { isCustomHolidayEvent, holidayDatesOf } from '@/services/custom-holidays.js';
@@ -65,6 +65,9 @@ export function useCalendarEvents(range) {
       .then((items) => {
         // 取得中にキャッシュが破棄された場合は古い世代の結果を書き戻さない
         if (generation !== cacheGeneration) return;
+        const prev = monthEvents.value.get(target.key);
+        // 内容が同一なら置換しない（新しい Map への差し替え自体が再描画を起こすため）
+        if (prev && sameEventItems(prev, items)) return;
         const next = new Map(monthEvents.value);
         next.set(target.key, items);
         monthEvents.value = next;
@@ -102,14 +105,15 @@ export function useCalendarEvents(range) {
 
   // 表示中のカレンダー構成が変わったらキャッシュを破棄して取り直す
   // （カレンダー別月キャッシュも破棄しないと古い月エントリが再利用される）
+  // deep 監視だと名前や共有状態の更新でも月キャッシュが全破棄され画面がちらつくため、
+  // 表示に影響する ID・配色だけのフィンガープリントで実質変更を検出する
   watch(
-    () => calendarStore.listVisibleCalendars,
+    () => calendarStore.listVisibleCalendars.map((/** @type {any} */ cal) => `${cal.id}:${cal.colorId ?? ''}:${cal.backgroundColor ?? ''}`).join(','),
     () => {
       eventStore.clearEventCache();
       resetSharedEventCache();
       loadNeededMonths();
     },
-    { deep: true },
   );
 
   /** @type {ComputedRef<HandyCalendarEvent[]>} 表示範囲に重なる全イベント（カスタム休日を含む） */

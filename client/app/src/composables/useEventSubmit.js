@@ -30,9 +30,10 @@ export function useEventSubmit() {
    * 保存後の後処理（アルバム作成・画面遷移）
    * @param {HandyCalendarEvent|null} event 保存されたイベント
    * @param {EventSubmitPayload} payload フォームの送信内容
+   * @param {Promise<HandyCalendarEvent|null>} [synced] サーバ同期の完了を追跡する Promise（アルバム作成はこの完了を待つ）
    * @returns {Promise<void>}
    */
-  async function afterSubmit(event, payload) {
+  async function afterSubmit(event, payload, synced = null) {
     const { body, attendees = [], createPhotoAlbum = false } = payload;
     userStore.rememberEventTitle(body.summary);
     // 保存に使われたタグを候補キャッシュへ記録する
@@ -47,18 +48,25 @@ export function useEventSubmit() {
     // 詳細画面が新しいイベントを表示できるよう選択状態を更新する（複製・作成時）
     if (event) userStore.setNowSelectedEvent({ eid: event.id, cid: event.calendarId });
     if (createPhotoAlbum && event) {
-      // イベントの保存自体は成功しているため、アルバム作成の失敗はエラー表示だけに留める
-      try {
-        await photos.ensureEventAlbum(photos.applySubmitBody(event, { ...body, attendees }));
-      } catch (albumError) {
-        userStore.setError(true, albumError);
-      }
+      // アルバム作成にはサーバ側のイベント ID が必要なため、バックグラウンド同期の
+      // 完了を待ってから実行する。イベントの保存自体は完了しているため、
+      // アルバム作成の失敗はエラー表示だけに留める
+      void (async () => {
+        try {
+          const saved = (await synced) ?? event;
+          if (!saved || String(saved.id).startsWith('offline-')) throw new Error('イベントのサーバ同期が完了していないためアルバムを作成できませんでした');
+          await photos.ensureEventAlbum(photos.applySubmitBody(saved, { ...body, attendees }));
+        } catch (albumError) {
+          userStore.setError(true, albumError);
+        }
+      })();
     }
     router.push({ name: 'EventDetail' });
   }
 
   /**
-   * イベントを作成する
+   * イベントを作成する。ローカル保存が完了したら即座に画面遷移し、
+   * サーバ同期はバックグラウンド（Web Worker）に委譲する。
    * @param {EventSubmitPayload} payload フォームの送信内容
    * @returns {Promise<void>}
    */
@@ -66,9 +74,9 @@ export function useEventSubmit() {
     const { body, calendarId } = payload;
     userStore.setLoading(true, 'Creating event...');
     try {
-      const event = await events.createEvent(body, calendarId ?? '');
+      const { event, synced } = await events.createEvent(body, calendarId ?? '');
       if (!event) throw new Error('Failed to create event. No event returned.');
-      await afterSubmit(event, payload);
+      await afterSubmit(event, payload, synced);
     } catch (err) {
       userStore.setError(true, err);
     } finally {

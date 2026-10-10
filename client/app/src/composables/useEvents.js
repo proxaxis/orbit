@@ -13,6 +13,7 @@ import { useUserStore } from '@/stores/user.js';
 import { rescheduleNotifications } from '@/composables/useNotifications.js';
 import { CACHE_KEYS, SYNC_TAGS, registerBackgroundSync, writeCache } from '@/composables/useCache.js';
 import { getStoredEvents, processEventOperations, readEventOperations, removeStoredEvent, storedEventsForMonth, upsertStoredEvent, writeEventOperations } from '@/services/event-offline.js';
+import { runEventOperation } from '@/services/event-sync-worker.js';
 import { parseEventTags, stripTagsFromDescription } from '@/services/event-tags.js';
 import { isCustomHolidayEvent } from '@/services/custom-holidays.js';
 
@@ -40,6 +41,55 @@ function updatedStampOf(event) {
   const raw = String(event?.raw?.updated ?? '');
   const top = String(event?.updated ?? '');
   return top > raw ? top : raw;
+}
+
+/**
+ * 保存・表示イベントの一意キー（カレンダーID:イベントID）
+ * @param {HandyCalendarEvent} event
+ * @returns {string}
+ */
+function eventKeyOf(event) {
+  return `${event.calendarId}:${event.id}`;
+}
+
+/**
+ * 削除直後のイベントが events.list の反映遅れで復活するのを防ぐ
+ * @param {HandyCalendarEvent} event
+ * @returns {boolean} 削除ガード期間内か
+ */
+function isRecentlyRemovedEvent(event) {
+  const at = recentlyRemovedEventKeys.get(eventKeyOf(event));
+  if (at === undefined) return false;
+  if (Date.now() - at > REMOVED_EVENT_GUARD_MS) {
+    recentlyRemovedEventKeys.delete(eventKeyOf(event));
+    return false;
+  }
+  return true;
+}
+
+/** @type {Set<string>} 取得中の年月キー（year:monthIndex）。同じ月の重複フェッチを抑止する */
+const monthFetchInFlight = new Set();
+
+/**
+ * 2 つのイベント一覧が同一内容か判定する（順序も含む）。
+ * 取得直後の一覧と既存キャッシュの突き合わせに使い、差分が無い場合の置換・再描画を抑止する。
+ * @param {HandyCalendarEvent[]} a
+ * @param {HandyCalendarEvent[]} b
+ * @returns {boolean} 同一なら true
+ */
+export function sameEventItems(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (eventKeyOf(x) !== eventKeyOf(y)) return false;
+    if (updatedStampOf(x) !== updatedStampOf(y)) return false;
+    if (x.color !== y.color) return false;
+    // dayjs インスタンスは別オブジェクトになり得るため unix 時刻で比較する
+    if (x.startDateTime.unix() !== y.startDateTime.unix() || x.endDateTime.unix() !== y.endDateTime.unix()) return false;
+    if ((x.summary ?? '') !== (y.summary ?? '')) return false;
+  }
+  return true;
 }
 
 /**
@@ -133,7 +183,95 @@ export function useEvents() {
   }
 
   /**
-   * 指定の年と月における全てのカレンダーリストの全てのイベントを取得
+   * 月単位のイベントを BFF バッチで取得し、メモリキャッシュと保存イベントへ反映する。
+   * listEvents からバックグラウンドで呼ばれ、画面は先にキャッシュ/保存済みデータで描画する。
+   * @param {{gCalId: string, key: string}[]} targets 取得対象のカレンダー
+   * @param {number} year 取得する年
+   * @param {number} monthIndex 取得する月インデックス（0-11）
+   * @param {GoogleCalendarEventsListQueryParams} query クエリパラメータ
+   * @returns {Promise<boolean>} 1 カレンダー以上の取得に成功したか
+   */
+  async function fetchMonthEvents(targets, year, monthIndex, query) {
+    // オフラインキューに残っている操作の対象イベントはローカル保存版を優先する
+    const pendingEventIds = new Set(eventStore.pendingOperations.map((operation) => operation.eventId ?? operation.localId));
+    // フェッチ開始前の保存イベントキー。取得中に保存されたイベント（作成直後で events.list に未反映など）は
+    // 一括書き戻しで消さないために使う
+    const storedBeforeKeys = new Set((await getStoredEvents()).map((/** @type {HandyCalendarEvent} */ event) => eventKeyOf(event)));
+    const timeMin = dayjs().year(year).month(monthIndex).date(1).toISOString();
+    const timeMax = dayjs()
+      .year(year)
+      .month(monthIndex + 1)
+      .date(1)
+      .toISOString();
+    /** @type {Awaited<ReturnType<typeof gCalAPI.listEventsBatch>>} */
+    let results = [];
+    try {
+      results = await gCalAPI.listEventsBatch(
+        authStore.token,
+        targets.map(({ gCalId }) => ({ calendarId: gCalId, query: { ...query, timeMin, timeMax } })),
+      );
+    } catch (error) {
+      // バッチ自体の失敗（BFF 到達不可など）はローカル表示分だけで続行する
+      console.warn('Event list could not be refreshed. Using offline data.', error);
+    }
+    /** @type {Map<string, HandyCalendarEvent[]>} API 取得に成功したカレンダー ID → その月のイベント一覧（保存イベントへまとめて反映するため） */
+    const succeeded = new Map();
+    results.forEach((result, index) => {
+      const { gCalId, key } = targets[index];
+      if (!result.ok) {
+        console.warn('Event list could not be refreshed. Using offline data.', gCalId);
+        return;
+      }
+      const calendarColor = calendarStore.getCalendarColor(gCalId);
+      const fetched = result.items.map((/** @type {GoogleCalendarEvent} */ evt) => toHandyEvent(evt, gCalId, calendarColor)).filter((event) => !isRecentlyRemovedEvent(event));
+      const prev = eventStore.getCachedEntry(key);
+      if (prev && Array.isArray(prev.items) && sameEventItems(prev.items, fetched)) {
+        // 内容が同一なら既存のイベント参照を維持して取得時刻だけ更新する（再描画のちらつき防止）
+        eventStore.setCachedEntry(key, { at: Date.now(), items: prev.items });
+        return;
+      }
+      eventStore.setCachedEntry(key, { at: Date.now(), items: fetched });
+      succeeded.set(gCalId, fetched);
+    });
+
+    // 取得成功カレンダーの当月分を保存イベントへ反映する。
+    // 全体配列の read-modify-write は同時実行で他カレンダー/他月の保存分を巻き戻すため、
+    // 月ロードごとに 1 回の書き込みへまとめた上で直列化する
+    if (succeeded.size > 0) {
+      // API 版イベントの updated を引けるようにする（ローカル新規版の巻き戻し防止）
+      const apiUpdatedByKey = new Map();
+      succeeded.forEach((items) => items.forEach((event) => apiUpdatedByKey.set(eventKeyOf(event), updatedStampOf(event))));
+      storedEventsWriteQueue = storedEventsWriteQueue
+        .then(async () => {
+          const monthStart = dayjs().year(year).month(monthIndex).date(1).startOf('day');
+          const monthEnd = monthStart.add(1, 'month');
+          const currentEvents = await getStoredEvents();
+          const kept = currentEvents.filter((/** @type {HandyCalendarEvent} */ event) => {
+            if (!succeeded.has(event.calendarId)) return true;
+            const overlapsMonth = event.startDateTime.isBefore(monthEnd) && event.endDateTime.isAfter(monthStart);
+            if (!overlapsMonth || pendingEventIds.has(event.id)) return true;
+            // フェッチ中に保存されたイベントは残す（作成直後で events.list に未反映のイベントを消さない）
+            if (!storedBeforeKeys.has(eventKeyOf(event))) return true;
+            // 直近に削除したイベントは API 一覧の遅延で復活させない
+            if (isRecentlyRemovedEvent(event)) return false;
+            const apiUpdated = apiUpdatedByKey.get(eventKeyOf(event));
+            // API 一覧に無いイベントはサーバ側の削除・月外移動を反映して落とす
+            if (apiUpdated === undefined) return false;
+            // ローカル保存版の方が新しい（更新直後で list 未反映）なら残す
+            return updatedStampOf(event) > apiUpdated;
+          });
+          await writeCache(CACHE_KEYS.EVENTS, [...kept, ...[...succeeded.values()].flat()]);
+        })
+        .catch(() => {});
+      await storedEventsWriteQueue;
+    }
+    return succeeded.size > 0;
+  }
+
+  /**
+   * 指定の年と月における全てのカレンダーリストの全てのイベントを取得。
+   * オンライン・オフラインに関わらず、まず保存済み・キャッシュのデータで即座に返す。
+   * オンラインでキャッシュが古い場合はバックグラウンドで取り直し、完了後にビューへ通知する。
    * @param {number} year 取得する年
    * @param {number} monthIndex 取得する月インデックス（0-11）
    * @param {GoogleCalendarEventsListQueryParams} [query={}] クエリパラメータ
@@ -142,29 +280,14 @@ export function useEvents() {
   async function listEvents(year, monthIndex, query = {}) {
     /** @type {Map<string, HandyCalendarEvent>} 同一イベントの重複を除くためのマップ（キーは カレンダーID:イベントID） */
     const set = new Map();
-    const eventKey = (/** @type {HandyCalendarEvent} */ event) => `${event.calendarId}:${event.id}`;
+    const eventKey = eventKeyOf;
     // オフラインキューに残っている操作の対象イベントはローカル保存版を優先する
     // （API レスポンスは未反映の古いデータのため、上書きすると変更が画面から消える）
     const pendingEventIds = new Set(eventStore.pendingOperations.map((operation) => operation.eventId ?? operation.localId));
     const gCalendarIdSet = new Set(calendarStore.listVisibleCalendars.map((/** @type {any} */ cal) => cal.id));
 
-    /** @type {Map<string, HandyCalendarEvent[]>} API 取得に成功したカレンダー ID → その月のイベント一覧（保存イベントへまとめて反映するため） */
-    const succeeded = new Map();
-    // フェッチ開始前の保存イベントキー。取得中に保存されたイベント（作成直後で events.list に未反映など）は
-    // 一括書き戻しで消さないために使う
-    const storedBeforeKeys = new Set((await getStoredEvents()).map((/** @type {HandyCalendarEvent} */ event) => eventKey(event)));
-
     // 削除直後のイベントが events.list の反映遅れで復活するのを防ぐ
-    /** @param {HandyCalendarEvent} event @returns {boolean} 削除ガード期間内か */
-    const isRecentlyRemoved = (event) => {
-      const at = recentlyRemovedEventKeys.get(eventKey(event));
-      if (at === undefined) return false;
-      if (Date.now() - at > REMOVED_EVENT_GUARD_MS) {
-        recentlyRemovedEventKeys.delete(eventKey(event));
-        return false;
-      }
-      return true;
-    };
+    const isRecentlyRemoved = isRecentlyRemovedEvent;
 
     // API 版でローカル保存版を上書きしてよいか。
     // 更新直後のローカル版は updated が新しいため、events.list の反映遅れで古い API 版に戻されるのを防ぐ
@@ -176,6 +299,8 @@ export function useEvents() {
       target.set(eventKey(event), event);
     };
 
+    /** @type {{gCalId: string, key: string}[]} API フェッチが必要なカレンダー */
+    const fetchTargets = [];
     await Promise.all(
       Array.from(gCalendarIdSet).map(async (gCalId) => {
         const key = `${gCalId}:${year}:${monthIndex}`;
@@ -183,74 +308,29 @@ export function useEvents() {
         storedItems.forEach((/** @type {HandyCalendarEvent} */ event) => set.set(eventKey(event), event));
 
         const cached = eventStore.getCachedEntry(key);
-        const cachedItems = cached && Array.isArray(cached.items) && Date.now() - cached.at < MONTH_CACHE_TTL_MS ? cached.items : null;
-        if (cachedItems) {
-          cachedItems.forEach((/** @type {HandyCalendarEvent} */ event) => mergeApiEvent(set, event));
-          return;
-        }
-        if (userStore.isOffline || !authStore.token) return;
-
-        const timeMin = dayjs().year(year).month(monthIndex).date(1).toISOString();
-        const timeMax = dayjs()
-          .year(year)
-          .month(monthIndex + 1)
-          .date(1)
-          .toISOString();
-        /** @type {HandyCalendarEvent[]} */
-        const items = [];
-        let events;
-        do {
-          if (events?.nextPageToken && query) query.pageToken = events.nextPageToken;
-          try {
-            events = await gCalAPI.listEvents(authStore.token, gCalId, { ...query, timeMin, timeMax });
-          } catch (error) {
-            console.warn('Event list could not be refreshed. Using offline data.', error);
-            return;
-          }
-          if (events?.items) {
-            const calendarColor = calendarStore.getCalendarColor(gCalId);
-            items.push(...events.items.map((/** @type {GoogleCalendarEvent} */ evt) => toHandyEvent(evt, gCalId, calendarColor)));
-          }
-        } while (events?.nextPageToken);
-
-        const fetched = items.filter((event) => !isRecentlyRemoved(event));
-        eventStore.setCachedEntry(key, { at: Date.now(), items: fetched });
-        succeeded.set(gCalId, fetched);
-        // キューに残る操作対象とローカル新規版は保存版を維持し、それ以外は API の最新データで上書きする
-        fetched.forEach((event) => mergeApiEvent(set, event));
+        const cachedItems = cached && Array.isArray(cached.items) ? cached.items : null;
+        // 期限切れのキャッシュもまず表示に使う（オンラインなら裏で取り直して差し替える）
+        if (cachedItems) cachedItems.forEach((/** @type {HandyCalendarEvent} */ event) => mergeApiEvent(set, event));
+        const isFresh = cached && Date.now() - cached.at < MONTH_CACHE_TTL_MS;
+        if (isFresh || userStore.isOffline || !authStore.token) return;
+        fetchTargets.push({ gCalId, key });
       }),
     );
 
-    // 取得成功カレンダーの当月分を保存イベントへ反映する。
-    // 全体配列の read-modify-write は同時実行で他カレンダー/他月の保存分を巻き戻すため、
-    // 月ロードごとに 1 回の書き込みへまとめた上で直列化する
-    if (succeeded.size > 0) {
-      // API 版イベントの updated を引けるようにする（ローカル新規版の巻き戻し防止）
-      const apiUpdatedByKey = new Map();
-      succeeded.forEach((items) => items.forEach((event) => apiUpdatedByKey.set(eventKey(event), updatedStampOf(event))));
-      storedEventsWriteQueue = storedEventsWriteQueue
-        .then(async () => {
-          const monthStart = dayjs().year(year).month(monthIndex).date(1).startOf('day');
-          const monthEnd = monthStart.add(1, 'month');
-          const currentEvents = await getStoredEvents();
-          const kept = currentEvents.filter((/** @type {HandyCalendarEvent} */ event) => {
-            if (!succeeded.has(event.calendarId)) return true;
-            const overlapsMonth = event.startDateTime.isBefore(monthEnd) && event.endDateTime.isAfter(monthStart);
-            if (!overlapsMonth || pendingEventIds.has(event.id)) return true;
-            // フェッチ中に保存されたイベントは残す（作成直後で list に未反映のイベントを消さない）
-            if (!storedBeforeKeys.has(eventKey(event))) return true;
-            // 直近に削除したイベントは API 一覧の遅延で復活させない
-            if (isRecentlyRemoved(event)) return false;
-            const apiUpdated = apiUpdatedByKey.get(eventKey(event));
-            // API 一覧に無いイベントはサーバ側の削除・月外移動を反映して落とす
-            if (apiUpdated === undefined) return false;
-            // ローカル保存版の方が新しい（更新直後で list 未反映）なら残す
-            return updatedStampOf(event) > apiUpdated;
-          });
-          await writeCache(CACHE_KEYS.EVENTS, [...kept, ...[...succeeded.values()].flat()]);
-        })
-        .catch(() => {});
-      await storedEventsWriteQueue;
+    // 取得が必要なカレンダーはバックグラウンドでまとめてフェッチし、完了後にビューへ通知する。
+    // 失敗時は通知しない（通知→再取得の失敗ループを防ぐ）。同じ月の多重フェッチも抑止する
+    if (fetchTargets.length > 0) {
+      const fetchKey = `${year}:${monthIndex}`;
+      if (!monthFetchInFlight.has(fetchKey)) {
+        monthFetchInFlight.add(fetchKey);
+        void (async () => {
+          try {
+            if (await fetchMonthEvents(fetchTargets, year, monthIndex, query)) notifyEventDataChanged();
+          } finally {
+            monthFetchInFlight.delete(fetchKey);
+          }
+        })();
+      }
     }
 
     // バージョンは上げず副作用だけ実行する（バージョンを上げるとビューの再取得→再取得の無限ループになる）
@@ -274,13 +354,13 @@ export function useEvents() {
   }
 
   /**
-   * メモリキャッシュを破棄して現在月の予定を再同期する
+   * メモリキャッシュを期限切れにして現在月の予定を再同期する
    * @param {number} year 取得する年
    * @param {number} monthIndex 取得する月インデックス（0-11）
    * @returns {Promise<HandyCalendarEvent[]>}
    */
   async function syncEvents(year, monthIndex) {
-    eventStore.clearEventCache();
+    eventStore.invalidateEventCache();
     return listEvents(year, monthIndex);
   }
 
@@ -310,10 +390,109 @@ export function useEvents() {
   }
 
   /**
-   * イベントを作成する
+   * イベント API 操作を Web Worker でバックグラウンド実行する。
+   * 401 時はトークンを再取得して 1 回だけ再試行する（Worker 内では
+   * トークン再取得コールバックが使えないためメインスレッド側で処理する）。
+   * @param {'insert'|'update'|'remove'} op 実行する操作
+   * @param {...any} args アクセストークン以降の引数
+   * @returns {Promise<any>} API レスポンス
+   */
+  async function runEventApiInBackground(op, ...args) {
+    try {
+      return await runEventOperation(op, authStore.token, ...args);
+    } catch (error) {
+      if (/** @type {any} */ (error)?.status !== 401) throw error;
+      const { useAuth } = await import('@/composables/useAuth.js');
+      const token = await useAuth().fetchToken();
+      if (!token) throw error;
+      return await runEventOperation(op, token, ...args);
+    }
+  }
+
+  /**
+   * ローカルに保存したイベントをバックグラウンドでサーバへ登録する。
+   * 成功時はローカルイベントをサーバ発行 ID のイベントへ差し替え、結果をトーストで通知する。
+   * @param {string} localId ローカルイベント ID
+   * @param {string} gCalendarId カレンダー ID
+   * @param {any} body イベントのペイロード
+   * @param {{colorId?: string, backgroundColor?: string, foregroundColor?: string}} calendarColor カレンダーの配色
+   * @returns {Promise<HandyCalendarEvent|null>} 作成されたイベント（失敗時は null）
+   */
+  async function syncCreatedEvent(localId, gCalendarId, body, calendarColor) {
+    try {
+      const event = await runEventApiInBackground('insert', gCalendarId, body);
+      await removeStoredEvent(localId, gCalendarId);
+      if (!event) return null;
+      const created = { ...toHandyEvent(event, gCalendarId, calendarColor), timeZone: event.start?.timeZone ?? undefined };
+      await upsertStoredEvent(created);
+      // 詳細画面がローカル ID を指している場合はサーバ ID へ差し替える
+      const selected = userStore.nowSelectedEvent;
+      if (selected?.eid === localId && selected?.cid === gCalendarId) userStore.setNowSelectedEvent({ eid: created.id, cid: created.calendarId });
+      // 作成時の通知は insert 前に出ているため、API 版へ差し替えたことを再通知する
+      eventStore.invalidateEventCache();
+      notifyEventDataChanged();
+      userStore.showToast('予定を保存しました');
+      return created;
+    } catch (error) {
+      console.warn('Event creation could not be synced. Queued for retry.', error);
+      queueOperation({ type: 'create', calendarId: gCalendarId, localId, body });
+      userStore.showToast('予定の保存に失敗しました。オンライン時に再同期します');
+      return null;
+    }
+  }
+
+  /**
+   * イベントの更新をバックグラウンドでサーバへ送信し、結果をトーストで通知する。
+   * @param {string} gEventId イベント ID
+   * @param {string} gCalendarId カレンダー ID
+   * @param {any} body 更新するイベントのペイロード
+   * @returns {Promise<void>}
+   */
+  async function syncUpdatedEvent(gEventId, gCalendarId, body) {
+    try {
+      const event = await runEventApiInBackground('update', gCalendarId, gEventId, body);
+      if (event) {
+        const updated = { ...toHandyEvent(event, gCalendarId, calendarStore.getCalendarColor(gCalendarId)), timeZone: event.start?.timeZone ?? undefined };
+        await upsertStoredEvent(updated);
+      }
+      // 更新前の通知は API 反映前に出ているため、サーバー版へ差し替えたことを再通知する
+      eventStore.invalidateEventCache();
+      notifyEventDataChanged();
+      userStore.showToast('予定を保存しました');
+    } catch (error) {
+      console.warn('Event update could not be synced. Queued for retry.', error);
+      queueOperation({ type: 'update', calendarId: gCalendarId, eventId: gEventId, body });
+      userStore.showToast('予定の保存に失敗しました。オンライン時に再同期します');
+    }
+  }
+
+  /**
+   * イベントの削除をバックグラウンドでサーバへ送信し、結果をトーストで通知する。
+   * @param {string} gEventId イベント ID
+   * @param {string} gCalendarId カレンダー ID
+   * @returns {Promise<void>}
+   */
+  async function syncRemovedEvent(gEventId, gCalendarId) {
+    try {
+      await runEventApiInBackground('remove', gCalendarId, gEventId);
+      // 削除前の通知は API 反映前に出ているため、古い一覧で再読込されないよう再通知する
+      eventStore.invalidateEventCache();
+      notifyEventDataChanged();
+      userStore.showToast('予定を削除しました');
+    } catch (error) {
+      console.warn('Event removal could not be synced. Queued for retry.', error);
+      queueOperation({ type: 'remove', calendarId: gCalendarId, eventId: gEventId });
+      userStore.showToast('予定の削除に失敗しました。オンライン時に再同期します');
+    }
+  }
+
+  /**
+   * イベントを作成する。ローカル保存と画面反映を先に行い、
+   * サーバへの登録は Web Worker のバックグラウンド同期に委譲する。
    * @param {any} body イベントのペイロード
    * @param {string} gCalendarId カレンダー ID
-   * @returns {Promise<HandyCalendarEvent>} 作成されたイベント（オフライン等で同期保留になった場合はローカルイベント）
+   * @returns {Promise<{event: HandyCalendarEvent, synced: Promise<HandyCalendarEvent|null>}>}
+   *   ローカルイベントと、サーバ同期の完了を追跡する Promise（失敗・オフライン時はローカルイベントまたは null）
    */
   async function createEvent(body, gCalendarId) {
     const localId = `offline-${globalThis.crypto?.randomUUID?.() ?? `${dayjs().valueOf()}-${Math.random().toString(36).slice(2)}`}`;
@@ -340,26 +519,13 @@ export function useEvents() {
     // HandyCalendarEvent 形式で保存する。Google 形式（start/end）で保存すると
     // 読み戻し時に startDateTime/endDateTime が欠落して日時が現在時刻扱いになる
     await upsertStoredEvent(localHandyEvent);
-    eventStore.clearEventCache();
+    eventStore.invalidateEventCache();
     notifyEventDataChanged();
     if (userStore.isOffline || !authStore.isAuthenticated) {
       queueOperation({ type: 'create', calendarId: gCalendarId, localId, body });
-      return localHandyEvent;
+      return { event: localHandyEvent, synced: Promise.resolve(localHandyEvent) };
     }
-    try {
-      const event = await gCalAPI.insertEvent(authStore.token, gCalendarId, body);
-      await removeStoredEvent(localId, gCalendarId);
-      if (!event) return localHandyEvent;
-      const created = { ...toHandyEvent(event, gCalendarId, calendarColor), timeZone: event.start?.timeZone ?? undefined };
-      await upsertStoredEvent(created);
-      // 作成時の通知は insert 前に出ているため、API 版へ差し替えたことを再通知する
-      eventStore.clearEventCache();
-      notifyEventDataChanged();
-      return created;
-    } catch {
-      queueOperation({ type: 'create', calendarId: gCalendarId, localId, body });
-      return localHandyEvent;
-    }
+    return { event: localHandyEvent, synced: syncCreatedEvent(localId, gCalendarId, body, calendarColor) };
   }
 
   /**
@@ -392,26 +558,14 @@ export function useEvents() {
       raw: { ...(existing.raw ?? {}), ...body, id: gEventId, updated: now },
       updated: now,
     });
-    eventStore.clearEventCache();
+    eventStore.invalidateEventCache();
     notifyEventDataChanged();
     if (userStore.isOffline || !authStore.isAuthenticated) {
       queueOperation({ type: 'update', calendarId: gCalendarId, eventId: gEventId, body });
       return true;
     }
-    try {
-      const event = await gCalAPI.updateEvent(authStore.token, gCalendarId, gEventId, body);
-      if (event) {
-        const updated = { ...toHandyEvent(event, gCalendarId, calendarStore.getCalendarColor(gCalendarId)), timeZone: event.start?.timeZone ?? undefined };
-        await upsertStoredEvent(updated);
-      }
-      // 更新前の通知は API 反映前に出ているため、サーバー版へ差し替えたことを再通知する
-      eventStore.clearEventCache();
-      notifyEventDataChanged();
-      return true;
-    } catch {
-      queueOperation({ type: 'update', calendarId: gCalendarId, eventId: gEventId, body });
-      return true;
-    }
+    void syncUpdatedEvent(gEventId, gCalendarId, body);
+    return true;
   }
 
   /**
@@ -427,26 +581,29 @@ export function useEvents() {
     if (!query || userStore.isOffline || !authStore.token) return [];
     /** @type {Map<string, HandyCalendarEvent>} */
     const found = new Map();
-    await Promise.all(
-      calendarStore.list.map(async (/** @type {any} */ cal) => {
-        const gCalId = cal.id;
-        /** @type {GoogleCalendarEventsListResponse|undefined} */
-        let events;
-        do {
-          try {
-            events = await gCalAPI.listEvents(authStore.token, gCalId, { q: query, singleEvents: true, pageToken: events?.nextPageToken });
-          } catch (error) {
-            console.warn('Event search failed for a calendar.', error);
-            return;
-          }
-          const calendarColor = calendarStore.getCalendarColor(gCalId);
-          events?.items?.forEach((/** @type {GoogleCalendarEvent} */ evt) => {
-            const handy = toHandyEvent(evt, gCalId, calendarColor);
-            if (!isCustomHolidayEvent(handy)) found.set(`${handy.calendarId}:${handy.id}`, handy);
-          });
-        } while (events?.nextPageToken);
-      }),
-    );
+    /** @type {Awaited<ReturnType<typeof gCalAPI.listEventsBatch>>} */
+    let results = [];
+    try {
+      results = await gCalAPI.listEventsBatch(
+        authStore.token,
+        calendarStore.list.map((/** @type {any} */ cal) => ({ calendarId: cal.id, query: { q: query, singleEvents: true } })),
+      );
+    } catch (error) {
+      console.warn('Event search failed.', error);
+      return [];
+    }
+    results.forEach((result, index) => {
+      if (!result.ok) {
+        console.warn('Event search failed for a calendar.', calendarStore.list[index]?.id);
+        return;
+      }
+      const gCalId = calendarStore.list[index].id;
+      const calendarColor = calendarStore.getCalendarColor(gCalId);
+      result.items.forEach((/** @type {GoogleCalendarEvent} */ evt) => {
+        const handy = toHandyEvent(evt, gCalId, calendarColor);
+        if (!isCustomHolidayEvent(handy)) found.set(`${handy.calendarId}:${handy.id}`, handy);
+      });
+    });
     return Array.from(found.values()).sort((a, b) => a.startDateTime.unix() - b.startDateTime.unix());
   }
 
@@ -459,22 +616,14 @@ export function useEvents() {
   async function removeEvent(gEventId, gCalendarId) {
     recentlyRemovedEventKeys.set(`${gCalendarId}:${gEventId}`, Date.now());
     await removeStoredEvent(gEventId, gCalendarId);
-    eventStore.clearEventCache();
+    eventStore.invalidateEventCache();
     notifyEventDataChanged();
     if (userStore.isOffline || !authStore.isAuthenticated) {
       queueOperation({ type: 'remove', calendarId: gCalendarId, eventId: gEventId });
       return true;
     }
-    try {
-      await gCalAPI.deleteEvent(authStore.token, gCalendarId, gEventId);
-      // 削除前の通知は API 反映前に出ているため、古い一覧で再読込されないよう再通知する
-      eventStore.clearEventCache();
-      notifyEventDataChanged();
-      return true;
-    } catch {
-      queueOperation({ type: 'remove', calendarId: gCalendarId, eventId: gEventId });
-      return true;
-    }
+    void syncRemovedEvent(gEventId, gCalendarId);
+    return true;
   }
 
   return {

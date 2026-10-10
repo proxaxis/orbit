@@ -9,6 +9,7 @@ const props = defineProps({
   mobileSubPaneHeight: { type: Number, required: true },
   isCollapsingMobileSub: { type: Boolean, required: true },
   isMobileSubCollapsed: { type: Boolean, required: true },
+  hideMobileSub: { type: Boolean, required: true },
   mobileSubContent: { type: Object, required: true },
   selectPane: { type: Function, required: true },
   collapseMobileSubPane: { type: Function, required: true },
@@ -82,7 +83,7 @@ function setMobileSubContent(element) {
     <aside
       class="sub-pane"
       v-show="!userStore.formDatePick"
-      :class="{ 'is-collapsing': props.isCollapsingMobileSub, 'is-collapsed': props.isMobileSubCollapsed && props.activePane !== 'sub' }"
+      :class="{ 'is-collapsing': props.isCollapsingMobileSub, 'is-collapsed': props.isMobileSubCollapsed && props.activePane !== 'sub', 'is-hidden': props.hideMobileSub }"
       :style="{ flexBasis: `${props.mobileSubPaneHeight}px` }"
       @touchstart="onSubTouchStart"
       @touchmove="onSubTouchMove"
@@ -141,6 +142,11 @@ function setMobileSubContent(element) {
       :deep(.menu-bar ~ *) {
         display: none;
       }
+    }
+
+    // 中身が body へ Teleport されて空の殻だけになった場合はペイン自体を隠す
+    &.is-hidden {
+      display: none;
     }
   }
 

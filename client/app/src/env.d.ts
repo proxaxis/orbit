@@ -23,11 +23,12 @@ declare global {
   interface ImportMetaEnv {
     readonly VITE_CLIENT_APP_BASE_URL: string;
     readonly VITE_BFF_BASE_URL: string;
-    readonly VITE_VAPID_PUBLIC_KEY?: string;
+    readonly VITE_VAPID_PUBLIC_KEY: string;
     readonly VITE_GOOGLE_API_BASE_URL_CALENDAR: string;
     readonly VITE_GOOGLE_API_BASE_URL_PEOPLE: string;
     readonly VITE_GOOGLE_API_BASE_URL_PHOTOSLIBRARY: string;
     readonly VITE_GOOGLE_API_BASE_URL_PHOTOSPICKER: string;
+    readonly VITE_GOOGLE_API_BASE_URL_DRIVE?: string;
     [key: string]: any;
   }
 

@@ -1,7 +1,7 @@
 {
   "name": "app",
   "type": "module",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "scripts": {
     "dev": "node ./node_modules/tsx/dist/cli.mjs watch src/index.js",
     "build": "tsc",

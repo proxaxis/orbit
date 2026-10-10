@@ -25,10 +25,18 @@ try {
 } catch {
   // .env がない環境ではアプリ側のデフォルト値が使われる
 }
+// テスト専用の Realm ファイルを使う（index.js 読み込み前に設定が必要）
+process.env.REALM_PATH = '/tmp/orbit-bff-push-test.realm';
 
-const { app, redis, SESSION_SECRET, drainDuePushNotifications } = await import(
-  '../src/index.js'
-);
+const {
+  app,
+  redis,
+  realm,
+  SESSION_SECRET,
+  drainDuePushNotifications,
+  createSession: createRealmSession,
+  upsertUser,
+} = await import('../src/index.js');
 
 let redisAvailable = false;
 
@@ -44,6 +52,10 @@ before(async () => {
 
 after(() => {
   redis.disconnect();
+  realm.close();
+  // Realm の内部スレッドがイベントループを保持してプロセスが終了しないため、
+  // 出力を流し切ったあと明示的に終了する
+  setTimeout(() => process.exit(0), 100).unref();
 });
 
 const endpointHash = (/** @type {string} */ endpoint) =>
@@ -69,20 +81,32 @@ const makeNotification = (/** @type {string} */ key, /** @type {number} */ fireA
   },
 });
 
-// テスト用のログイン済みセッションを Redis に作り、Cookie ヘッダ値を返す
+// テスト用のユーザ＋ログイン済みセッションを Realm に作り、Cookie ヘッダ値を返す
 const createSession = async () => {
-  const sessionId = crypto.randomUUID();
-  await redis.set(`session:${sessionId}`, 'fake-refresh-token');
+  const userId = `test-user-${crypto.randomUUID()}`;
+  upsertUser(userId);
+  const sessionId = createRealmSession(userId);
   const signature = await signCookie(sessionId, SESSION_SECRET);
   const cookie = `session_id=${encodeURIComponent(`${sessionId}.${signature}`)}`;
-  return { sessionId, cookie };
+  return { userId, sessionId, cookie };
 };
 
 const cleanup = async (
+  /** @type {string} */ userId,
   /** @type {string} */ sessionId,
   /** @type {string | undefined} */ endpoint = undefined
 ) => {
-  const keys = [`session:${sessionId}`, `push:subscriptions:${sessionId}`];
+  realm.write(() => {
+    const session = realm.objectForPrimaryKey('Session', sessionId);
+    if (session) {
+      realm.delete(session);
+    }
+    const user = realm.objectForPrimaryKey('User', userId);
+    if (user) {
+      realm.delete(user);
+    }
+  });
+  const keys = [`push:subscriptions:${sessionId}`];
   if (endpoint) {
     const h = endpointHash(endpoint);
     const members = await redis.hvals(`push:schedule:${h}`);
@@ -125,7 +149,7 @@ describe('POST /api/push/subscriptions', () => {
       t.skip('Redis is not reachable');
       return;
     }
-    const { sessionId, cookie } = await createSession();
+    const { userId, sessionId, cookie } = await createSession();
     try {
       // notifications が配列でない
       let res = await postSubscriptions(cookie, {
@@ -147,7 +171,7 @@ describe('POST /api/push/subscriptions', () => {
       });
       assert.equal(res.status, 400);
     } finally {
-      await cleanup(sessionId);
+      await cleanup(userId, sessionId);
     }
   });
 
@@ -156,7 +180,7 @@ describe('POST /api/push/subscriptions', () => {
       t.skip('Redis is not reachable');
       return;
     }
-    const { sessionId, cookie } = await createSession();
+    const { userId, sessionId, cookie } = await createSession();
     const subscription = makeSubscription();
     const fireAt = Date.now() + 60 * 60 * 1000;
     try {
@@ -179,7 +203,7 @@ describe('POST /api/push/subscriptions', () => {
       assert.ok(member != null);
       assert.equal(await redis.zscore('push:due', /** @type {string} */ (member)), String(fireAt));
     } finally {
-      await cleanup(sessionId, subscription.endpoint);
+      await cleanup(userId, sessionId, subscription.endpoint);
     }
   });
 
@@ -188,7 +212,7 @@ describe('POST /api/push/subscriptions', () => {
       t.skip('Redis is not reachable');
       return;
     }
-    const { sessionId, cookie } = await createSession();
+    const { userId, sessionId, cookie } = await createSession();
     const subscription = makeSubscription();
     const h = endpointHash(subscription.endpoint);
     try {
@@ -216,7 +240,7 @@ describe('POST /api/push/subscriptions', () => {
       assert.equal(await redis.hlen(`push:schedule:${h}`), 0);
       assert.ok(await redis.get(`push:subscription:${h}`));
     } finally {
-      await cleanup(sessionId, subscription.endpoint);
+      await cleanup(userId, sessionId, subscription.endpoint);
     }
   });
 
@@ -245,7 +269,7 @@ describe('POST /api/push/subscriptions', () => {
       t.skip('Redis is not reachable');
       return;
     }
-    const { sessionId, cookie } = await createSession();
+    const { userId, sessionId, cookie } = await createSession();
     const subscription = makeSubscription();
     const h = endpointHash(subscription.endpoint);
     try {
@@ -265,7 +289,7 @@ describe('POST /api/push/subscriptions', () => {
       assert.equal(await redis.exists(`push:schedule:${h}`), 0);
       assert.equal(await redis.exists(`push:subscriptions:${sessionId}`), 0);
     } finally {
-      await cleanup(sessionId, subscription.endpoint);
+      await cleanup(userId, sessionId, subscription.endpoint);
     }
   });
 });

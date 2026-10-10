@@ -142,6 +142,18 @@ const router = createRouter({
       name: 'Enable',
       component: () => import('@/views/EnableView.vue'),
     },
+    {
+      // Google OAuth でユーザが認可したときのリダイレクト先（?t= で認可対象を識別）
+      path: '/authorized',
+      name: 'AccessAuthorized',
+      component: () => import('@/views/AccessAuthorizedView.vue'),
+    },
+    {
+      // Google OAuth でユーザが拒否したとき・エラー発生時のリダイレクト先
+      path: '/unauthorized',
+      name: 'AccessUnauthorized',
+      component: () => import('@/views/AccessUnauthorizedView.vue'),
+    },
   ],
 });
 

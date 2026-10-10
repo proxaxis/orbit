@@ -5,17 +5,13 @@
  * 入力ボックスは半透明のフローティングカードとしてカレンダーグリッド上に重なって表示されるため、
  * カレンダーを見ながら日時を考えて入力できる。
  */
-import { onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
-import { useUserStore } from "@/stores/user.js";
-import {
-  parseScheduleText,
-  setQuickAddDraft,
-  quickAddEngineState,
-} from "@/composables/useQuickAdd.js";
-import MenuBar from "@/components/MenuBar.vue";
-import IconXMark from "@/components/icons/IconXMark.vue";
-import IconWandMagicSparkles from "@/components/icons/IconWandMagicSparkles.vue";
+import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { useUserStore } from '@/stores/user.js';
+import { parseScheduleText, setQuickAddDraft, quickAddEngineState } from '@/composables/useQuickAdd.js';
+import MenuBar from '@/components/MenuBar.vue';
+import IconXMark from '@/components/icons/IconXMark.vue';
+import IconWandMagicSparkles from '@/components/icons/IconWandMagicSparkles.vue';
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -26,15 +22,15 @@ const props = defineProps({
 });
 
 /** @type {Ref<string>} 自然言語登録の入力 */
-const quickAddText = ref("");
+const quickAddText = ref('');
 /** @type {Ref<boolean>} 自然言語登録の実行中かどうか */
 const isQuickAdding = ref(false);
 
-// フローティング表示のため、このルートではモバイルでも中央ペイン（カレンダーグリッド）を背面に表示する
+// フローティング表示のため、このルートではモバイルでも中央ペイン（カレンダーグリッド）を背面に表示する。
+// カードは body へ Teleport するため sub ペインの収納 CSS の影響を受けない。
+// 空になったモバイル下部ペインは HomeLayout 側で非表示にする。
 onMounted(() => {
-  props.selectPane("main");
-  // カードは画面外へフローティングするため、空になった下部ペインは畳んでグリッドを広く見せる
-  props.collapseMobileSubPane();
+  props.selectPane('main');
 });
 
 /**
@@ -47,10 +43,9 @@ async function runQuickAdd() {
   isQuickAdding.value = true;
   try {
     const { draft, usedFallback } = await parseScheduleText(text);
-    if (usedFallback)
-      userStore.showToast("AI 解析を利用できないため、簡易解析で入力しました");
+    if (usedFallback) userStore.showToast('AI 解析を利用できないため、簡易解析で入力しました');
     setQuickAddDraft(draft);
-    router.push({ name: "EventCreator" });
+    router.push({ name: 'EventCreator' });
   } catch (err) {
     userStore.setError(true, err);
   } finally {
@@ -60,60 +55,33 @@ async function runQuickAdd() {
 </script>
 
 <template>
-  <div class="event-quick-add-view">
-    <div class="quick-add-card">
-      <MenuBar :useMobilePadding="userStore.isMobile">
-        <template #center>
-          <h2 class="title">自然言語で登録</h2>
-        </template>
-        <template #sub>
-          <button
-            type="button"
-            class="icon-x-mark-wrapper"
-            title="閉じる"
-            aria-label="閉じる"
-            @click="router.push({ name: 'Home' })"
-          >
-            <IconXMark />
-          </button>
-        </template>
-        日時と予定を文章で入力してください（例: 明日の15時に歯医者）
-      </MenuBar>
+  <!-- sub ペイン内に置くと収納時の CSS（.menu-bar ~ * の非表示）や高さ計測の対象になってしまうため body へ逃がす -->
+  <Teleport to="body">
+    <div class="event-quick-add-view">
+      <div class="quick-add-card">
+        <MenuBar :useMobilePadding="userStore.isMobile">
+          <template #center>
+            <h2 class="title">自然言語で登録</h2>
+          </template>
+          <template #sub>
+            <button type="button" class="icon-x-mark-wrapper" title="閉じる" aria-label="閉じる" @click="router.push({ name: 'Home' })">
+              <IconXMark />
+            </button>
+          </template>
+          日時と予定を文章で入力することができます
+        </MenuBar>
 
-      <form class="quick-add-form" @submit.prevent="runQuickAdd">
-        <input
-          v-model="quickAddText"
-          placeholder="例: 明日の15時に歯医者"
-          aria-label="自然言語での予定登録"
-          autofocus
-        />
-        <button
-          type="submit"
-          data-app-button="primary"
-          :disabled="isQuickAdding || !quickAddText.trim()"
-          title="登録"
-          aria-label="登録"
-        >
-          <IconWandMagicSparkles /> 登録
-        </button>
-      </form>
+        <form class="quick-add-form" @submit.prevent="runQuickAdd">
+          <input v-model="quickAddText" placeholder="明日の15時に歯医者" aria-label="自然言語での予定登録" autofocus />
+          <button type="submit" data-app-button="primary" :disabled="isQuickAdding || !quickAddText.trim()" title="登録" aria-label="登録"><IconWandMagicSparkles /> 登録</button>
+        </form>
 
-      <p v-if="isQuickAdding" class="quick-add-status">解析中...</p>
-      <p
-        v-else-if="quickAddEngineState.status === 'loading'"
-        class="quick-add-status"
-      >
-        AIモデル読込中: {{ quickAddEngineState.message }}
-      </p>
-      <p
-        v-else-if="quickAddEngineState.status === 'unsupported'"
-        class="quick-add-status"
-      >
-        このブラウザは AI
-        解析（WebGPU）に対応していないため、簡易解析で登録します
-      </p>
+        <p v-if="isQuickAdding" class="quick-add-status">解析中...</p>
+        <p v-else-if="quickAddEngineState.status === 'loading'" class="quick-add-status">AIモデル読込中: {{ quickAddEngineState.message }}</p>
+        <p v-else-if="quickAddEngineState.status === 'unsupported'" class="quick-add-status">このブラウザは AI 解析（WebGPU）に対応していないため、簡易解析で登録します</p>
+      </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <style lang="scss" scoped>
@@ -140,6 +108,16 @@ async function runQuickAdd() {
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   box-shadow: 0 8px 32px rgb(0 0 0 / 0.28);
+}
+
+/* タッチ端末（モバイル）のGPUではスクロール連動のブラーが重いため、
+   backdrop-filter を解除して代わりに不透明度を上げる */
+@media (hover: none), (pointer: coarse) {
+  .quick-add-card {
+    background-color: color-mix(in srgb, var(--bg-1) 94%, transparent);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 .quick-add-form {

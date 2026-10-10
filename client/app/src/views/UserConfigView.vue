@@ -8,6 +8,8 @@ import IconFloppyDisk from '@/components/icons/IconFloppyDisk.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
 import UserConfigViewAccountSection from '@/components/items/UserConfigViewAccountSection.vue';
 import UserConfigViewPhotoSharingSection from '@/components/items/UserConfigViewPhotoSharingSection.vue';
+import UserConfigViewPeopleSection from '@/components/items/UserConfigViewPeopleSection.vue';
+import UserConfigViewDriveSyncSection from '@/components/items/UserConfigViewDriveSyncSection.vue';
 import UserConfigViewNotificationSection from '@/components/items/UserConfigViewNotificationSection.vue';
 import UserConfigViewSyncSection from '@/components/items/UserConfigViewSyncSection.vue';
 import UserConfigViewDataSection from '@/components/items/UserConfigViewDataSection.vue';
@@ -228,6 +230,14 @@ function save() {
 
       <AccordionMenu label="写真共有">
         <UserConfigViewPhotoSharingSection />
+      </AccordionMenu>
+
+      <AccordionMenu label="連絡先連携">
+        <UserConfigViewPeopleSection />
+      </AccordionMenu>
+
+      <AccordionMenu label="クラウド同期">
+        <UserConfigViewDriveSyncSection />
       </AccordionMenu>
 
       <AccordionMenu label="通知設定">

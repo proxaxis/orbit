@@ -191,6 +191,37 @@ export function useCalendars() {
   }
 
   /**
+   * 複数カレンダーの共有設定（ACL）一覧を BFF のバッチリクエストでまとめて取得する
+   * @param {string[]} calendarIds カレンダー ID の一覧
+   * @returns {Promise<(GoogleCalendarAclRule[]|null)[]>} calendarIds と同じ順序のルール一覧（失敗時は null）
+   */
+  function listAclRulesBatch(calendarIds) {
+    return gCalAPI.listAclBatch(authStore.token, calendarIds, { maxResults: 250 });
+  }
+
+  /**
+   * 共有設定画面の初期読み込み。対象カレンダーの ACL 一覧とカレンダー一覧を
+   * BFF のバッチリクエストで 1 ジョブにまとめて取得する。
+   * @param {string} calendarId カレンダー ID
+   * @returns {Promise<{rules: GoogleCalendarAclRule[], listEntries: GoogleCalendarListEntry[]|null}>} ACL 一覧とカレンダー一覧（一覧の取得失敗時は null）
+   */
+  async function listAclRulesWithCalendarList(calendarId) {
+    const [aclResult, listResult] = await gCalAPI.fetchCalendarAPIBatch(authStore.token, [
+      { method: 'GET', endpoint: `/calendars/$gCalendarId/acl`, params: { gCalendarId: calendarId }, query: { maxResults: 250 } },
+      { method: 'GET', endpoint: `/users/me/calendarList` },
+    ]);
+    if (!aclResult.ok) {
+      const error = new Error(aclResult.data?.error?.message || `API: GET ${aclResult.status}`);
+      Object.assign(error, { status: aclResult.status, details: aclResult.data });
+      throw error;
+    }
+    return {
+      rules: Array.isArray(aclResult.data?.items) ? aclResult.data.items : [],
+      listEntries: listResult.ok && Array.isArray(listResult.data?.items) ? listResult.data.items : null,
+    };
+  }
+
+  /**
    * カレンダーへ共有設定（ACL）を追加する
    * @param {string} calendarId カレンダー ID
    * @param {GoogleCalendarAclRule} body ACL ルール
@@ -233,6 +264,8 @@ export function useCalendars() {
     fetchCalendarResource,
     deleteCalendar,
     listAclRules,
+    listAclRulesBatch,
+    listAclRulesWithCalendarList,
     addAclRule,
     updateAclRule,
     removeAclRule,

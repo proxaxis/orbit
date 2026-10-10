@@ -96,6 +96,7 @@ body {
   background-color: var(--bg-1);
   color: var(--text);
   line-height: var(--line-height);
+  overscroll-behavior: contain;
 }
 
 li {

@@ -1,3 +1,5 @@
+import { bytesToBase64, postBffRequest } from '@/services/bff-request.js';
+
 /** @type {(() => Promise<string|null>)|null} 401 応答時に新しいアクセストークンを返すコールバック（呼び出し側が注入） */
 let tokenRefresher = null;
 
@@ -12,9 +14,9 @@ export function setTokenRefresher(refresher) {
 }
 
 /** @type {string} Google Photos Library API のベース URL */
-export const API_BASE_URL = (import.meta.env.VITE_GOOGLE_API_BASE_URL_PHOTOSLIBRARY).replace(/\/+$/, '');
+export const API_BASE_URL = import.meta.env.VITE_GOOGLE_API_BASE_URL_PHOTOSLIBRARY.replace(/\/+$/, '');
 /** @type {string} Google Photos Picker API のベース URL */
-export const PICKER_API_BASE_URL = (import.meta.env.VITE_GOOGLE_API_BASE_URL_PHOTOSPICKER).replace(/\/+$/, '');
+export const PICKER_API_BASE_URL = import.meta.env.VITE_GOOGLE_API_BASE_URL_PHOTOSPICKER.replace(/\/+$/, '');
 
 /**
  * ============================================================================
@@ -112,12 +114,12 @@ export async function listAlbumMediaItems(token, albumId, pageSize = 100) {
 
 /**
  * メディアアイテムのバイト列を取得する（Picker API のファイルは認証が必要）
- * @param {string} token アクセストークン
+ * @param {string} token アクセストークン（BFF 側の予備トークンとして使用）
  * @param {string} baseUrl メディアのベース URL
  * @returns {Promise<Blob>} ファイル内容
  */
 export async function downloadMediaFile(token, baseUrl) {
-  const res = await fetch(baseUrl, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await postBffRequest({ service: 'photos', method: 'GET', url: baseUrl, accessToken: token });
   if (!res.ok) throw new Error(`Failed to download media file: ${res.status}`);
   return res.blob();
 }
@@ -184,9 +186,11 @@ export async function listPickedMediaItems(token, sessionId) {
  */
 
 /**
- * Google Photos API エンドポイントへリクエストを送信
+ * Google Photos API エンドポイントへリクエストを送信。
+ * 直接 Google API を呼ばず、BFF の `POST /request` へ転送を依頼する。
+ * バイナリのアップロードは base64 にエンコードして JSON ボディへ含める。
  * @template T
- * @param {string|null} token Photos 用アクセストークン
+ * @param {string|null} token Photos 用アクセストークン（認証済み確認と BFF 側の予備トークンとして使用）
  * @param {'GET'|'POST'|'PUT'|'PATCH'|'DELETE'} method HTTP メソッド
  * @param {string} endpoint エンドポイントのパス（例: /albums/$albumId）
  * @param {object} [options={}] リクエストオプション
@@ -215,25 +219,30 @@ async function fetchPhotosAPI(token, method, endpoint, { base = API_BASE_URL, pa
     if (value !== undefined && value !== null) epUrl.searchParams.append(key, String(value));
   });
 
-  /** @param {string} accessToken @returns {Promise<Response>} */
-  const call = (accessToken) =>
-    fetch(epUrl.toString(), {
-      method,
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
-        ...headers,
-      },
-      body: rawBody ?? (body ? JSON.stringify(body) : undefined),
-    });
+  /** @type {import('@/services/bff-request.js').BffApiRequest} BFF へ転送を依頼するリクエスト内容 */
+  const request = {
+    service: 'photos',
+    method,
+    url: epUrl.toString(),
+    headers: {
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...headers,
+    },
+    accessToken: token,
+  };
+  if (rawBody) request.bodyBase64 = await bytesToBase64(rawBody);
+  else if (body) request.body = body;
 
-  let res = await call(token);
+  let res = await postBffRequest(request);
 
   // トークン期限切れ (401) 時は写真共有用トークンを再取得して再試行
   if (res.status === 401) {
     /** @type {string|null} 注入されたリフレッシュ処理で再取得したアクセストークン */
     const refreshedToken = (await tokenRefresher?.()) ?? null;
-    if (refreshedToken) res = await call(refreshedToken);
+    if (refreshedToken) {
+      request.accessToken = refreshedToken;
+      res = await postBffRequest(request);
+    }
   }
 
   if (res.status === 204) return /** @type {T} */ (null);

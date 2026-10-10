@@ -1,3 +1,5 @@
+import { postBffRequest } from '@/services/bff-request.js';
+
 /** @type {(() => Promise<string|null>)|null} 401 応答時に新しいアクセストークンを返すコールバック（呼び出し側が注入） */
 let tokenRefresher = null;
 
@@ -119,9 +121,10 @@ export function searchOtherContacts(token, queryText, options = { readMask: 'nam
  */
 
 /**
- * Google People API エンドポイントへ GET リクエストを送信
+ * Google People API エンドポイントへ GET リクエストを送信。
+ * 直接 Google API を呼ばず、BFF の `POST /request` へ転送を依頼する。
  * @template T
- * @param {string|null} token アクセストークン
+ * @param {string|null} token アクセストークン（認証済み確認と BFF 側の予備トークンとして使用）
  * @param {string} endpoint エンドポイントのパス（例: /$resourceName/connections）
  * @param {object} [options={}] リクエストオプション
  * @param {Record<string, any>} [options.params={}] パスパラメータ（'$'プレフィックスは自動置換）
@@ -157,29 +160,25 @@ async function fetchPeopleAPI(token, endpoint, { params = {}, query = {} } = {})
     }
   });
 
-  // console.log(`Calling Google People API: GET ${epUrl.toString()}`);
+  // console.log(`Calling Google People API via BFF: GET ${epUrl.toString()}`);
 
-  /**
-   * API を fetch で呼び出す
-   * @returns {Promise<Response>}
-   */
-  const call = () =>
-    fetch(epUrl.toString(), {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+  /** @type {import('@/services/bff-request.js').BffApiRequest} BFF へ転送を依頼するリクエスト内容 */
+  const request = {
+    service: 'people',
+    method: 'GET',
+    url: epUrl.toString(),
+    accessToken: token,
+  };
 
-  let res = await call();
+  let res = await postBffRequest(request);
 
   // トークン期限切れ (401) 時のリフレッシュと再試行
   if (res.status === 401) {
     /** @type {string|null} 注入されたリフレッシュ処理で再取得したアクセストークン */
     const refreshedToken = (await tokenRefresher?.()) ?? null;
     if (refreshedToken) {
-      token = refreshedToken;
-      res = await call();
+      request.accessToken = refreshedToken;
+      res = await postBffRequest(request);
     }
   }
 

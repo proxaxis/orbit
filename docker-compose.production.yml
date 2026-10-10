@@ -22,8 +22,6 @@ services:
       - "18787:18787"
     env_file:
       - .env.production
-    environment:
-      - NODE_ENV=production
     volumes:
       - nv_realm:/app/.realm
     depends_on:
@@ -43,8 +41,6 @@ services:
       - "15173:15173"
     env_file:
       - .env.production
-    environment:
-      - NODE_ENV=production
     depends_on:
       - server
     tty: true

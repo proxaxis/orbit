@@ -29,30 +29,29 @@ export function useSharingStates() {
   const sharingStates = ref({});
 
   /**
-   * カレンダーの ACL を取得し、所有者以外の共有ルールがあるか判定する
+   * カレンダーの ACL を取得し、所有者以外の共有ルールがあるか判定する。
+   * 対象カレンダー分の acl.list は BFF のバッチリクエストで 1 ジョブにまとめて送信する。
    * @returns {Promise<void>}
    */
   async function loadSharingStates() {
     if (!authStore.token || !calendarStore.list.length) return;
     const primaryCalendar = calendarStore.list.find((calendar) => calendar.primary);
     const knownOwnerPrincipals = new Set([normalizePrincipal(primaryCalendar?.id), normalizePrincipal(primaryCalendar ? /** @type {{ dataOwner?: string }} */ (/** @type {unknown} */ (primaryCalendar)).dataOwner : undefined)].filter(Boolean));
-    const entries = await Promise.all(
-      calendarStore.list.map(async (calendar) => {
-        if (calendar.accessRole !== 'owner' && !calendar.primary) return [calendar.id, 'unknown'];
-        try {
-          const rules = await calendars.listAclRules(calendar.id);
-          const systemPrincipals = new Set([normalizePrincipal(calendar.id), normalizePrincipal(/** @type {{ dataOwner?: string }} */ (/** @type {unknown} */ (calendar)).dataOwner)]);
-          const dataOwner = normalizePrincipal(/** @type {{ dataOwner?: string }} */ (/** @type {unknown} */ (calendar)).dataOwner);
-          const belongsToAnotherOwner = Boolean(dataOwner && knownOwnerPrincipals.size && !knownOwnerPrincipals.has(dataOwner));
-          const relevantRules = rules.filter((rule) => !systemPrincipals.has(normalizePrincipal(rule.scope.value)));
-          const ownerCount = relevantRules.filter((rule) => rule.role === 'owner').length;
-          const hasSharingRule = belongsToAnotherOwner || ownerCount > 1 || relevantRules.some((rule) => rule.role !== 'owner' && ['user', 'group', 'domain'].includes(rule.scope.type));
-          return [calendar.id, hasSharingRule ? 'shared' : 'private'];
-        } catch {
-          return [calendar.id, 'unknown'];
-        }
-      }),
-    );
+    const targets = calendarStore.list.filter((calendar) => calendar.accessRole === 'owner' || calendar.primary);
+    const rulesList = await calendars.listAclRulesBatch(targets.map((calendar) => calendar.id));
+    const entries = calendarStore.list.map((calendar) => {
+      const index = targets.indexOf(calendar);
+      if (index === -1) return [calendar.id, 'unknown'];
+      const rules = rulesList[index];
+      if (!rules) return [calendar.id, 'unknown'];
+      const systemPrincipals = new Set([normalizePrincipal(calendar.id), normalizePrincipal(/** @type {{ dataOwner?: string }} */ (/** @type {unknown} */ (calendar)).dataOwner)]);
+      const dataOwner = normalizePrincipal(/** @type {{ dataOwner?: string }} */ (/** @type {unknown} */ (calendar)).dataOwner);
+      const belongsToAnotherOwner = Boolean(dataOwner && knownOwnerPrincipals.size && !knownOwnerPrincipals.has(dataOwner));
+      const relevantRules = rules.filter((rule) => !systemPrincipals.has(normalizePrincipal(rule.scope.value)));
+      const ownerCount = relevantRules.filter((rule) => rule.role === 'owner').length;
+      const hasSharingRule = belongsToAnotherOwner || ownerCount > 1 || relevantRules.some((rule) => rule.role !== 'owner' && ['user', 'group', 'domain'].includes(rule.scope.type));
+      return [calendar.id, hasSharingRule ? 'shared' : 'private'];
+    });
     sharingStates.value = Object.fromEntries(entries);
   }
 

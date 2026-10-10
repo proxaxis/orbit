@@ -5,6 +5,7 @@
 import { ref } from 'vue';
 import { useCalendars } from '@/composables/useCalendars.js';
 import { useAuthStore } from '@/stores/auth.js';
+import { useCalendarStore } from '@/stores/calendar.js';
 import { useUserStore } from '@/stores/user.js';
 
 /**
@@ -19,10 +20,13 @@ const savingRuleId = ref(null);
 export function useAclRules() {
   const calendars = useCalendars();
   const authStore = useAuthStore();
+  const calendarStore = useCalendarStore();
   const userStore = useUserStore();
 
   /**
-   * 指定カレンダーの共有ルール一覧を読み込む
+   * 指定カレンダーの共有ルール一覧を読み込む。
+   * ACL 一覧とカレンダー一覧を 1 つのバッチリクエストにまとめて取得し、
+   * カレンダー選択肢もあわせて最新化する。
    * @param {string} calendarId カレンダー ID
    * @returns {Promise<void>}
    */
@@ -32,7 +36,9 @@ export function useAclRules() {
 
     userStore.setLoading(true, '共有設定を読み込んでいます...');
     try {
-      aclRules.value = await calendars.listAclRules(calendarId);
+      const { rules, listEntries } = await calendars.listAclRulesWithCalendarList(calendarId);
+      aclRules.value = rules;
+      if (listEntries) calendarStore.setCalendars(listEntries);
     } catch (error) {
       userStore.setError(true, error);
     } finally {

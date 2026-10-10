@@ -1,10 +1,10 @@
-import { defineStore } from "pinia";
-import { ref, computed } from "vue";
-import dayjs from "@/services/dayjs";
-import { CACHE_KEYS, readCache, writeCache } from "@/composables/useCache.js";
+import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
+import dayjs from '@/services/dayjs';
+import { CACHE_KEYS, readCache, writeCache } from '@/composables/useCache.js';
 
 export const USER_FONT_FAMILIES = Object.freeze({
-  SYSTEM: "system-ui, sans-serif",
+  SYSTEM: 'system-ui, sans-serif',
   NOTO_SANS_JP: "'Noto Sans JP', sans-serif",
   KOSUGI_MARU: "'Kosugi Maru', sans-serif",
   M_PLUS_ROUNDED: "'M PLUS Rounded 1c', sans-serif",
@@ -14,44 +14,44 @@ export const USER_FONT_FAMILIES = Object.freeze({
 
 export const USER_TEXT_SIZE_VALUES = Object.freeze({
   XTRASMALL: Object.freeze({
-    xxs: "0.5rem",
-    xs: "0.6rem",
-    sm: "0.7rem",
-    md: "0.8rem",
-    lg: "0.9rem",
-    xl: "1rem",
-    xxl: "1.2rem",
+    xxs: '0.5rem',
+    xs: '0.6rem',
+    sm: '0.7rem',
+    md: '0.8rem',
+    lg: '0.9rem',
+    xl: '1rem',
+    xxl: '1.2rem',
   }),
   SMALL: Object.freeze({
-    xxs: "0.5625rem",
-    xs: "0.675rem",
-    sm: "0.7875rem",
-    md: "0.9rem",
-    lg: "1.0125rem",
-    xl: "1.125rem",
-    xxl: "1.35rem",
+    xxs: '0.5625rem',
+    xs: '0.675rem',
+    sm: '0.7875rem',
+    md: '0.9rem',
+    lg: '1.0125rem',
+    xl: '1.125rem',
+    xxl: '1.35rem',
   }),
   MEDIUM: Object.freeze({
-    xxs: "0.625rem",
-    xs: "0.75rem",
-    sm: "0.875rem",
-    md: "1rem",
-    lg: "1.125rem",
-    xl: "1.25rem",
-    xxl: "1.5rem",
+    xxs: '0.625rem',
+    xs: '0.75rem',
+    sm: '0.875rem',
+    md: '1rem',
+    lg: '1.125rem',
+    xl: '1.25rem',
+    xxl: '1.5rem',
   }),
   LARGE: Object.freeze({
-    xxs: "0.6875rem",
-    xs: "0.825rem",
-    sm: "0.9625rem",
-    md: "1.1rem",
-    lg: "1.2375rem",
-    xl: "1.375rem",
-    xxl: "1.65rem",
+    xxs: '0.6875rem',
+    xs: '0.825rem',
+    sm: '0.9625rem',
+    md: '1.1rem',
+    lg: '1.2375rem',
+    xl: '1.375rem',
+    xxl: '1.65rem',
   }),
 });
 
-export const DEFAULT_THEME_COLOR = "#ff3434";
+export const DEFAULT_THEME_COLOR = '#ff3434';
 
 /**
  * @typedef {'LIGHT' | 'DARK' | 'SYSTEM'} UserAvailableTheme ユーザが選択可能なテーマ設定
@@ -59,21 +59,21 @@ export const DEFAULT_THEME_COLOR = "#ff3434";
  * @typedef {'MOBILE' | 'TABLET' | 'DESKTOP'} DeviceType デバイス種別（タッチ入力の有無と画面幅で判定）
  */
 
-export const useUserStore = defineStore("user", () => {
+export const useUserStore = defineStore('user', () => {
   // #region ユーティリティ処理
 
   /** @type {Ref<boolean>} @description データの読み込み中かどうか */
   const isLoading = ref(false);
 
   /** @type {Ref<string>} @description ローディング時のメッセージ */
-  const loadingMessage = ref("");
+  const loadingMessage = ref('');
 
   /** ローディング状態を設定
    * @param {boolean} state ローディング状態フラグ
    * @param {string} [message=''] ローディングメッセージ
    * @returns {void}
    */
-  function setLoading(state, message = "") {
+  function setLoading(state, message = '') {
     isLoading.value = state;
     loadingMessage.value = message;
   }
@@ -100,7 +100,7 @@ export const useUserStore = defineStore("user", () => {
   }
 
   /** @type {Ref<string>} @description トーストで表示するフィードバックメッセージ */
-  const toastMessage = ref("");
+  const toastMessage = ref('');
 
   /**
    * トーストメッセージを表示する
@@ -108,7 +108,7 @@ export const useUserStore = defineStore("user", () => {
    * @returns {void}
    */
   function showToast(message) {
-    toastMessage.value = String(message ?? "");
+    toastMessage.value = String(message ?? '');
   }
 
   /**
@@ -116,20 +116,20 @@ export const useUserStore = defineStore("user", () => {
    * @returns {void}
    */
   function clearToast() {
-    toastMessage.value = "";
+    toastMessage.value = '';
   }
 
   /** @type {Ref<boolean>} @description ユーザーダイアログを表示しているかどうか */
   const isUserDialogOpen = ref(false);
 
   /** @type {Ref<string>} @description ユーザーダイアログのタイトル */
-  const userDialogTitle = ref("User");
+  const userDialogTitle = ref('User');
 
   /** @type {Ref<string>} @description ユーザーダイアログのメッセージ */
-  const userDialogMessage = ref("");
+  const userDialogMessage = ref('');
 
   /** @type {Ref<'USER' | 'CONFIRM'>} @description ユーザーダイアログの種類 */
-  const userDialogType = ref("USER");
+  const userDialogType = ref('USER');
 
   /** @type {((result: boolean) => void)|null} @description confirm の回答待ちコールバック */
   let confirmResolver = null;
@@ -141,9 +141,9 @@ export const useUserStore = defineStore("user", () => {
    */
   function openUserDialog(options = {}) {
     if (confirmResolver) resolveConfirm(false);
-    userDialogType.value = "USER";
-    userDialogTitle.value = options.title ?? "User";
-    userDialogMessage.value = options.message ?? "";
+    userDialogType.value = 'USER';
+    userDialogTitle.value = options.title ?? 'User';
+    userDialogMessage.value = options.message ?? '';
     isUserDialogOpen.value = true;
   }
 
@@ -155,9 +155,9 @@ export const useUserStore = defineStore("user", () => {
   function confirm(options = {}) {
     if (confirmResolver) confirmResolver(false);
 
-    userDialogType.value = "CONFIRM";
-    userDialogTitle.value = options.title ?? "Confirm";
-    userDialogMessage.value = options.message ?? "";
+    userDialogType.value = 'CONFIRM';
+    userDialogTitle.value = options.title ?? 'Confirm';
+    userDialogMessage.value = options.message ?? '';
     isUserDialogOpen.value = true;
 
     return new Promise((resolve) => {
@@ -184,7 +184,7 @@ export const useUserStore = defineStore("user", () => {
    * @returns {void}
    */
   function closeUserDialog() {
-    if (userDialogType.value === "CONFIRM") resolveConfirm(false);
+    if (userDialogType.value === 'CONFIRM') resolveConfirm(false);
     isUserDialogOpen.value = false;
   }
 
@@ -193,10 +193,8 @@ export const useUserStore = defineStore("user", () => {
    * @returns {boolean} 環境が揃っている場合は true、そうでない場合は false を返す
    */
   const checkUserEnvironment = () => {
-    if (typeof window === "undefined") {
-      console.warn(
-        "User store is being used in a non-browser environment. Some features may not work as expected.",
-      );
+    if (typeof window === 'undefined') {
+      console.warn('User store is being used in a non-browser environment. Some features may not work as expected.');
       return false;
     }
 
@@ -204,46 +202,30 @@ export const useUserStore = defineStore("user", () => {
   };
 
   /** @type {ComputedRef<boolean>} @description オフラインかどうか */
-  const isOffline = computed(
-    () => typeof navigator !== "undefined" && !navigator.onLine,
-  );
+  const isOffline = computed(() => typeof navigator !== 'undefined' && !navigator.onLine);
 
   /** @type {ComputedRef<string>} @description タイムゾーン（例: Asia/Tokyo）*/
-  const timeZone = computed(
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
-  );
+  const timeZone = computed(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
 
   /** @type {ComputedRef<boolean>} @description アプリがインストールされているかどうか */
-  const isAppInstalled = computed(
-    () =>
-      (typeof window !== "undefined" &&
-        "serviceWorker" in navigator &&
-        navigator.serviceWorker.controller) ||
-      (typeof window !== "undefined" &&
-        window.matchMedia("(display-mode: standalone)").matches),
-  );
+  const isAppInstalled = computed(() => (typeof window !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) || (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches));
 
   // #endregion
 
   // #region テーマ設定処理
 
   /** @type {Ref<UserAvailableTheme>} @description ユーザ設定のテーマ */
-  const userSelectedTheme = ref("SYSTEM");
+  const userSelectedTheme = ref('SYSTEM');
 
   /** @type {Ref<string>} @description ユーザーが選択したテーマカラー */
   const themeColor = ref(DEFAULT_THEME_COLOR);
 
   /** @type {Ref<boolean>} @description システムのテーマ設定がダークモードかどうか */
-  const isSystemPrefersDark = ref(
-    typeof window !== "undefined"
-      ? window.matchMedia("(prefers-color-scheme: dark)").matches
-      : false,
-  );
+  const isSystemPrefersDark = ref(typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)').matches : false);
 
   /** @type {ComputedRef<ResolvedTheme>} @description 実際に画面へ適用されるテーマ */
   const theme = computed(() => {
-    if (userSelectedTheme.value === "SYSTEM")
-      return isSystemPrefersDark.value ? "DARK" : "LIGHT";
+    if (userSelectedTheme.value === 'SYSTEM') return isSystemPrefersDark.value ? 'DARK' : 'LIGHT';
     return userSelectedTheme.value;
   });
 
@@ -253,7 +235,7 @@ export const useUserStore = defineStore("user", () => {
    * @returns {void}
    */
   function setTheme(newTheme) {
-    if (!["LIGHT", "DARK", "SYSTEM"].includes(newTheme)) return;
+    if (!['LIGHT', 'DARK', 'SYSTEM'].includes(newTheme)) return;
     userSelectedTheme.value = newTheme;
     saveSettings();
   }
@@ -264,7 +246,7 @@ export const useUserStore = defineStore("user", () => {
    * @returns {void}
    */
   function setThemeColor(color) {
-    if (typeof color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(color)) return;
+    if (typeof color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(color)) return;
     themeColor.value = color;
     saveSettings();
   }
@@ -277,7 +259,7 @@ export const useUserStore = defineStore("user", () => {
   const firstDayOfWeek = ref(0);
 
   /** @type {Ref<string[]>} @description 曜日ラベル（日曜始まりの配列） */
-  const weekdayLabels = ref(["日", "月", "火", "水", "木", "金", "土"]);
+  const weekdayLabels = ref(['日', '月', '火', '水', '木', '金', '土']);
 
   /** @type {Ref<string[]>} @description 左ペインに表示するカレンダー ID の順序 */
   const calendarOrder = ref([]);
@@ -289,7 +271,7 @@ export const useUserStore = defineStore("user", () => {
   const visibleShareCalendarIds = ref([]);
 
   /** @type {Ref<string>} @description 予定作成時に使用するデフォルトカレンダー ID */
-  const defaultCalendarId = ref("");
+  const defaultCalendarId = ref('');
 
   /** @type {Ref<number>} @description 左ペインの幅 */
   const navPaneWidth = ref(260);
@@ -301,19 +283,19 @@ export const useUserStore = defineStore("user", () => {
   const subPaneWidth = ref(360);
 
   /** @type {Ref<'right'|'left'>} @description 自然言語登録フローティングボタンの配置（右下 / 左下） */
-  const quickAddButtonSide = ref("right");
+  const quickAddButtonSide = ref('right');
 
   /** @type {Ref<{index: number, color: string}[]>} @description 曜日ごとの定休日と文字色の設定 */
   const weekendDays = ref([
-    { index: 6, color: "#0a0dd6" },
-    { index: 0, color: "#d32f2f" },
+    { index: 6, color: '#0a0dd6' },
+    { index: 0, color: '#d32f2f' },
   ]);
 
   /** @type {Ref<string>} @description カスタム休日（日付セルから登録する休日）の日付文字色 */
-  const customHolidayColor = ref("#d32f2f");
+  const customHolidayColor = ref('#d32f2f');
 
   /** @type {Ref<string>} @description 日本の祝日の日付文字色 */
-  const holidayColor = ref("#d32f2f");
+  const holidayColor = ref('#d32f2f');
 
   /**
    * 色を白方向へ補間
@@ -322,37 +304,30 @@ export const useUserStore = defineStore("user", () => {
    * @returns {string} 補間後の色
    */
   function lightenColor(color, ratio = 0.5) {
-    const hex = color.replace(/^#/, "");
+    const hex = color.replace(/^#/, '');
     const normalizedHex =
       hex.length === 3
         ? hex
-            .split("")
+            .split('')
             .map((value) => value + value)
-            .join("")
+            .join('')
         : hex;
     if (!/^[0-9a-fA-F]{6}$/.test(normalizedHex)) return color;
 
-    const channels = [0, 2, 4].map((offset) =>
-      Number.parseInt(normalizedHex.slice(offset, offset + 2), 16),
-    );
-    const lightenedChannels = channels.map((channel) =>
-      Math.round(channel + (255 - channel) * ratio),
-    );
-    return `#${lightenedChannels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+    const channels = [0, 2, 4].map((offset) => Number.parseInt(normalizedHex.slice(offset, offset + 2), 16));
+    const lightenedChannels = channels.map((channel) => Math.round(channel + (255 - channel) * ratio));
+    return `#${lightenedChannels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
   }
 
   /** @param {number} dayIndex 曜日番号（日曜: 0 - 土曜: 6） @param {boolean} [isOtherMonth=false] 他月の日付かどうか @returns {string|null} 設定された休日色 */
   function getWeekendColor(dayIndex, isOtherMonth = false) {
-    const color =
-      weekendDays.value.find((day) => day.index === dayIndex)?.color ?? null;
+    const color = weekendDays.value.find((day) => day.index === dayIndex)?.color ?? null;
     return color && isOtherMonth ? lightenColor(color) : color;
   }
 
   /** @param {boolean} [isOtherMonth=false] 他月の日付かどうか @returns {string} カスタム休日の日付文字色 */
   function getCustomHolidayColor(isOtherMonth = false) {
-    return isOtherMonth
-      ? lightenColor(customHolidayColor.value)
-      : customHolidayColor.value;
+    return isOtherMonth ? lightenColor(customHolidayColor.value) : customHolidayColor.value;
   }
 
   /** @param {boolean} [isOtherMonth=false] 他月の日付かどうか @returns {string} 祝日の日付文字色 */
@@ -362,14 +337,14 @@ export const useUserStore = defineStore("user", () => {
 
   /** @param {string} color HEX 形式の祝日色 */
   function setHolidayColor(color) {
-    if (typeof color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(color)) return;
+    if (typeof color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(color)) return;
     holidayColor.value = color;
     saveSettings();
   }
 
   /** @param {string} color HEX 形式のカスタム休日色 */
   function setCustomHolidayColor(color) {
-    if (typeof color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(color)) return;
+    if (typeof color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(color)) return;
     customHolidayColor.value = color;
     saveSettings();
   }
@@ -384,31 +359,37 @@ export const useUserStore = defineStore("user", () => {
   const maxEventBarsPerCell = ref(6);
 
   /** @type {Ref<'FIXED'|'VARIABLE'>} @description 月表示のカレンダーセル高さ */
-  const calendarCellHeightMode = ref("VARIABLE");
+  const calendarCellHeightMode = ref('VARIABLE');
 
   /** @type {Ref<'FILL'|'DOT'>} @description 終日イベントのバー表示方法（塗りつぶし / ドット） */
-  const allDayEventBarStyle = ref("FILL");
+  const allDayEventBarStyle = ref('FILL');
 
   /** @type {Ref<'FILL'|'DOT'>} @description 時間指定イベントのバー表示方法（塗りつぶし / ドット） */
-  const timedEventBarStyle = ref("FILL");
+  const timedEventBarStyle = ref('FILL');
 
   /** @type {Ref<'MONTH'|'WEEK'>} @description メインカレンダーの表示モード */
-  const mainCalendarView = ref("MONTH");
+  const mainCalendarView = ref('MONTH');
 
   /** @type {Ref<boolean>} @description イベントへの写真共有機能を有効にするか（要 Google Photos OAuth） */
   const usePhotoSharing = ref(false);
 
+  /** @type {Ref<boolean>} @description 連絡先検索（Google People API）を有効にするか（要追加 OAuth） */
+  const usePeopleApi = ref(false);
+
+  /** @type {Ref<boolean>} @description Google Drive appDataFolder への設定・セッションカレンダー同期を有効にするか（要追加 OAuth） */
+  const useDriveSync = ref(false);
+
   /** @type {Ref<keyof typeof USER_FONT_FAMILIES>} @description 通常 UI のフォント */
-  const uiFontFamily = ref("NOTO_SANS_JP");
+  const uiFontFamily = ref('NOTO_SANS_JP');
 
   /** @type {Ref<keyof typeof USER_FONT_FAMILIES>} @description カレンダー UI のフォント */
-  const calendarFontFamily = ref("NOTO_SANS_JP");
+  const calendarFontFamily = ref('NOTO_SANS_JP');
 
   /** @type {Ref<keyof typeof USER_TEXT_SIZE_VALUES>} @description 通常 UI の文字サイズ */
-  const uiTextSize = ref("MEDIUM");
+  const uiTextSize = ref('MEDIUM');
 
   /** @type {Ref<keyof typeof USER_TEXT_SIZE_VALUES>} @description カレンダー UI の文字サイズ */
-  const calendarTextSize = ref("MEDIUM");
+  const calendarTextSize = ref('MEDIUM');
 
   /** @type {Ref<string[]>} 最近使ったイベントタイトル */
   const recentEventTitles = ref([]);
@@ -417,10 +398,7 @@ export const useUserStore = defineStore("user", () => {
   function rememberEventTitle(title) {
     const normalizedTitle = title.trim();
     if (!normalizedTitle) return;
-    recentEventTitles.value = [
-      normalizedTitle,
-      ...recentEventTitles.value.filter((item) => item !== normalizedTitle),
-    ].slice(0, 30);
+    recentEventTitles.value = [normalizedTitle, ...recentEventTitles.value.filter((item) => item !== normalizedTitle)].slice(0, 30);
     writeCache(CACHE_KEYS.RECENT_EVENT_TITLES, recentEventTitles.value);
   }
 
@@ -428,9 +406,7 @@ export const useUserStore = defineStore("user", () => {
   function getRecentEventTitleSuggestions(query) {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) return recentEventTitles.value.slice(0, 8);
-    return recentEventTitles.value
-      .filter((title) => title.toLowerCase().includes(normalizedQuery))
-      .slice(0, 8);
+    return recentEventTitles.value.filter((title) => title.toLowerCase().includes(normalizedQuery)).slice(0, 8);
   }
 
   /** @type {Ref<string[]>} 最近使ったイベントタグ */
@@ -438,9 +414,7 @@ export const useUserStore = defineStore("user", () => {
 
   /** @param {string[]} tags 保存するイベントタグ */
   function rememberEventTags(tags) {
-    const normalized = (Array.isArray(tags) ? tags : [])
-      .map((tag) => String(tag).trim())
-      .filter(Boolean);
+    const normalized = (Array.isArray(tags) ? tags : []).map((tag) => String(tag).trim()).filter(Boolean);
     if (!normalized.length) return;
     const merged = [...normalized];
     for (const tag of recentEventTags.value) {
@@ -452,13 +426,11 @@ export const useUserStore = defineStore("user", () => {
 
   /** @param {string} query @returns {string[]} 入力に一致するタグ候補 */
   function getRecentEventTagSuggestions(query) {
-    const normalizedQuery = String(query ?? "")
+    const normalizedQuery = String(query ?? '')
       .trim()
       .toLowerCase();
     if (!normalizedQuery) return recentEventTags.value.slice(0, 8);
-    return recentEventTags.value
-      .filter((tag) => tag.toLowerCase().includes(normalizedQuery))
-      .slice(0, 8);
+    return recentEventTags.value.filter((tag) => tag.toLowerCase().includes(normalizedQuery)).slice(0, 8);
   }
 
   /** イベント入力履歴（タイトル・タグ）を破棄する（アカウント切替時などに使用） */
@@ -467,9 +439,12 @@ export const useUserStore = defineStore("user", () => {
     recentEventTags.value = [];
   }
 
-  /** 現在の設定をキャッシュへ保存する */
-  async function saveSettings() {
-    await writeCache(CACHE_KEYS.USER_SETTINGS, {
+  /**
+   * 現在の設定を永続化対象のオブジェクトとして構築する
+   * @returns {Record<string, any>} 設定スナップショット
+   */
+  function buildSettingsSnapshot() {
+    return {
       theme: userSelectedTheme.value,
       themeColor: themeColor.value,
       firstDayOfWeek: firstDayOfWeek.value,
@@ -484,6 +459,8 @@ export const useUserStore = defineStore("user", () => {
       timedEventBarStyle: timedEventBarStyle.value,
       mainCalendarView: mainCalendarView.value,
       usePhotoSharing: usePhotoSharing.value,
+      usePeopleApi: usePeopleApi.value,
+      useDriveSync: useDriveSync.value,
       uiFontFamily: uiFontFamily.value,
       calendarFontFamily: calendarFontFamily.value,
       uiTextSize: uiTextSize.value,
@@ -497,160 +474,93 @@ export const useUserStore = defineStore("user", () => {
       navPaneCollapsed: navPaneCollapsed.value,
       subPaneWidth: subPaneWidth.value,
       quickAddButtonSide: quickAddButtonSide.value,
-    });
+    };
+  }
+
+  /** 現在の設定をキャッシュへ保存する */
+  async function saveSettings() {
+    await writeCache(CACHE_KEYS.USER_SETTINGS, buildSettingsSnapshot());
+  }
+
+  /** 現在の設定スナップショットを返す（Drive 同期など外部永続化用） */
+  function exportSettings() {
+    return buildSettingsSnapshot();
+  }
+
+  /**
+   * 設定オブジェクトを state へ反映する（バリデーション付き）
+   * @param {Record<string, any>} saved 読み込んだ設定
+   * @returns {void}
+   */
+  function applySettingsData(saved) {
+    if (['LIGHT', 'DARK', 'SYSTEM'].includes(saved.theme)) userSelectedTheme.value = saved.theme;
+    if (typeof saved.themeColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(saved.themeColor)) themeColor.value = saved.themeColor;
+    if (Number.isInteger(saved.firstDayOfWeek) && saved.firstDayOfWeek >= 0 && saved.firstDayOfWeek <= 6) firstDayOfWeek.value = saved.firstDayOfWeek;
+    if (Array.isArray(saved.weekendDays)) {
+      weekendDays.value = saved.weekendDays.filter((/** @type {{ index?: number, color?: unknown }} */ day) => typeof day.index === 'number' && Number.isInteger(day.index) && day.index >= 0 && day.index <= 6 && typeof day.color === 'string');
+    }
+    if (typeof saved.customHolidayColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(saved.customHolidayColor)) customHolidayColor.value = saved.customHolidayColor;
+    if (typeof saved.holidayColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(saved.holidayColor)) holidayColor.value = saved.holidayColor;
+    if (typeof saved.useMiniCalendar === 'boolean') useMiniCalendar.value = saved.useMiniCalendar;
+    if (typeof saved.useWheelMonthNavigation === 'boolean') useWheelMonthNavigation.value = saved.useWheelMonthNavigation;
+    if (Number.isInteger(saved.maxEventBarsPerCell) && saved.maxEventBarsPerCell >= 1 && saved.maxEventBarsPerCell <= 10) {
+      maxEventBarsPerCell.value = saved.maxEventBarsPerCell;
+    }
+    if (saved.calendarCellHeightMode === 'FIXED' || saved.calendarCellHeightMode === 'VARIABLE') {
+      calendarCellHeightMode.value = saved.calendarCellHeightMode;
+    }
+    if (saved.allDayEventBarStyle === 'FILL' || saved.allDayEventBarStyle === 'DOT') allDayEventBarStyle.value = saved.allDayEventBarStyle;
+    if (saved.timedEventBarStyle === 'FILL' || saved.timedEventBarStyle === 'DOT') timedEventBarStyle.value = saved.timedEventBarStyle;
+    if (saved.mainCalendarView === 'MONTH' || saved.mainCalendarView === 'MONTH_VERTICAL' || saved.mainCalendarView === 'WEEK') mainCalendarView.value = saved.mainCalendarView;
+    if (typeof saved.usePhotoSharing === 'boolean') usePhotoSharing.value = saved.usePhotoSharing;
+    if (typeof saved.usePeopleApi === 'boolean') usePeopleApi.value = saved.usePeopleApi;
+    if (typeof saved.useDriveSync === 'boolean') useDriveSync.value = saved.useDriveSync;
+    if (typeof saved.uiFontFamily === 'string' && Object.hasOwn(USER_FONT_FAMILIES, saved.uiFontFamily)) {
+      uiFontFamily.value = saved.uiFontFamily;
+    }
+    if (typeof saved.calendarFontFamily === 'string' && Object.hasOwn(USER_FONT_FAMILIES, saved.calendarFontFamily)) {
+      calendarFontFamily.value = saved.calendarFontFamily;
+    }
+    if (typeof saved.uiTextSize === 'string' && Object.hasOwn(USER_TEXT_SIZE_VALUES, saved.uiTextSize)) {
+      uiTextSize.value = saved.uiTextSize;
+    }
+    if (typeof saved.calendarTextSize === 'string' && Object.hasOwn(USER_TEXT_SIZE_VALUES, saved.calendarTextSize)) {
+      calendarTextSize.value = saved.calendarTextSize;
+    }
+    if (Array.isArray(saved.weekdayLabels) && saved.weekdayLabels.length === 7 && saved.weekdayLabels.every((/** @type {unknown} */ label) => typeof label === 'string')) {
+      weekdayLabels.value = saved.weekdayLabels;
+    }
+    if (Array.isArray(saved.calendarOrder)) calendarOrder.value = saved.calendarOrder.filter((/** @type {unknown} */ id) => typeof id === 'string');
+    if (Array.isArray(saved.hiddenCalendarIds)) hiddenCalendarIds.value = [...new Set(saved.hiddenCalendarIds.filter((/** @type {unknown} */ id) => typeof id === 'string'))];
+    if (Array.isArray(saved.visibleShareCalendarIds)) visibleShareCalendarIds.value = [...new Set(saved.visibleShareCalendarIds.filter((/** @type {unknown} */ id) => typeof id === 'string'))];
+    if (typeof saved.defaultCalendarId === 'string') defaultCalendarId.value = saved.defaultCalendarId;
+    if (Number.isInteger(saved.navPaneWidth) && saved.navPaneWidth >= 260 && saved.navPaneWidth <= 600) navPaneWidth.value = saved.navPaneWidth;
+    if (typeof saved.navPaneCollapsed === 'boolean') navPaneCollapsed.value = saved.navPaneCollapsed;
+    if (Number.isInteger(saved.subPaneWidth) && saved.subPaneWidth >= 260 && saved.subPaneWidth <= 600) subPaneWidth.value = saved.subPaneWidth;
+    if (saved.quickAddButtonSide === 'right' || saved.quickAddButtonSide === 'left') quickAddButtonSide.value = saved.quickAddButtonSide;
   }
 
   /** キャッシュから設定を読み込み state に反映する */
   async function loadSettings() {
     try {
       const saved = await readCache(CACHE_KEYS.USER_SETTINGS, {});
-      if (["LIGHT", "DARK", "SYSTEM"].includes(saved.theme))
-        userSelectedTheme.value = saved.theme;
-      if (
-        typeof saved.themeColor === "string" &&
-        /^#[0-9a-fA-F]{6}$/.test(saved.themeColor)
-      )
-        themeColor.value = saved.themeColor;
-      if (
-        Number.isInteger(saved.firstDayOfWeek) &&
-        saved.firstDayOfWeek >= 0 &&
-        saved.firstDayOfWeek <= 6
-      )
-        firstDayOfWeek.value = saved.firstDayOfWeek;
-      if (Array.isArray(saved.weekendDays)) {
-        weekendDays.value = saved.weekendDays.filter(
-          (/** @type {{ index?: number, color?: unknown }} */ day) =>
-            typeof day.index === "number" &&
-            Number.isInteger(day.index) &&
-            day.index >= 0 &&
-            day.index <= 6 &&
-            typeof day.color === "string",
-        );
-      }
-      if (
-        typeof saved.customHolidayColor === "string" &&
-        /^#[0-9a-fA-F]{6}$/.test(saved.customHolidayColor)
-      )
-        customHolidayColor.value = saved.customHolidayColor;
-      if (
-        typeof saved.holidayColor === "string" &&
-        /^#[0-9a-fA-F]{6}$/.test(saved.holidayColor)
-      )
-        holidayColor.value = saved.holidayColor;
-      if (typeof saved.useMiniCalendar === "boolean")
-        useMiniCalendar.value = saved.useMiniCalendar;
-      if (typeof saved.useWheelMonthNavigation === "boolean")
-        useWheelMonthNavigation.value = saved.useWheelMonthNavigation;
-      if (
-        Number.isInteger(saved.maxEventBarsPerCell) &&
-        saved.maxEventBarsPerCell >= 1 &&
-        saved.maxEventBarsPerCell <= 10
-      ) {
-        maxEventBarsPerCell.value = saved.maxEventBarsPerCell;
-      }
-      if (
-        saved.calendarCellHeightMode === "FIXED" ||
-        saved.calendarCellHeightMode === "VARIABLE"
-      ) {
-        calendarCellHeightMode.value = saved.calendarCellHeightMode;
-      }
-      if (
-        saved.allDayEventBarStyle === "FILL" ||
-        saved.allDayEventBarStyle === "DOT"
-      )
-        allDayEventBarStyle.value = saved.allDayEventBarStyle;
-      if (
-        saved.timedEventBarStyle === "FILL" ||
-        saved.timedEventBarStyle === "DOT"
-      )
-        timedEventBarStyle.value = saved.timedEventBarStyle;
-      if (
-        saved.mainCalendarView === "MONTH" ||
-        saved.mainCalendarView === "MONTH_VERTICAL" ||
-        saved.mainCalendarView === "WEEK"
-      )
-        mainCalendarView.value = saved.mainCalendarView;
-      if (typeof saved.usePhotoSharing === "boolean")
-        usePhotoSharing.value = saved.usePhotoSharing;
-      if (
-        typeof saved.uiFontFamily === "string" &&
-        Object.hasOwn(USER_FONT_FAMILIES, saved.uiFontFamily)
-      ) {
-        uiFontFamily.value = saved.uiFontFamily;
-      }
-      if (
-        typeof saved.calendarFontFamily === "string" &&
-        Object.hasOwn(USER_FONT_FAMILIES, saved.calendarFontFamily)
-      ) {
-        calendarFontFamily.value = saved.calendarFontFamily;
-      }
-      if (
-        typeof saved.uiTextSize === "string" &&
-        Object.hasOwn(USER_TEXT_SIZE_VALUES, saved.uiTextSize)
-      ) {
-        uiTextSize.value = saved.uiTextSize;
-      }
-      if (
-        typeof saved.calendarTextSize === "string" &&
-        Object.hasOwn(USER_TEXT_SIZE_VALUES, saved.calendarTextSize)
-      ) {
-        calendarTextSize.value = saved.calendarTextSize;
-      }
-      if (
-        Array.isArray(saved.weekdayLabels) &&
-        saved.weekdayLabels.length === 7 &&
-        saved.weekdayLabels.every(
-          (/** @type {unknown} */ label) => typeof label === "string",
-        )
-      ) {
-        weekdayLabels.value = saved.weekdayLabels;
-      }
-      if (Array.isArray(saved.calendarOrder))
-        calendarOrder.value = saved.calendarOrder.filter(
-          (/** @type {unknown} */ id) => typeof id === "string",
-        );
-      if (Array.isArray(saved.hiddenCalendarIds))
-        hiddenCalendarIds.value = [
-          ...new Set(
-            saved.hiddenCalendarIds.filter(
-              (/** @type {unknown} */ id) => typeof id === "string",
-            ),
-          ),
-        ];
-      if (Array.isArray(saved.visibleShareCalendarIds))
-        visibleShareCalendarIds.value = [
-          ...new Set(
-            saved.visibleShareCalendarIds.filter(
-              (/** @type {unknown} */ id) => typeof id === "string",
-            ),
-          ),
-        ];
-      if (typeof saved.defaultCalendarId === "string")
-        defaultCalendarId.value = saved.defaultCalendarId;
-      if (
-        Number.isInteger(saved.navPaneWidth) &&
-        saved.navPaneWidth >= 260 &&
-        saved.navPaneWidth <= 600
-      )
-        navPaneWidth.value = saved.navPaneWidth;
-      if (typeof saved.navPaneCollapsed === "boolean")
-        navPaneCollapsed.value = saved.navPaneCollapsed;
-      if (
-        Number.isInteger(saved.subPaneWidth) &&
-        saved.subPaneWidth >= 260 &&
-        saved.subPaneWidth <= 600
-      )
-        subPaneWidth.value = saved.subPaneWidth;
-      if (
-        saved.quickAddButtonSide === "right" ||
-        saved.quickAddButtonSide === "left"
-      )
-        quickAddButtonSide.value = saved.quickAddButtonSide;
+      applySettingsData(saved);
     } catch (error) {
-      console.warn("Failed to load user settings.", error);
+      console.warn('Failed to load user settings.', error);
     } finally {
       settingsLoaded.value = true;
     }
+  }
+
+  /**
+   * Drive から取得した設定を反映してローカルにも永続化する
+   * @param {Record<string, any>} saved リモートの設定オブジェクト
+   * @returns {Promise<void>}
+   */
+  async function applyRemoteSettings(saved) {
+    if (!saved || typeof saved !== 'object') return;
+    applySettingsData(saved);
+    await saveSettings();
   }
 
   /** @param {number} dayIndex */
@@ -663,10 +573,7 @@ export const useUserStore = defineStore("user", () => {
   /** @param {number} dayIndex @param {string} color */
   function setWeekendDay(dayIndex, color) {
     const existing = weekendDays.value.find((day) => day.index === dayIndex);
-    if (existing)
-      weekendDays.value = weekendDays.value.filter(
-        (day) => day.index !== dayIndex,
-      );
+    if (existing) weekendDays.value = weekendDays.value.filter((day) => day.index !== dayIndex);
     else weekendDays.value = [...weekendDays.value, { index: dayIndex, color }];
     saveSettings();
   }
@@ -682,42 +589,34 @@ export const useUserStore = defineStore("user", () => {
   /** @param {string[]} labels */
   function setWeekdayLabels(labels) {
     if (!Array.isArray(labels) || labels.length !== 7) return;
-    weekdayLabels.value = labels.map((label) =>
-      String(label).trim().slice(0, 8),
-    );
+    weekdayLabels.value = labels.map((label) => String(label).trim().slice(0, 8));
     saveSettings();
   }
 
   /** @param {string[]} calendarIds */
   function setCalendarOrder(calendarIds) {
     if (!Array.isArray(calendarIds)) return;
-    calendarOrder.value = [
-      ...new Set(calendarIds.filter((id) => typeof id === "string")),
-    ];
+    calendarOrder.value = [...new Set(calendarIds.filter((id) => typeof id === 'string'))];
     saveSettings();
   }
 
   /** @param {string} calendarId @param {boolean} isVisible */
   function setCalendarVisibility(calendarId, isVisible) {
-    if (typeof calendarId !== "string") return;
-    hiddenCalendarIds.value = isVisible
-      ? hiddenCalendarIds.value.filter((id) => id !== calendarId)
-      : [...new Set([...hiddenCalendarIds.value, calendarId])];
+    if (typeof calendarId !== 'string') return;
+    hiddenCalendarIds.value = isVisible ? hiddenCalendarIds.value.filter((id) => id !== calendarId) : [...new Set([...hiddenCalendarIds.value, calendarId])];
     saveSettings();
   }
 
   /** @param {string} calendarId @param {boolean} isVisible */
   function setShareCalendarVisibility(calendarId, isVisible) {
-    if (typeof calendarId !== "string") return;
-    visibleShareCalendarIds.value = isVisible
-      ? [...new Set([...visibleShareCalendarIds.value, calendarId])]
-      : visibleShareCalendarIds.value.filter((id) => id !== calendarId);
+    if (typeof calendarId !== 'string') return;
+    visibleShareCalendarIds.value = isVisible ? [...new Set([...visibleShareCalendarIds.value, calendarId])] : visibleShareCalendarIds.value.filter((id) => id !== calendarId);
     saveSettings();
   }
 
   /** @param {string} calendarId */
   function setDefaultCalendar(calendarId) {
-    if (typeof calendarId !== "string") return;
+    if (typeof calendarId !== 'string') return;
     defaultCalendarId.value = calendarId;
     saveSettings();
   }
@@ -744,15 +643,14 @@ export const useUserStore = defineStore("user", () => {
 
   /** @param {'right'|'left'} side クイック登録ボタンの配置位置 */
   function setQuickAddButtonSide(side) {
-    if (side !== "right" && side !== "left") return;
+    if (side !== 'right' && side !== 'left') return;
     quickAddButtonSide.value = side;
     saveSettings();
   }
 
   /** @param {'MONTH'|'MONTH_VERTICAL'|'WEEK'} mode メインカレンダーの表示モード */
   function setMainCalendarView(mode) {
-    if (mode !== "MONTH" && mode !== "MONTH_VERTICAL" && mode !== "WEEK")
-      return;
+    if (mode !== 'MONTH' && mode !== 'MONTH_VERTICAL' && mode !== 'WEEK') return;
     mainCalendarView.value = mode;
     saveSettings();
   }
@@ -763,20 +661,26 @@ export const useUserStore = defineStore("user", () => {
     saveSettings();
   }
 
+  /** @param {boolean} enabled 連絡先検索を有効にするか（有効化は OAuth 認証後にのみ行う） */
+  function setUsePeopleApi(enabled) {
+    usePeopleApi.value = Boolean(enabled);
+    saveSettings();
+  }
+
+  /** @param {boolean} enabled Drive への設定同期を有効にするか（有効化は OAuth 認証後にのみ行う） */
+  function setUseDriveSync(enabled) {
+    useDriveSync.value = Boolean(enabled);
+    saveSettings();
+  }
+
   /** @type {Ref<boolean>} @description 永続化された設定の読み込みが完了したか（完了前は初期値で描画しないためのゲート） */
   const settingsLoaded = ref(false);
   const settingsReady = loadSettings();
   readCache(CACHE_KEYS.RECENT_EVENT_TITLES, []).then((titles) => {
-    if (Array.isArray(titles))
-      recentEventTitles.value = titles
-        .filter((title) => typeof title === "string")
-        .slice(0, 30);
+    if (Array.isArray(titles)) recentEventTitles.value = titles.filter((title) => typeof title === 'string').slice(0, 30);
   });
   readCache(CACHE_KEYS.RECENT_EVENT_TAGS, []).then((tags) => {
-    if (Array.isArray(tags))
-      recentEventTags.value = tags
-        .filter((tag) => typeof tag === "string")
-        .slice(0, 50);
+    if (Array.isArray(tags)) recentEventTags.value = tags.filter((tag) => typeof tag === 'string').slice(0, 50);
   });
 
   /** @type {Ref<import('dayjs').Dayjs>} @description 現在表示している日付 */
@@ -788,30 +692,28 @@ export const useUserStore = defineStore("user", () => {
    * @returns {void}
    */
   function setNowUsingDate(date) {
-    nowUsingDate.value = date.startOf("month");
+    nowUsingDate.value = date.startOf('month');
   }
 
   /** 現在表示中の月から前月の1日へ移動 */
   function goPrevMonth() {
-    nowUsingDate.value = nowUsingDate.value
-      .subtract(1, "month")
-      .startOf("month");
+    nowUsingDate.value = nowUsingDate.value.subtract(1, 'month').startOf('month');
   }
 
   /** 現在表示中の月から翌月の1日へ移動 */
   function goNextMonth() {
-    nowUsingDate.value = nowUsingDate.value.add(1, "month").startOf("month");
+    nowUsingDate.value = nowUsingDate.value.add(1, 'month').startOf('month');
   }
 
   /** 現在表示中の月から今日の日付に移動 */
   function goToday() {
     const today = dayjs();
     nowUsingDate.value = today;
-    nowSelectedDate.value = today.format("YYYY-MM-DD");
+    nowSelectedDate.value = today.format('YYYY-MM-DD');
   }
 
   /** @type {Ref<GoogleApiDateString|null>} @description 選択している日付（形式: YYYY-MM-DD） */
-  const nowSelectedDate = ref(dayjs().format("YYYY-MM-DD"));
+  const nowSelectedDate = ref(dayjs().format('YYYY-MM-DD'));
 
   /** @param {Dayjs|string|null} date @description 日付を選択する */
   function setNowSelectedDate(date) {
@@ -819,8 +721,7 @@ export const useUserStore = defineStore("user", () => {
       nowSelectedDate.value = null;
       return;
     }
-    nowSelectedDate.value =
-      typeof date === "string" ? date : date.format("YYYY-MM-DD");
+    nowSelectedDate.value = typeof date === 'string' ? date : date.format('YYYY-MM-DD');
   }
 
   /** @type {Ref<boolean>} @description カレンダーのセルがクリックされたかどうか */
@@ -936,16 +837,10 @@ export const useUserStore = defineStore("user", () => {
   // #region 画面サイズ判定処理
 
   /** @type {Ref<number>} @description 現在のウィンドウ幅 */
-  const winInnerWidth = ref(
-    typeof window !== "undefined" ? window.innerWidth : 1024,
-  );
+  const winInnerWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024);
 
   /** @type {Ref<boolean>} @description タッチ操作が主入力のデバイスかどうか（hover 不可 + 粗いポインタ） */
-  const hasCoarsePointer = ref(
-    typeof window !== "undefined"
-      ? window.matchMedia("(hover: none) and (pointer: coarse)").matches
-      : false,
-  );
+  const hasCoarsePointer = ref(typeof window !== 'undefined' ? window.matchMedia('(hover: none) and (pointer: coarse)').matches : false);
 
   /**
    * タッチデバイスかどうかを最新値で返す。
@@ -953,26 +848,24 @@ export const useUserStore = defineStore("user", () => {
    * @returns {boolean} タッチ操作が主入力なら true
    */
   function checkCoarsePointer() {
-    return typeof window !== "undefined"
-      ? window.matchMedia("(hover: none) and (pointer: coarse)").matches
-      : false;
+    return typeof window !== 'undefined' ? window.matchMedia('(hover: none) and (pointer: coarse)').matches : false;
   }
 
   /** @type {ComputedRef<DeviceType>} @description 現在のデバイス種別（タッチ入力なし: デスクトップ、タッチ入力あり + 狭い画面: モバイル、タッチ入力あり + 広い画面: タブレット） */
   const device = computed(() => {
-    if (!hasCoarsePointer.value) return "DESKTOP";
-    if (winInnerWidth.value < 768) return "MOBILE";
-    return "TABLET";
+    if (!hasCoarsePointer.value) return 'DESKTOP';
+    if (winInnerWidth.value < 768) return 'MOBILE';
+    return 'TABLET';
   });
 
   /** @type {ComputedRef<boolean>} @description モバイル判定（タッチデバイスかつ画面幅 < 768px） */
-  const isMobile = computed(() => device.value === "MOBILE");
+  const isMobile = computed(() => device.value === 'MOBILE');
 
   /** @type {ComputedRef<boolean>} @description タブレット判定（タッチデバイスかつ画面幅 >= 768px） */
-  const isTablet = computed(() => device.value === "TABLET");
+  const isTablet = computed(() => device.value === 'TABLET');
 
   /** @type {ComputedRef<boolean>} @description デスクトップ判定（タッチ操作が主入力でない環境） */
-  const isDesktop = computed(() => device.value === "DESKTOP");
+  const isDesktop = computed(() => device.value === 'DESKTOP');
 
   // #endregion
 
@@ -1015,6 +908,8 @@ export const useUserStore = defineStore("user", () => {
     timedEventBarStyle,
     mainCalendarView,
     usePhotoSharing,
+    usePeopleApi,
+    useDriveSync,
     uiFontFamily,
     calendarFontFamily,
     uiTextSize,
@@ -1057,6 +952,8 @@ export const useUserStore = defineStore("user", () => {
     clearToast,
     setNowSelectedEvent,
     saveSettings,
+    exportSettings,
+    applyRemoteSettings,
     setTheme,
     setThemeColor,
     settingsReady,
@@ -1076,6 +973,8 @@ export const useUserStore = defineStore("user", () => {
     setQuickAddButtonSide,
     setMainCalendarView,
     setUsePhotoSharing,
+    setUsePeopleApi,
+    setUseDriveSync,
     openUserDialog,
     confirm,
     resolveConfirm,

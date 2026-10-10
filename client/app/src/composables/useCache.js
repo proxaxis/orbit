@@ -51,6 +51,8 @@ export const CACHE_KEYS = Object.freeze({
   ACCOUNT_ID: 'orbit-account-id',
   /** リモート変更チェックを最後に実行した時刻（updatedMin 差分クエリの起点）の保存キー */
   REMOTE_SYNC_CHECKED_AT: 'orbit-remote-sync-checked-at',
+  /** Drive へ最後に書き込んだ/適用した同期データの updatedAt の保存キー */
+  DRIVE_SYNC_AT: 'orbit-drive-sync-at',
 });
 
 /**

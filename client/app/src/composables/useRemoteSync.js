@@ -61,29 +61,9 @@ async function checkCalendarListChanges() {
 }
 
 /**
- * 指定カレンダーで `since` 以降に更新（削除含む）されたイベントがあるかを差分確認する。
- * @param {string} token アクセストークン
- * @param {string} calendarId カレンダー ID
- * @param {string} since 前回チェック時刻（ISO 8601）
- * @returns {Promise<boolean>} 変更があったか
- */
-async function calendarHasEventUpdates(token, calendarId, since) {
-  try {
-    let pageToken;
-    do {
-      const response = await gCalAPI.listEvents(token, calendarId, { updatedMin: since, showDeleted: true, pageToken });
-      if (response?.items?.length) return true;
-      pageToken = response?.nextPageToken;
-    } while (pageToken);
-  } catch (error) {
-    console.warn('Remote event change check failed.', error);
-  }
-  return false;
-}
-
-/**
  * 全カレンダーのイベントを差分確認する。前回チェック時刻が無い（初回）場合は
  * ビュー側の通常取得が走るためチェックをスキップする。
+ * カレンダーごとの events.list は BFF バッチでまとめて発行する。
  * @returns {Promise<boolean>} 変更があったか
  */
 async function checkEventUpdates() {
@@ -91,8 +71,16 @@ async function checkEventUpdates() {
   const calendarStore = useCalendarStore();
   const since = await readCache(CACHE_KEYS.REMOTE_SYNC_CHECKED_AT, null);
   if (!since) return false;
-  const results = await Promise.all(calendarStore.list.map((/** @type {any} */ calendar) => calendarHasEventUpdates(authStore.token, calendar.id, since)));
-  return results.some(Boolean);
+  try {
+    const results = await gCalAPI.listEventsBatch(
+      authStore.token,
+      calendarStore.list.map((/** @type {any} */ calendar) => ({ calendarId: calendar.id, query: { updatedMin: since, showDeleted: true } })),
+    );
+    return results.some((result) => result.ok && result.items.length > 0);
+  } catch (error) {
+    console.warn('Remote event change check failed.', error);
+    return false;
+  }
 }
 
 /**
@@ -113,7 +101,8 @@ export async function checkRemoteChanges(force = false) {
     const checkedAt = dayjs().toISOString();
     const [calendarsChanged, eventsChanged] = await Promise.all([checkCalendarListChanges(), checkEventUpdates()]);
     if (calendarsChanged || eventsChanged) {
-      useEventStore().clearEventCache();
+      // items は残して期限切れにする（空キャッシュからの中間描画によるちらつき防止）
+      useEventStore().invalidateEventCache();
       notifyEventDataChanged();
     }
     await writeCache(CACHE_KEYS.REMOTE_SYNC_CHECKED_AT, checkedAt);

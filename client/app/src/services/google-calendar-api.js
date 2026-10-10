@@ -1,3 +1,5 @@
+import { postBffRequest, postBffRequestBatch } from '@/services/bff-request.js';
+
 /** @type {(() => Promise<string|null>)|null} 401 応答時に新しいアクセストークンを返すコールバック（呼び出し側が注入） */
 let tokenRefresher = null;
 
@@ -12,7 +14,7 @@ export function setTokenRefresher(refresher) {
 }
 
 /** @type {string} Google Calendar API のベース URL */
-export const API_BASE_URL = (import.meta.env.VITE_GOOGLE_API_BASE_URL_CALENDAR).replace(/\/+$/, '');
+export const API_BASE_URL = import.meta.env.VITE_GOOGLE_API_BASE_URL_CALENDAR.replace(/\/+$/, '');
 
 /**
  * 予定の一覧取得
@@ -418,9 +420,10 @@ export function stopChannel(token, body) {
 }
 
 /**
- * Google Calendar API エンドポイントへリクエストを送信
+ * Google Calendar API エンドポイントへリクエストを送信。
+ * 直接 Google API を呼ばず、BFF の `POST /request` へ転送を依頼する。
  * @template T
- * @param {string|null} token アクセストークン
+ * @param {string|null} token アクセストークン（認証済み確認と BFF 側の予備トークンとして使用）
  * @param {'GET'|'POST'|'PUT'|'PATCH'|'DELETE'} method HTTP メソッド
  * @param {string} endpoint エンドポイントのパス（例: /calendars/$gCalendarId）
  * @param {object} [options={}] リクエストオプション
@@ -431,6 +434,44 @@ export function stopChannel(token, body) {
  * @throws {Error & { status: number, details?: GoogleApiErrorResponse }} HTTP エラー発生時
  */
 async function fetchCalendarAPI(token, method, endpoint, { params = {}, query = {}, body = null } = {}) {
+  const request = buildCalendarRequest(token, method, endpoint, { params, query, body });
+
+  let res = await postBffRequest(request);
+
+  // トークン期限切れ (401) 時のリフレッシュと再試行
+  if (res.status === 401) {
+    /** @type {string|null} 注入されたリフレッシュ処理で再取得したアクセストークン */
+    const refreshedToken = (await tokenRefresher?.()) ?? null;
+    if (refreshedToken) {
+      request.accessToken = refreshedToken;
+      res = await postBffRequest(request);
+    }
+  }
+
+  const { ok, status, statusText, data } = await parseCalendarResponse(res);
+  if (!ok) {
+    const errorMsg = data?.error?.message || `API: ${method} ${status} ${statusText}`;
+    console.error(errorMsg);
+    const error = new Error(errorMsg);
+    Object.assign(error, { status, details: data });
+    throw error;
+  }
+
+  return /** @type {T} */ (data);
+}
+
+/**
+ * BFF /request へ送るリクエストエンベロープを構築する
+ * @param {string|null} token アクセストークン
+ * @param {'GET'|'POST'|'PUT'|'PATCH'|'DELETE'} method HTTP メソッド
+ * @param {string} endpoint エンドポイントのパス
+ * @param {object} [options={}] リクエストオプション
+ * @param {Record<string, any>} [options.params={}] パスパラメータ（'$'プレフィックスは自動置換）
+ * @param {Record<string, any>} [options.query={}] クエリパラメータ
+ * @param {any|null} [options.body=null] リクエストボディ
+ * @returns {import('@/services/bff-request.js').BffApiRequest} BFF リクエストエンベロープ
+ */
+function buildCalendarRequest(token, method, endpoint, { params = {}, query = {}, body = null } = {}) {
   if (!method || typeof method !== 'string' || !['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
     throw new Error('HTTP method is not set or invalid');
   }
@@ -456,58 +497,114 @@ async function fetchCalendarAPI(token, method, endpoint, { params = {}, query = 
     }
   });
 
-  // console.log(`Calling Google Calendar API: ${method} ${epUrl.toString()}`);
+  /** @type {import('@/services/bff-request.js').BffApiRequest} BFF へ転送を依頼するリクエスト内容 */
+  const request = {
+    service: 'calendar',
+    method,
+    url: epUrl.toString(),
+    headers: { 'Content-Type': 'application/json' },
+    accessToken: token,
+  };
+  if (body && ['POST', 'PUT', 'PATCH'].includes(method)) request.body = body;
+  return request;
+}
 
-  /**
-   * API を fetch で呼び出す
-   * @param {RequestInit} [args={}]
-   * @returns {Promise<Response>}
-   */
-  const call = (args = {}) =>
-    fetch(epUrl.toString(), {
-      method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      ...args,
-    });
+/**
+ * fetch の Response を {ok, status, statusText, data} に分解する（バッチ処理でも共有）
+ * @param {Response} res レスポンス
+ * @returns {Promise<{ok: boolean, status: number, statusText: string, data: any}>} 分解結果
+ */
+async function parseCalendarResponse(res) {
+  // 204 No Content のハンドリング (ボディパースをスキップ)
+  if (res.status === 204) return { ok: true, status: 204, statusText: res.statusText, data: null };
+  const data = await res.json().catch(() => null);
+  return { ok: res.ok, status: res.status, statusText: res.statusText, data };
+}
 
-  let res;
-  if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
-    res = await call({ body: JSON.stringify(body) });
-  } else {
-    res = await call();
-  }
+/**
+ * @typedef {Object} CalendarApiSpec
+ * @property {'GET'|'POST'|'PUT'|'PATCH'|'DELETE'} method HTTP メソッド
+ * @property {string} endpoint エンドポイントのパス（'$'プレフィックスのパスパラメータ可）
+ * @property {Record<string, any>} [params] パスパラメータ
+ * @property {Record<string, any>} [query] クエリパラメータ
+ * @property {any} [body] リクエストボディ
+ */
 
-  // トークン期限切れ (401) 時のリフレッシュと再試行
-  if (res.status === 401) {
+/**
+ * @typedef {Object} CalendarApiResult
+ * @property {boolean} ok リクエストが成功したか（2xx）
+ * @property {number} status HTTP ステータス
+ * @property {any} data レスポンスボディ（パース済み JSON）
+ */
+
+/**
+ * 複数の Calendar API リクエストを 1 つの BFF ジョブとしてまとめて送信する。
+ * 個々のリクエスト失敗は他のリクエストに影響しない（結果ごとに ok/status を返す）。
+ * @param {string|null} token アクセストークン
+ * @param {CalendarApiSpec[]} specs リクエスト定義の一覧
+ * @returns {Promise<CalendarApiResult[]>} specs と同じ順序の結果一覧
+ */
+export async function fetchCalendarAPIBatch(token, specs) {
+  const requests = specs.map((spec) => buildCalendarRequest(token, spec.method, spec.endpoint, { params: spec.params ?? {}, query: spec.query ?? {}, body: spec.body ?? null }));
+  let responses = await postBffRequestBatch(requests);
+  // トークン期限切れ (401) を含む場合はリフレッシュしてバッチごと再送する
+  if (responses.some((res) => res.status === 401)) {
     /** @type {string|null} 注入されたリフレッシュ処理で再取得したアクセストークン */
     const refreshedToken = (await tokenRefresher?.()) ?? null;
     if (refreshedToken) {
-      token = refreshedToken;
-      if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
-        res = await call({ body: JSON.stringify(body) });
-      } else {
-        res = await call();
-      }
+      requests.forEach((request) => {
+        request.accessToken = refreshedToken;
+      });
+      responses = await postBffRequestBatch(requests);
     }
   }
+  return Promise.all(responses.map(async (res) => ({ ok: res.ok, status: res.status, data: res.status === 204 ? null : await res.json().catch(() => null) })));
+}
 
-  // 204 No Content のハンドリング (ボディパースをスキップ)
-  if (res.status === 204) {
-    return /** @type {T} */ (null);
+/**
+ * 複数カレンダーの ACL 一覧をまとめて取得する
+ * @param {string|null} token アクセストークン
+ * @param {string[]} calendarIds カレンダー ID の一覧
+ * @param {Record<string, any>} [query={}] クエリパラメータ
+ * @returns {Promise<(GoogleCalendarAclRule[]|null)[]>} calendarIds と同じ順序のルール一覧（失敗時は null）
+ */
+export async function listAclBatch(token, calendarIds, query = {}) {
+  const results = await fetchCalendarAPIBatch(
+    token,
+    calendarIds.map((gCalendarId) => ({ method: 'GET', endpoint: `/calendars/$gCalendarId/acl`, params: { gCalendarId }, query })),
+  );
+  return results.map((result) => (result.ok && Array.isArray(result.data?.items) ? result.data.items : null));
+}
+
+/**
+ * 複数カレンダーのイベント一覧を BFF バッチでまとめて取得する（ページング対応）。
+ * nextPageToken が残っているカレンダーだけを続けてバッチ取得するため、
+ * カレンダー数ではなく必要ページ数だけのジョブ往復で済む。
+ * @param {string|null} token アクセストークン
+ * @param {{calendarId: string, query?: Record<string, any>}[]} requests カレンダーごとのリクエスト
+ * @returns {Promise<({ok: true, items: GoogleCalendarEvent[]}|{ok: false})[]>} requests と同じ順序の結果一覧
+ */
+export async function listEventsBatch(token, requests) {
+  /** @type {{items: GoogleCalendarEvent[], ok: boolean, nextQuery: Record<string, any>|null}[]} カレンダーごとの取得状態 */
+  const states = requests.map((req) => ({ items: [], ok: true, nextQuery: req.query ?? {} }));
+  while (true) {
+    // 取得未完（次ページあり）のカレンダーだけを次のバッチに載せる
+    const pending = states.map((state, index) => (state.ok && state.nextQuery ? { index, query: state.nextQuery } : null)).filter(Boolean);
+    if (!pending.length) break;
+    const results = await fetchCalendarAPIBatch(
+      token,
+      pending.map(({ index, query }) => ({ method: 'GET', endpoint: `/calendars/$gCalendarId/events`, params: { gCalendarId: requests[index].calendarId }, query })),
+    );
+    results.forEach((result, pos) => {
+      const state = states[pending[pos].index];
+      if (!result.ok) {
+        state.ok = false;
+        return;
+      }
+      if (Array.isArray(result.data?.items)) state.items.push(...result.data.items);
+      const pageToken = result.data?.nextPageToken;
+      state.nextQuery = pageToken ? { ...pending[pos].query, pageToken } : null;
+    });
   }
-
-  const data = await res.json().catch(() => null);
-
-  if (!res.ok) {
-    const errorMsg = data?.error?.message || `API: ${method} ${res.status} ${res.statusText}`;
-    console.error(errorMsg);
-    const error = new Error(errorMsg);
-    Object.assign(error, { status: res.status, details: data });
-    throw error;
-  }
-
-  return /** @type {T} */ (data);
+  return states.map((state) => (state.ok ? { ok: true, items: state.items } : { ok: false }));
 }

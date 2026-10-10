@@ -11,6 +11,7 @@ import { initEventSync } from '@/composables/useEvents.js';
 import { initEventNotifications, rescheduleNotifications } from '@/composables/useNotifications.js';
 import { initRemoteChangeSync, checkRemoteChanges } from '@/composables/useRemoteSync.js';
 import { initShareSync } from '@/composables/useShare.js';
+import { useDriveSync } from '@/composables/useDriveSync.js';
 import { scheduleQuickAddWarmup } from '@/composables/useQuickAdd.js';
 import { useTheme } from '@/composables/useTheme.js';
 
@@ -121,6 +122,9 @@ export function useAppBootstrap() {
     await calendars.loadCalendars();
     if (token) {
       if (userStore.usePhotoSharing) auth.ensurePhotoToken();
+      if (userStore.usePeopleApi) auth.ensurePeopleToken();
+      // Drive 同期: リモートを取り込んでから設定変更の監視を開始する
+      if (userStore.useDriveSync) useDriveSync().initDriveSync();
       // 起動時に他デバイスでの変更をバックグラウンド確認する（UI はブロックしない）
       checkRemoteChanges();
     }

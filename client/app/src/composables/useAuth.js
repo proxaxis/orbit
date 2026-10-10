@@ -11,9 +11,16 @@ import { CACHE_KEYS, SYNC_TAGS, deleteCache, registerBackgroundSync, writeCache 
 import { setTokenRefresher as setCalendarTokenRefresher } from '@/services/google-calendar-api.js';
 import { setTokenRefresher as setPeopleTokenRefresher } from '@/services/google-people-api.js';
 import { setTokenRefresher as setPhotoTokenRefresher } from '@/services/google-photo-api.js';
+import { setTokenRefresher as setDriveTokenRefresher } from '@/services/google-drive-api.js';
 
 /** @type {Promise<string|null>|null} 写真共有用トークン取得中のリクエスト（重複防止用） */
 let photoTokenRequest = null;
+
+/** @type {Promise<string|null>|null} People API 用トークン取得中のリクエスト（重複防止用） */
+let peopleTokenRequest = null;
+
+/** @type {Promise<string|null>|null} Drive API 用トークン取得中のリクエスト（重複防止用） */
+let driveTokenRequest = null;
 
 /**
  * BFF サーバのトークンエンドポイントへ問い合わせる
@@ -100,6 +107,80 @@ export function useAuth() {
   }
 
   /**
+   * Cookie 経由で BFF サーバから People API 用のアクセストークンを取得
+   * @returns {Promise<string|null>} 取得したアクセストークン（未認証なら null）
+   */
+  async function fetchPeopleToken() {
+    try {
+      const token = await requestToken('t=people');
+      authStore.setPeopleAccessToken(token);
+      return token;
+    } catch (err) {
+      userStore.setError(true, err instanceof Error ? err : new Error(String(err)));
+      return null;
+    }
+  }
+
+  /**
+   * People API 用トークンを必要に応じて取得する。未取得のときだけ BFF へ問い合わせ、取得中のリクエストは共有する。
+   * @returns {Promise<string|null>} 取得したアクセストークン（未認証なら null）
+   */
+  function ensurePeopleToken() {
+    if (authStore.peopleToken) return Promise.resolve(authStore.peopleToken);
+    if (!peopleTokenRequest) {
+      peopleTokenRequest = fetchPeopleToken().finally(() => {
+        peopleTokenRequest = null;
+      });
+    }
+    return peopleTokenRequest;
+  }
+
+  /**
+   * People API 用トークンを破棄する（機能の無効化時に使用）
+   * @returns {void}
+   */
+  function clearPeopleToken() {
+    authStore.setPeopleAccessToken(null);
+  }
+
+  /**
+   * Cookie 経由で BFF サーバから Drive API 用のアクセストークンを取得
+   * @returns {Promise<string|null>} 取得したアクセストークン（未認証なら null）
+   */
+  async function fetchDriveToken() {
+    try {
+      const token = await requestToken('t=drive');
+      authStore.setDriveAccessToken(token);
+      return token;
+    } catch (err) {
+      userStore.setError(true, err instanceof Error ? err : new Error(String(err)));
+      return null;
+    }
+  }
+
+  /**
+   * Drive API 用トークンを必要に応じて取得する。未取得のときだけ BFF へ問い合わせ、取得中のリクエストは共有する。
+   * @returns {Promise<string|null>} 取得したアクセストークン（未認証なら null）
+   */
+  function ensureDriveToken() {
+    if (authStore.driveToken) return Promise.resolve(authStore.driveToken);
+    if (!driveTokenRequest) {
+      driveTokenRequest = fetchDriveToken().finally(() => {
+        driveTokenRequest = null;
+      });
+    }
+    return driveTokenRequest;
+  }
+
+  /**
+   * Drive API 用トークンを破棄する（機能の無効化時に使用）
+   * @returns {void}
+   */
+  function clearDriveToken() {
+    authStore.setDriveAccessToken(null);
+  }
+
+  /**
    * BFF サーバのセッションを破棄してログアウトし、保持しているアクセストークンを全て破棄する
    * @returns {Promise<boolean>} サーバ側のログアウトに成功した場合は true
    */
@@ -122,6 +203,12 @@ export function useAuth() {
     fetchPhotoToken,
     ensurePhotoToken,
     clearPhotoToken,
+    fetchPeopleToken,
+    ensurePeopleToken,
+    clearPeopleToken,
+    fetchDriveToken,
+    ensureDriveToken,
+    clearDriveToken,
     logout,
   };
 }
@@ -144,6 +231,7 @@ export function initApiClients() {
     return token;
   };
   setCalendarTokenRefresher(calendarRefresher);
-  setPeopleTokenRefresher(calendarRefresher);
+  setPeopleTokenRefresher(() => auth.fetchPeopleToken());
   setPhotoTokenRefresher(() => auth.fetchPhotoToken());
+  setDriveTokenRefresher(() => auth.fetchDriveToken());
 }
