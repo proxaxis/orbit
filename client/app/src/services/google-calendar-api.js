@@ -13,8 +13,8 @@ export function setTokenRefresher(refresher) {
   tokenRefresher = refresher;
 }
 
-/** @type {string} Google Calendar API のベース URL */
-export const API_BASE_URL = import.meta.env.VITE_GOOGLE_API_BASE_URL_CALENDAR.replace(/\/+$/, '');
+/** @type {string} Google Calendar API のベース URL（未設定時は本番エンドポイント） */
+export const API_BASE_URL = (import.meta.env.VITE_GOOGLE_API_BASE_URL_CALENDAR || 'https://www.googleapis.com/calendar/v3').replace(/\/+$/, '');
 
 /**
  * 予定の一覧取得

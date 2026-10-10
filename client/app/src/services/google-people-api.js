@@ -13,8 +13,8 @@ export function setTokenRefresher(refresher) {
   tokenRefresher = refresher;
 }
 
-/** @type {string|undefined} Google People API のベース URL */
-export const API_BASE_URL = import.meta.env.VITE_GOOGLE_API_BASE_URL_PEOPLE;
+/** @type {string} Google People API のベース URL（未設定時は本番エンドポイント） */
+export const API_BASE_URL = (import.meta.env.VITE_GOOGLE_API_BASE_URL_PEOPLE || 'https://people.googleapis.com/v1').replace(/\/+$/, '');
 
 /**
  * ============================================================================

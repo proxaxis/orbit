@@ -10,8 +10,8 @@
  * をポーリングし、結果（上流レスポンスのステータス・ヘッダ・ボディ）を取得する。
  */
 
-/** @type {string} BFF サーバのベース URL（未設定時は同一オリジン） */
-export const BFF_BASE_URL = import.meta.env.VITE_BFF_BASE_URL.replace(/\/$/, '');
+/** @type {string} BFF サーバのベース URL（未設定時は空文字 = 同一オリジンの相対パス） */
+export const BFF_BASE_URL = (import.meta.env.VITE_BFF_BASE_URL ?? '').replace(/\/$/, '');
 
 /** @type {number} 結果ポーリングの間隔 (ms) */
 const POLL_INTERVAL_MS = 250;

@@ -13,10 +13,10 @@ export function setTokenRefresher(refresher) {
   tokenRefresher = refresher;
 }
 
-/** @type {string} Google Photos Library API のベース URL */
-export const API_BASE_URL = import.meta.env.VITE_GOOGLE_API_BASE_URL_PHOTOSLIBRARY.replace(/\/+$/, '');
-/** @type {string} Google Photos Picker API のベース URL */
-export const PICKER_API_BASE_URL = import.meta.env.VITE_GOOGLE_API_BASE_URL_PHOTOSPICKER.replace(/\/+$/, '');
+/** @type {string} Google Photos Library API のベース URL（未設定時は本番エンドポイント） */
+export const API_BASE_URL = (import.meta.env.VITE_GOOGLE_API_BASE_URL_PHOTOSLIBRARY || 'https://photoslibrary.googleapis.com/v1').replace(/\/+$/, '');
+/** @type {string} Google Photos Picker API のベース URL（未設定時は本番エンドポイント） */
+export const PICKER_API_BASE_URL = (import.meta.env.VITE_GOOGLE_API_BASE_URL_PHOTOSPICKER || 'https://photospicker.googleapis.com/v1').replace(/\/+$/, '');
 
 /**
  * ============================================================================

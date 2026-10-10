@@ -52,10 +52,8 @@ services:
     container_name: orbit_tunnel_production
     restart: unless-stopped
     env_file:
-      - .env
+      - .env.production
     command: tunnel --no-autoupdate run
-    environment:
-      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
       - server
       - client
