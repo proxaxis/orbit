@@ -1,7 +1,7 @@
-# 環境変数ファイル（機微情報）
+# 環境変数ファイル
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.sample
 
 # 依存モジュール
 node_modules/

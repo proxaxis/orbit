@@ -7,7 +7,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 
 /** @type {string} BFF サーバのベース URL（未設定時は同一オリジン） */
-export const BFF_BASE_URL = (import.meta.env.VITE_BFF_BASE_URL ?? '').replace(/\/$/, '');
+export const BFF_BASE_URL = (import.meta.env.VITE_BFF_BASE_URL).replace(/\/$/, '');
 
 export const useAuthStore = defineStore('auth', () => {
   /** @type {Ref<string|null>} @description BFF サーバから取得した Google OAuth アクセストークン */

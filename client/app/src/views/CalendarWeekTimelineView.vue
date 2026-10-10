@@ -1,27 +1,35 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
-import dayjs, { toDayjs } from '@/services/dayjs.js';
-import { isDotEventBar, getEventBarStyle, getEventDotColor } from '@/composables/useEventBarStyle.js';
-import { useCalendarEvents } from '@/composables/useCalendarEvents.js';
-import { useEvents } from '@/composables/useEvents.js';
-import { useCalendarStore } from '@/stores/calendar.js';
-import { useUserStore } from '@/stores/user.js';
-import { useCalendarToolbar } from '@/composables/useCalendarToolbar.js';
-import { buildCustomHolidayBody, holidayDatesOf } from '@/services/custom-holidays.js';
-import { isJapaneseHoliday } from '@/services/japanese-holidays.js';
-import IconCaretLeft from '@/components/icons/IconCaretLeft.vue';
-import IconCaretRight from '@/components/icons/IconCaretRight.vue';
-import IconBars from '@/components/icons/IconBars.vue';
-import IconGear from '@/components/icons/IconGear.vue';
-import IconCalendarDays from '@/components/icons/IconCalendarDays.vue';
-import IconArrowsUpDown from '@/components/icons/IconArrowsUpDown.vue';
-import IconArrowRotateLeft from '@/components/icons/IconArrowRotateLeft.vue';
-import IconEllipsisVertical from '@/components/icons/IconEllipsisVertical.vue';
-import IconMagnifyingGlass from '@/components/icons/IconMagnifyingGlass.vue';
-import IconWandMagicSparkles from '@/components/icons/IconWandMagicSparkles.vue';
-import DropdownMenu from '@/components/DropdownMenu.vue';
-import InlineEmoji from '@/components/InlineEmoji.vue';
+import { computed, onMounted, onUnmounted, ref } from "vue";
+import { useRouter } from "vue-router";
+import dayjs, { toDayjs } from "@/services/dayjs.js";
+import {
+  isDotEventBar,
+  getEventBarStyle,
+  getEventDotColor,
+} from "@/composables/useEventBarStyle.js";
+import { useCalendarEvents } from "@/composables/useCalendarEvents.js";
+import { useEvents } from "@/composables/useEvents.js";
+import { useCalendarStore } from "@/stores/calendar.js";
+import { useUserStore } from "@/stores/user.js";
+import { useCalendarToolbar } from "@/composables/useCalendarToolbar.js";
+import {
+  buildCustomHolidayBody,
+  holidayDatesOf,
+} from "@/services/custom-holidays.js";
+import { isJapaneseHoliday } from "@/services/japanese-holidays.js";
+import YearMonthJump from "@/components/YearMonthJump.vue";
+import IconCaretLeft from "@/components/icons/IconCaretLeft.vue";
+import IconCaretRight from "@/components/icons/IconCaretRight.vue";
+import IconBars from "@/components/icons/IconBars.vue";
+import IconGear from "@/components/icons/IconGear.vue";
+import IconCalendarDays from "@/components/icons/IconCalendarDays.vue";
+import IconArrowsUpDown from "@/components/icons/IconArrowsUpDown.vue";
+import IconArrowRotateLeft from "@/components/icons/IconArrowRotateLeft.vue";
+import IconEllipsisVertical from "@/components/icons/IconEllipsisVertical.vue";
+import IconMagnifyingGlass from "@/components/icons/IconMagnifyingGlass.vue";
+import IconWandMagicSparkles from "@/components/icons/IconWandMagicSparkles.vue";
+import DropdownMenu from "@/components/DropdownMenu.vue";
+import InlineEmoji from "@/components/InlineEmoji.vue";
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -51,36 +59,43 @@ const suppressSwipeOnRelease = ref(false);
 /** @type {Ref<number>} 直近のホイール週移動時刻（連続移動の抑制用） */
 const lastWheelNavigationAt = ref(0);
 /** @type {Ref<'prev'|'next'|'today'>} 週切り替えアニメーションの方向 */
-const weekTransition = ref('next');
+const weekTransition = ref("next");
 /** @type {Ref<HTMLElement|null>} ツールバー */
 const rfToolbar = ref(null);
 /** ツールバーのコンパクト表示状態・週/月タイトルは月表示ビューと共有ロジック */
-const { isCompactToolbar, weekStart, weekTitle } = useCalendarToolbar(rfToolbar);
+const { isCompactToolbar, weekStart, weekTitle } =
+  useCalendarToolbar(rfToolbar);
 let nowTimer = null;
 
 /** @type {ComputedRef<{start: Dayjs, end: Dayjs}>} 表示中の週の日付範囲（イベント購読用） */
 const visibleRange = computed(() => ({
-  start: weekStart.value.startOf('day'),
-  end: weekStart.value.add(6, 'day').endOf('day'),
+  start: weekStart.value.startOf("day"),
+  end: weekStart.value.add(6, "day").endOf("day"),
 }));
 
 /** 表示範囲のイベント・カスタム休日。取得は composable 側のバックグラウンド処理 */
-const { events, customHolidays, customHolidayDates } = useCalendarEvents(visibleRange);
+const { events, customHolidays, customHolidayDates } =
+  useCalendarEvents(visibleRange);
 
 /** @type {ComputedRef<Dayjs[]>} 表示中の週の7日分 */
-const weekDays = computed(() => Array.from({ length: 7 }, (_, i) => weekStart.value.add(i, 'day')));
+const weekDays = computed(() =>
+  Array.from({ length: 7 }, (_, i) => weekStart.value.add(i, "day")),
+);
 
 /** 現在時刻ラインの位置（上端からの割合） */
-const nowLineTop = computed(() => `${((now.value.hour() * 60 + now.value.minute()) / MINUTES_PER_DAY) * 100}%`);
+const nowLineTop = computed(
+  () =>
+    `${((now.value.hour() * 60 + now.value.minute()) / MINUTES_PER_DAY) * 100}%`,
+);
 
 /** @param {Dayjs} date @returns {boolean} 今日かどうか */
 function isToday(date) {
-  return date.format('YYYY-MM-DD') === now.value.format('YYYY-MM-DD');
+  return date.format("YYYY-MM-DD") === now.value.format("YYYY-MM-DD");
 }
 
 /** @param {Dayjs} date @returns {boolean} 選択中の日付かどうか */
 function isSelected(date) {
-  return userStore.nowSelectedDate === date.format('YYYY-MM-DD');
+  return userStore.nowSelectedDate === date.format("YYYY-MM-DD");
 }
 
 /**
@@ -90,20 +105,26 @@ function isSelected(date) {
  */
 function getDayNumberColor(day) {
   if (isJapaneseHoliday(day)) return userStore.getHolidayColor(false);
-  if (customHolidayDates.value.has(day.format('YYYY-MM-DD'))) return userStore.getCustomHolidayColor(false);
+  if (customHolidayDates.value.has(day.format("YYYY-MM-DD")))
+    return userStore.getCustomHolidayColor(false);
   return undefined;
 }
 
 /** @param {HandyCalendarEvent} evt @returns {boolean} 複数日または終日のイベントかどうか */
 function isMultiDayEvent(evt) {
-  return evt.isAllDay || !evt.startDateTime.isSame(evt.endDateTime, 'day');
+  return evt.isAllDay || !evt.startDateTime.isSame(evt.endDateTime, "day");
 }
 
 /** @param {Dayjs} day @returns {HandyCalendarEvent[]} 指定日に重なる終日・複数日イベント */
 function allDayEventsFor(day) {
-  const dayStart = day.startOf('day');
-  const dayEnd = dayStart.add(1, 'day');
-  return events.value.filter((evt) => isMultiDayEvent(evt) && evt.startDateTime.isBefore(dayEnd) && evt.endDateTime.isAfter(dayStart));
+  const dayStart = day.startOf("day");
+  const dayEnd = dayStart.add(1, "day");
+  return events.value.filter(
+    (evt) =>
+      isMultiDayEvent(evt) &&
+      evt.startDateTime.isBefore(dayEnd) &&
+      evt.endDateTime.isAfter(dayStart),
+  );
 }
 
 /**
@@ -112,14 +133,22 @@ function allDayEventsFor(day) {
  * @returns {{event: HandyCalendarEvent, top: number, height: number, left: number, width: number}[]}
  */
 function timedEventsFor(day) {
-  const dayStart = day.startOf('day');
-  const dayEnd = dayStart.add(1, 'day');
+  const dayStart = day.startOf("day");
+  const dayEnd = dayStart.add(1, "day");
   const blocks = events.value
-    .filter((evt) => !isMultiDayEvent(evt) && evt.startDateTime.isBefore(dayEnd) && evt.endDateTime.isAfter(dayStart))
+    .filter(
+      (evt) =>
+        !isMultiDayEvent(evt) &&
+        evt.startDateTime.isBefore(dayEnd) &&
+        evt.endDateTime.isAfter(dayStart),
+    )
     .map((evt) => ({
       event: evt,
-      startMin: Math.max(0, evt.startDateTime.diff(dayStart, 'minute')),
-      endMin: Math.min(MINUTES_PER_DAY, evt.endDateTime.diff(dayStart, 'minute')),
+      startMin: Math.max(0, evt.startDateTime.diff(dayStart, "minute")),
+      endMin: Math.min(
+        MINUTES_PER_DAY,
+        evt.endDateTime.diff(dayStart, "minute"),
+      ),
     }))
     .filter((block) => block.endMin > block.startMin)
     .sort((a, b) => a.startMin - b.startMin || b.endMin - a.endMin);
@@ -149,7 +178,10 @@ function timedEventsFor(day) {
         lane,
         lanes: laneFreeAt.length,
         top: (block.startMin / MINUTES_PER_DAY) * 100,
-        height: Math.max(1.2, ((block.endMin - block.startMin) / MINUTES_PER_DAY) * 100),
+        height: Math.max(
+          1.2,
+          ((block.endMin - block.startMin) / MINUTES_PER_DAY) * 100,
+        ),
       });
     }
     // レーン数が確定した後に幅を計算し直す
@@ -164,18 +196,20 @@ function timedEventsFor(day) {
 
 /** @param {HandyCalendarEvent} evt @param {Dayjs} day この表示列の日付 @returns {string} イベントブロック内の時刻テキスト */
 function getEventTimeText(evt, day) {
-  if (!evt.startDateTime.isSame(day, 'day')) return `${evt.startDateTime.format('M/D')} –`;
-  if (evt.endDateTime.diff(evt.startDateTime, 'minute') < 60) return evt.startDateTime.format('HH:mm');
-  return `${evt.startDateTime.format('HH:mm')}–${evt.endDateTime.format('HH:mm')}`;
+  if (!evt.startDateTime.isSame(day, "day"))
+    return `${evt.startDateTime.format("M/D")} –`;
+  if (evt.endDateTime.diff(evt.startDateTime, "minute") < 60)
+    return evt.startDateTime.format("HH:mm");
+  return `${evt.startDateTime.format("HH:mm")}–${evt.endDateTime.format("HH:mm")}`;
 }
 
 /** @param {Dayjs} date 日付を選択する */
 function selectDateCell(date) {
-  const selectedDate = date.format('YYYY-MM-DD');
+  const selectedDate = date.format("YYYY-MM-DD");
   const isDifferentDate = userStore.nowSelectedDate !== selectedDate;
   userStore.setNowSelectedDate(date);
-  if (router.currentRoute.value.name === 'EventDetail' && isDifferentDate) {
-    router.push({ name: 'Home' });
+  if (router.currentRoute.value.name === "EventDetail" && isDifferentDate) {
+    router.push({ name: "Home" });
   }
 }
 
@@ -201,9 +235,11 @@ let mouseDownPoint = null;
 const isFormPicking = computed(() => !!userStore.formDatePick);
 /** @type {ComputedRef<string>} フォーム日付ピック中の案内文 */
 const pickBannerText = computed(() => {
-  const field = userStore.formDatePick?.field ?? '';
-  if (field === 'expiryDate') return `有効期限を選択してください（列をクリック/タップ）`;
-  const label = field === 'endDate' || field === 'rangeEnd' ? '終了日' : '開始日';
+  const field = userStore.formDatePick?.field ?? "";
+  if (field === "expiryDate")
+    return `有効期限を選択してください（列をクリック/タップ）`;
+  const label =
+    field === "endDate" || field === "rangeEnd" ? "終了日" : "開始日";
   return `${label}を選択してください（列をクリック/タップ、ドラッグで期間選択）`;
 });
 
@@ -213,8 +249,16 @@ const pickBannerText = computed(() => {
  * @param {Dayjs} end 範囲の終了日（含む側）
  */
 function resolveFormDatePick(start, end) {
-  const pick = userStore.formDatePick ?? { target: 'eventForm', field: 'startDate' };
-  userStore.resolveFormDatePick({ target: pick.target, field: pick.field, start: start.format('YYYY-MM-DD'), end: end.format('YYYY-MM-DD') });
+  const pick = userStore.formDatePick ?? {
+    target: "eventForm",
+    field: "startDate",
+  };
+  userStore.resolveFormDatePick({
+    target: pick.target,
+    field: pick.field,
+    start: start.format("YYYY-MM-DD"),
+    end: end.format("YYYY-MM-DD"),
+  });
 }
 
 /**
@@ -225,24 +269,31 @@ function resolveFormDatePick(start, end) {
  */
 function minuteFromPosition(evt, colEl) {
   const rect = colEl.getBoundingClientRect();
-  const ratio = Math.min(1, Math.max(0, (evt.clientY - rect.top) / rect.height));
+  const ratio = Math.min(
+    1,
+    Math.max(0, (evt.clientY - rect.top) / rect.height),
+  );
   return Math.round((ratio * MINUTES_PER_DAY) / SNAP_MINUTES) * SNAP_MINUTES;
 }
 
 /** @param {MouseEvent} evt @param {Dayjs} day 日付列のマウス押下（ドラッグ起点） */
 function handleColMouseDown(evt, day) {
   if (userStore.isMobile || userStore.isTablet || evt.button !== 0) return;
-  mouseDownPoint = { dateKey: day.format('YYYY-MM-DD'), minute: minuteFromPosition(evt, evt.currentTarget) };
-  window.addEventListener('mouseup', handleGlobalMouseUp, { once: true });
+  mouseDownPoint = {
+    dateKey: day.format("YYYY-MM-DD"),
+    minute: minuteFromPosition(evt, evt.currentTarget),
+  };
+  window.addEventListener("mouseup", handleGlobalMouseUp, { once: true });
 }
 
 /** @param {MouseEvent} evt @param {Dayjs} day 日付列上のマウス移動（ドラッグ中は終端を更新） */
 function handleColMouseMove(evt, day) {
   if (!mouseDownPoint) return;
   const minute = minuteFromPosition(evt, evt.currentTarget);
-  const dateKey = day.format('YYYY-MM-DD');
+  const dateKey = day.format("YYYY-MM-DD");
   if (!isTimeDragging.value) {
-    if (minute === mouseDownPoint.minute && dateKey === mouseDownPoint.dateKey) return;
+    if (minute === mouseDownPoint.minute && dateKey === mouseDownPoint.dateKey)
+      return;
     isTimeDragging.value = true;
     dragStartPoint.value = { ...mouseDownPoint };
   }
@@ -258,12 +309,13 @@ function handleGlobalMouseUp(evt) {
 
 /** @param {TouchEvent} evt @param {Dayjs} day 日付列のタッチ開始（長押しで時間範囲ドラッグ） */
 function startColLongPress(evt, day) {
-  if (!(userStore.isMobile || userStore.isTablet) || evt.touches.length !== 1) return;
+  if (!(userStore.isMobile || userStore.isTablet) || evt.touches.length !== 1)
+    return;
   cancelColLongPress();
   const touch = evt.touches[0];
   const colEl = evt.currentTarget;
   const minute = minuteFromPosition(touch, colEl);
-  const dateKey = day.format('YYYY-MM-DD');
+  const dateKey = day.format("YYYY-MM-DD");
   longPressTimer.value = window.setTimeout(() => {
     longPressTimer.value = null;
     suppressNextCellClick.value = true;
@@ -286,9 +338,12 @@ function cancelColLongPress() {
 function updateTimeDragEnd(evt) {
   const touch = evt.touches?.[0] ?? evt.changedTouches?.[0];
   if (!touch) return;
-  const col = document.elementFromPoint(touch.clientX, touch.clientY)?.closest?.('.day-col');
-  const dateKey = col?.getAttribute('data-date');
-  if (dateKey) dragEndPoint.value = { dateKey, minute: minuteFromPosition(touch, col) };
+  const col = document
+    .elementFromPoint(touch.clientX, touch.clientY)
+    ?.closest?.(".day-col");
+  const dateKey = col?.getAttribute("data-date");
+  if (dateKey)
+    dragEndPoint.value = { dateKey, minute: minuteFromPosition(touch, col) };
 }
 
 /** @param {TouchEvent} evt 日付列上のタッチ移動 */
@@ -324,14 +379,14 @@ function finalizeTimeDrag(position) {
   dragEndPoint.value = null;
   if (!a || !b) return;
   suppressNextCellClick.value = true;
-  let start = toDayjs(a.dateKey).add(a.minute, 'minute');
-  let end = toDayjs(b.dateKey).add(b.minute, 'minute');
+  let start = toDayjs(a.dateKey).add(a.minute, "minute");
+  let end = toDayjs(b.dateKey).add(b.minute, "minute");
   if (end.isBefore(start)) [start, end] = [end, start];
-  if (end.isSame(start)) end = start.add(SNAP_MINUTES, 'minute');
+  if (end.isSame(start)) end = start.add(SNAP_MINUTES, "minute");
   if (isFormPicking.value) {
     // フォームの日付ピック中はメニューを開かず、選択範囲の日付をフォームへ返す
     suppressSwipeOnRelease.value = true;
-    resolveFormDatePick(start.startOf('day'), end.startOf('day'));
+    resolveFormDatePick(start.startOf("day"), end.startOf("day"));
     return;
   }
   contextMenuRange.value = { start, end, isTimed: true };
@@ -340,7 +395,10 @@ function finalizeTimeDrag(position) {
   // mouseup/touchend 直後に発火する click を DropdownMenu が外側クリックと判定して
   // 即座に閉じてしまうため、click ディスパッチ完了後にメニューを開く
   window.setTimeout(() => {
-    rfDropdownForContextMenu.value?.open({ clientX: position.x, clientY: position.y });
+    rfDropdownForContextMenu.value?.open({
+      clientX: position.x,
+      clientY: position.y,
+    });
   }, 0);
 }
 
@@ -350,8 +408,8 @@ const dragBlocks = computed(() => {
   if (isTimeDragging.value && dragStartPoint.value) {
     const a = dragStartPoint.value;
     const b = dragEndPoint.value ?? a;
-    start = toDayjs(a.dateKey).add(a.minute, 'minute');
-    end = toDayjs(b.dateKey).add(b.minute, 'minute');
+    start = toDayjs(a.dateKey).add(a.minute, "minute");
+    end = toDayjs(b.dateKey).add(b.minute, "minute");
   } else if (contextMenuRange.value?.isTimed) {
     // ドロップ後のコンテキストメニューが開いている間は確定範囲を表示し続ける
     ({ start, end } = contextMenuRange.value);
@@ -361,12 +419,16 @@ const dragBlocks = computed(() => {
   if (end.isBefore(start)) [start, end] = [end, start];
   return weekDays.value
     .map((day) => {
-      const dayStart = day.startOf('day');
-      const dayEnd = dayStart.add(1, 'day');
+      const dayStart = day.startOf("day");
+      const dayEnd = dayStart.add(1, "day");
       if (!start.isBefore(dayEnd) || !end.isAfter(dayStart)) return null;
-      const startMin = Math.max(0, start.diff(dayStart, 'minute'));
-      const endMin = Math.min(MINUTES_PER_DAY, end.diff(dayStart, 'minute'));
-      return { key: day.format('YYYY-MM-DD'), top: (startMin / MINUTES_PER_DAY) * 100, height: Math.max(0.5, ((endMin - startMin) / MINUTES_PER_DAY) * 100) };
+      const startMin = Math.max(0, start.diff(dayStart, "minute"));
+      const endMin = Math.min(MINUTES_PER_DAY, end.diff(dayStart, "minute"));
+      return {
+        key: day.format("YYYY-MM-DD"),
+        top: (startMin / MINUTES_PER_DAY) * 100,
+        height: Math.max(0.5, ((endMin - startMin) / MINUTES_PER_DAY) * 100),
+      };
     })
     .filter(Boolean);
 });
@@ -375,8 +437,10 @@ const dragBlocks = computed(() => {
 function isInContextRange(day) {
   const range = contextMenuRange.value;
   if (!range) return false;
-  const [first, last] = range.start.isAfter(range.end, 'day') ? [range.end, range.start] : [range.start, range.end];
-  return !day.isBefore(first, 'day') && !day.isAfter(last, 'day');
+  const [first, last] = range.start.isAfter(range.end, "day")
+    ? [range.end, range.start]
+    : [range.start, range.end];
+  return !day.isBefore(first, "day") && !day.isAfter(last, "day");
 }
 
 /** @param {Dayjs} day 日付列クリック（ドラッグ直後は抑止） */
@@ -405,7 +469,11 @@ function handleDayCellClick(day) {
 function handleDateContextMenu(evt, day) {
   evt.preventDefault();
   if (isFormPicking.value || userStore.isMobile || userStore.isTablet) return;
-  contextMenuRange.value = { start: day.startOf('day'), end: day.startOf('day'), isTimed: false };
+  contextMenuRange.value = {
+    start: day.startOf("day"),
+    end: day.startOf("day"),
+    isTimed: false,
+  };
   selectDateCell(day);
   rfDropdownForContextMenu.value?.open(evt);
 }
@@ -415,8 +483,12 @@ function handleColContextMenu(evt, day) {
   evt.preventDefault();
   if (isFormPicking.value || userStore.isMobile || userStore.isTablet) return;
   const minute = minuteFromPosition(evt, evt.currentTarget);
-  const start = day.startOf('day').add(minute, 'minute');
-  contextMenuRange.value = { start, end: start.add(SNAP_MINUTES, 'minute'), isTimed: true };
+  const start = day.startOf("day").add(minute, "minute");
+  contextMenuRange.value = {
+    start,
+    end: start.add(SNAP_MINUTES, "minute"),
+    isTimed: true,
+  };
   selectDateCell(day);
   rfDropdownForContextMenu.value?.open(evt);
 }
@@ -424,7 +496,12 @@ function handleColContextMenu(evt, day) {
 /** @type {ComputedRef<string|null>} カスタム休日の作成先カレンダー ID */
 const holidayCalendarId = computed(() => {
   const writable = calendarStore.listWritableCalendars;
-  if (writable.some((/** @type {any} */ cal) => cal.id === userStore.defaultCalendarId)) return userStore.defaultCalendarId;
+  if (
+    writable.some(
+      (/** @type {any} */ cal) => cal.id === userStore.defaultCalendarId,
+    )
+  )
+    return userStore.defaultCalendarId;
   return writable[0]?.id ?? null;
 });
 
@@ -432,8 +509,12 @@ const holidayCalendarId = computed(() => {
 const isContextRangeHoliday = computed(() => {
   const range = contextMenuRange.value;
   if (!range) return false;
-  for (let day = range.start.startOf('day'); !day.isAfter(range.end.startOf('day'), 'day'); day = day.add(1, 'day')) {
-    if (!customHolidayDates.value.has(day.format('YYYY-MM-DD'))) return false;
+  for (
+    let day = range.start.startOf("day");
+    !day.isAfter(range.end.startOf("day"), "day");
+    day = day.add(1, "day")
+  ) {
+    if (!customHolidayDates.value.has(day.format("YYYY-MM-DD"))) return false;
   }
   return true;
 });
@@ -444,14 +525,20 @@ async function setCustomHoliday() {
   const calendarId = holidayCalendarId.value;
   if (!range || !calendarId) return;
   if (isContextRangeHoliday.value) {
-    userStore.showToast('この日はすでに休日です');
+    userStore.showToast("この日はすでに休日です");
     return;
   }
   try {
-    await eventsService.createEvent(buildCustomHolidayBody(range.start.format('YYYY-MM-DD'), range.end.format('YYYY-MM-DD')), calendarId);
-    userStore.showToast('休日に設定しました');
+    await eventsService.createEvent(
+      buildCustomHolidayBody(
+        range.start.format("YYYY-MM-DD"),
+        range.end.format("YYYY-MM-DD"),
+      ),
+      calendarId,
+    );
+    userStore.showToast("休日に設定しました");
   } catch {
-    userStore.showToast('休日の設定に失敗しました');
+    userStore.showToast("休日の設定に失敗しました");
   }
 }
 
@@ -460,34 +547,56 @@ async function unsetCustomHoliday() {
   const range = contextMenuRange.value;
   if (!range) return;
   const keys = new Set();
-  for (let day = range.start.startOf('day'); !day.isAfter(range.end.startOf('day'), 'day'); day = day.add(1, 'day')) keys.add(day.format('YYYY-MM-DD'));
-  const targets = customHolidays.value.filter((evt) => holidayDatesOf(evt).some((key) => keys.has(key)));
-  await Promise.all(targets.map((evt) => eventsService.removeEvent(evt.id, evt.calendarId)));
-  if (targets.length > 0) userStore.showToast('休日を解除しました');
+  for (
+    let day = range.start.startOf("day");
+    !day.isAfter(range.end.startOf("day"), "day");
+    day = day.add(1, "day")
+  )
+    keys.add(day.format("YYYY-MM-DD"));
+  const targets = customHolidays.value.filter((evt) =>
+    holidayDatesOf(evt).some((key) => keys.has(key)),
+  );
+  await Promise.all(
+    targets.map((evt) => eventsService.removeEvent(evt.id, evt.calendarId)),
+  );
+  if (targets.length > 0) userStore.showToast("休日を解除しました");
 }
 
 /** @param {string} action コンテキストメニューを選択したときのハンドラ */
 function onSelectContextMenu(action) {
   switch (action) {
-    case 'CreateEvent': {
+    case "CreateEvent": {
       userStore.setNowSelectedEvent(null);
       const range = contextMenuRange.value;
       if (!range) break;
       if (range.isTimed) {
-        router.push({ name: 'EventCreator', query: { start: range.start.format('YYYY-MM-DDTHH:mm'), end: range.end.format('YYYY-MM-DDTHH:mm') } });
+        router.push({
+          name: "EventCreator",
+          query: {
+            start: range.start.format("YYYY-MM-DDTHH:mm"),
+            end: range.end.format("YYYY-MM-DDTHH:mm"),
+          },
+        });
       } else {
-        router.push({ name: 'EventCreator', query: { start: range.start.format('YYYY-MM-DD'), end: range.end.format('YYYY-MM-DD'), allday: '1' } });
+        router.push({
+          name: "EventCreator",
+          query: {
+            start: range.start.format("YYYY-MM-DD"),
+            end: range.end.format("YYYY-MM-DD"),
+            allday: "1",
+          },
+        });
       }
       break;
     }
-    case 'CreateFromTemplate':
+    case "CreateFromTemplate":
       userStore.setNowSelectedEvent(null);
-      router.push({ name: 'EventTemplatePicker' });
+      router.push({ name: "EventTemplatePicker" });
       break;
-    case 'SetCustomHoliday':
+    case "SetCustomHoliday":
       void setCustomHoliday();
       break;
-    case 'UnsetCustomHoliday':
+    case "UnsetCustomHoliday":
       void unsetCustomHoliday();
       break;
     default:
@@ -519,31 +628,32 @@ function handleEventClick(clickEvent, evt, date) {
     return;
   }
   userStore.setNowSelectedEvent({ eid: evt.id, cid: evt.calendarId });
-  router.push({ name: 'EventDetail' });
+  router.push({ name: "EventDetail" });
 }
 
 /** 前週へ移動します。 */
 function goPreviousWeek() {
-  weekTransition.value = 'prev';
-  userStore.nowUsingDate = userStore.nowUsingDate.subtract(7, 'day');
+  weekTransition.value = "prev";
+  userStore.nowUsingDate = userStore.nowUsingDate.subtract(7, "day");
 }
 
 /** 翌週へ移動します。 */
 function goNextWeek() {
-  weekTransition.value = 'next';
-  userStore.nowUsingDate = userStore.nowUsingDate.add(7, 'day');
+  weekTransition.value = "next";
+  userStore.nowUsingDate = userStore.nowUsingDate.add(7, "day");
 }
 
 /** 今週へ移動します。 */
 function goToday() {
-  weekTransition.value = 'today';
+  weekTransition.value = "today";
   userStore.goToday();
 }
 
 /** @param {TouchEvent} evt 週移動スワイプの開始 */
 function startWeekSwipe(evt) {
   suppressSwipeOnRelease.value = false;
-  if ((!userStore.isMobile && !userStore.isTablet) || evt.touches.length !== 1) return;
+  if ((!userStore.isMobile && !userStore.isTablet) || evt.touches.length !== 1)
+    return;
   const touch = evt.touches[0];
   swipeStart.value = { x: touch.clientX, y: touch.clientY };
 }
@@ -552,11 +662,19 @@ function startWeekSwipe(evt) {
 function finishWeekSwipe(evt) {
   const start = swipeStart.value;
   swipeStart.value = null;
-  if (suppressSwipeOnRelease.value || isTimeDragging.value || !start || (!userStore.isMobile && !userStore.isTablet) || evt.changedTouches.length !== 1) return;
+  if (
+    suppressSwipeOnRelease.value ||
+    isTimeDragging.value ||
+    !start ||
+    (!userStore.isMobile && !userStore.isTablet) ||
+    evt.changedTouches.length !== 1
+  )
+    return;
   const touch = evt.changedTouches[0];
   const deltaX = touch.clientX - start.x;
   const deltaY = touch.clientY - start.y;
-  if (Math.abs(deltaX) < 60 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.25) return;
+  if (Math.abs(deltaX) < 60 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.25)
+    return;
   if (deltaX > 0) goPreviousWeek();
   else goNextWeek();
 }
@@ -591,89 +709,216 @@ onMounted(() => {
   }, 30_000);
   scrollToNow();
   // Ctrl+ホイールでブラウザズームを抑止して週移動するため passive ではないリスナーを登録する
-  rfRoot.value?.addEventListener('wheel', handleWeekWheel, { passive: false });
+  rfRoot.value?.addEventListener("wheel", handleWeekWheel, { passive: false });
 });
 
 onUnmounted(() => {
   if (nowTimer !== null) window.clearInterval(nowTimer);
-  rfRoot.value?.removeEventListener('wheel', handleWeekWheel);
+  rfRoot.value?.removeEventListener("wheel", handleWeekWheel);
 });
 </script>
 
 <template>
-  <div ref="rfRoot" class="calendar-week-timeline-view" :class="{ 'is-dragging': isTimeDragging }" @touchstart="startWeekSwipe" @touchend="finishWeekSwipe" @touchcancel="swipeStart = null">
+  <div
+    ref="rfRoot"
+    class="calendar-week-timeline-view"
+    :class="{ 'is-dragging': isTimeDragging }"
+    @touchstart="startWeekSwipe"
+    @touchend="finishWeekSwipe"
+    @touchcancel="swipeStart = null"
+  >
     <div v-if="isFormPicking" class="form-pick-banner" role="status">
       <span>{{ pickBannerText }}</span>
-      <button type="button" @click="userStore.cancelFormDatePick()">キャンセル</button>
+      <button type="button" @click="userStore.cancelFormDatePick()">
+        キャンセル
+      </button>
     </div>
-    <header ref="rfToolbar" class="week-toolbar" :class="{ 'is-compact': isCompactToolbar }">
+    <header
+      ref="rfToolbar"
+      class="week-toolbar"
+      :class="{ 'is-compact': isCompactToolbar }"
+    >
       <div class="toolbar-left">
-        <button v-if="userStore.isMobile || userStore.isTablet" type="button" title="カレンダーを開閉" aria-label="カレンダーを開閉" @click="props.selectPane('nav')">
+        <button
+          v-if="userStore.isMobile || userStore.isTablet"
+          type="button"
+          title="カレンダーを開閉"
+          aria-label="カレンダーを開閉"
+          @click="props.selectPane('nav')"
+        >
           <IconBars size="1.25rem" />
         </button>
-        <button type="button" title="前週へ戻る" aria-label="前週へ戻る" v-if="userStore.isDesktop" @click="goPreviousWeek">
+        <button
+          type="button"
+          title="前週へ戻る"
+          aria-label="前週へ戻る"
+          v-if="userStore.isDesktop"
+          @click="goPreviousWeek"
+        >
           <IconCaretLeft size="1.25rem" />
         </button>
-        <button type="button" title="次週へ進む" aria-label="次週へ進む" v-if="userStore.isDesktop" @click="goNextWeek">
+        <button
+          type="button"
+          title="次週へ進む"
+          aria-label="次週へ進む"
+          v-if="userStore.isDesktop"
+          @click="goNextWeek"
+        >
           <IconCaretRight size="1.25rem" />
         </button>
       </div>
-      <h1>{{ weekTitle }}</h1>
+      <YearMonthJump :label="weekTitle" />
       <div class="toolbar-right">
         <template v-if="!isCompactToolbar">
-          <button type="button" title="今週に戻る" aria-label="今週に戻る" @click.prevent="goToday">
+          <button
+            type="button"
+            title="今週に戻る"
+            aria-label="今週に戻る"
+            @click.prevent="goToday"
+          >
             <IconArrowRotateLeft size="1.25rem" />
           </button>
-          <button type="button" title="イベントを検索" aria-label="イベントを検索" @click="router.push({ name: 'EventSearch' })">
+          <button
+            type="button"
+            title="イベントを検索"
+            aria-label="イベントを検索"
+            @click="router.push({ name: 'EventSearch' })"
+          >
             <IconMagnifyingGlass size="1.25rem" />
           </button>
-          <button type="button" title="自然言語で登録" aria-label="自然言語で登録" @click="router.push({ name: 'EventQuickAdd' })">
+          <button
+            type="button"
+            title="自然言語で登録"
+            aria-label="自然言語で登録"
+            @click="router.push({ name: 'EventQuickAdd' })"
+          >
             <IconWandMagicSparkles size="1.25rem" />
           </button>
-          <button type="button" title="縦スクロール月表示にする" aria-label="縦スクロール月表示にする" @click="userStore.setMainCalendarView('MONTH_VERTICAL')">
+          <button
+            type="button"
+            title="縦スクロール月表示にする"
+            aria-label="縦スクロール月表示にする"
+            @click="userStore.setMainCalendarView('MONTH_VERTICAL')"
+          >
             <IconArrowsUpDown size="1.25rem" />
           </button>
-          <button type="button" title="月表示にする" aria-label="月表示にする" @click="userStore.setMainCalendarView('MONTH')">
+          <button
+            type="button"
+            title="月表示にする"
+            aria-label="月表示にする"
+            @click="userStore.setMainCalendarView('MONTH')"
+          >
             <IconCalendarDays size="1.25rem" />
           </button>
-          <button type="button" title="個人設定" aria-label="個人設定" @click="router.push({ name: 'UserConfig' })">
+          <button
+            type="button"
+            title="個人設定"
+            aria-label="個人設定"
+            @click="router.push({ name: 'UserConfig' })"
+          >
             <IconGear size="1.25rem" />
           </button>
         </template>
         <DropdownMenu v-else>
           <template #button>
-            <button type="button" title="週表示の操作" aria-label="週表示の操作">
+            <button
+              type="button"
+              title="週表示の操作"
+              aria-label="週表示の操作"
+            >
               <IconEllipsisVertical size="1.25rem" />
             </button>
           </template>
-          <button type="button" @click="goToday"><IconArrowRotateLeft size="1rem" />今週に戻る</button>
-          <button type="button" @click="router.push({ name: 'EventSearch' })"><IconMagnifyingGlass size="1rem" />イベントを検索</button>
-          <button type="button" @click="router.push({ name: 'EventQuickAdd' })"><IconWandMagicSparkles size="1rem" />自然言語で登録</button>
-          <button type="button" @click="userStore.setMainCalendarView('MONTH_VERTICAL')"><IconArrowsUpDown size="1rem" />縦スクロール月表示にする</button>
-          <button type="button" @click="userStore.setMainCalendarView('MONTH')"><IconCalendarDays size="1rem" />月表示にする</button>
-          <button type="button" @click="router.push({ name: 'UserConfig' })"><IconGear size="1rem" />個人設定</button>
+          <button type="button" @click="goToday">
+            <IconArrowRotateLeft size="1rem" />今週に戻る
+          </button>
+          <button type="button" @click="router.push({ name: 'EventSearch' })">
+            <IconMagnifyingGlass size="1rem" />イベントを検索
+          </button>
+          <button type="button" @click="router.push({ name: 'EventQuickAdd' })">
+            <IconWandMagicSparkles size="1rem" />自然言語で登録
+          </button>
+          <button
+            type="button"
+            @click="userStore.setMainCalendarView('MONTH_VERTICAL')"
+          >
+            <IconArrowsUpDown size="1rem" />縦スクロール月表示にする
+          </button>
+          <button type="button" @click="userStore.setMainCalendarView('MONTH')">
+            <IconCalendarDays size="1rem" />月表示にする
+          </button>
+          <button type="button" @click="router.push({ name: 'UserConfig' })">
+            <IconGear size="1rem" />個人設定
+          </button>
         </DropdownMenu>
       </div>
     </header>
 
-    <Transition :name="`week-slide-${weekTransition}`" mode="out-in" @after-enter="scrollToNow">
-      <div ref="rfWeekScroll" :key="weekStart.format('YYYY-MM-DD')" class="week-scroll">
+    <Transition
+      :name="`week-slide-${weekTransition}`"
+      mode="out-in"
+      @after-enter="scrollToNow"
+    >
+      <div
+        ref="rfWeekScroll"
+        :key="weekStart.format('YYYY-MM-DD')"
+        class="week-scroll"
+      >
         <div class="week-grid">
           <!-- 曜日ヘッダー -->
           <div class="week-head">
             <div class="head-spacer"></div>
-            <div v-for="(day, i) in weekDays" :key="day.format('YYYY-MM-DD')" class="day-head" :class="{ 'is-today': isToday(day), 'is-selected': isSelected(day), 'is-in-drag-range': isInContextRange(day) }" @click="handleDayCellClick(day)" @contextmenu="handleDateContextMenu($event, day)">
-              <span class="weekday" :style="{ color: userStore.getWeekendColor(day.day()) ?? undefined }">{{ userStore.daysMap[i]?.label }}</span>
-              <span class="daynum" :style="{ color: getDayNumberColor(day) }">{{ day.date() }}</span>
+            <div
+              v-for="(day, i) in weekDays"
+              :key="day.format('YYYY-MM-DD')"
+              class="day-head"
+              :class="{
+                'is-today': isToday(day),
+                'is-selected': isSelected(day),
+                'is-in-drag-range': isInContextRange(day),
+              }"
+              @click="handleDayCellClick(day)"
+              @contextmenu="handleDateContextMenu($event, day)"
+            >
+              <span
+                class="weekday"
+                :style="{
+                  color: userStore.getWeekendColor(day.day()) ?? undefined,
+                }"
+                >{{ userStore.daysMap[i]?.label }}</span
+              >
+              <span class="daynum" :style="{ color: getDayNumberColor(day) }">{{
+                day.date()
+              }}</span>
             </div>
           </div>
 
           <!-- 終日・複数日イベント -->
           <div class="week-allday">
             <div class="allday-label">終日</div>
-            <div v-for="day in weekDays" :key="day.format('YYYY-MM-DD')" class="allday-cell" :class="{ 'is-in-drag-range': isInContextRange(day) }" @click="handleDayCellClick(day)" @contextmenu="handleDateContextMenu($event, day)">
-              <button v-for="evt in allDayEventsFor(day)" :key="`${evt.calendarId}:${evt.id}`" type="button" class="allday-chip" :class="{ 'is-dot': isDotEventBar(evt) }" :style="getEventBarStyle(evt)" @click="(e) => handleEventClick(e, evt, day)">
-                <i v-if="isDotEventBar(evt)" class="event-dot" :style="{ backgroundColor: getEventDotColor(evt) }"></i><InlineEmoji :emoji="evt.icon" /> {{ evt.summary }}
+            <div
+              v-for="day in weekDays"
+              :key="day.format('YYYY-MM-DD')"
+              class="allday-cell"
+              :class="{ 'is-in-drag-range': isInContextRange(day) }"
+              @click="handleDayCellClick(day)"
+              @contextmenu="handleDateContextMenu($event, day)"
+            >
+              <button
+                v-for="evt in allDayEventsFor(day)"
+                :key="`${evt.calendarId}:${evt.id}`"
+                type="button"
+                class="allday-chip"
+                :class="{ 'is-dot': isDotEventBar(evt) }"
+                :style="getEventBarStyle(evt)"
+                @click="(e) => handleEventClick(e, evt, day)"
+              >
+                <i
+                  v-if="isDotEventBar(evt)"
+                  class="event-dot"
+                  :style="{ backgroundColor: getEventDotColor(evt) }"
+                ></i
+                ><InlineEmoji :emoji="evt.icon" /> {{ evt.summary }}
               </button>
             </div>
           </div>
@@ -689,7 +934,10 @@ onUnmounted(() => {
               v-for="day in weekDays"
               :key="day.format('YYYY-MM-DD')"
               class="day-col"
-              :class="{ 'is-today': isToday(day), 'is-selected': isSelected(day) }"
+              :class="{
+                'is-today': isToday(day),
+                'is-selected': isSelected(day),
+              }"
               :data-date="day.format('YYYY-MM-DD')"
               @click="handleColClick(day)"
               @contextmenu="handleColContextMenu($event, day)"
@@ -698,38 +946,86 @@ onUnmounted(() => {
               @touchstart="startColLongPress($event, day)"
               @touchmove="handleColTouchMove"
               @touchend="finishColTouch"
-              @touchcancel="finishColTouch">
-              <div v-for="block in dragBlocks.filter((b) => b.key === day.format('YYYY-MM-DD'))" :key="`drag-${block.key}`" class="drag-range-block" :style="{ top: `${block.top}%`, height: `${block.height}%` }"></div>
+              @touchcancel="finishColTouch"
+            >
+              <div
+                v-for="block in dragBlocks.filter(
+                  (b) => b.key === day.format('YYYY-MM-DD'),
+                )"
+                :key="`drag-${block.key}`"
+                class="drag-range-block"
+                :style="{ top: `${block.top}%`, height: `${block.height}%` }"
+              ></div>
               <button
                 v-for="block in timedEventsFor(day)"
                 :key="`${block.event.calendarId}:${block.event.id}`"
                 type="button"
                 class="event-block"
                 :class="{ 'is-dot': isDotEventBar(block.event) }"
-                :style="{ top: `${block.top}%`, height: `${block.height}%`, left: `calc(${block.left}% + 1px)`, width: `calc(${block.width}% - 2px)`, ...getEventBarStyle(block.event) }"
+                :style="{
+                  top: `${block.top}%`,
+                  height: `${block.height}%`,
+                  left: `calc(${block.left}% + 1px)`,
+                  width: `calc(${block.width}% - 2px)`,
+                  ...getEventBarStyle(block.event),
+                }"
                 @click="(e) => handleEventClick(e, block.event, day)"
-                @mousedown.stop>
-                <span class="event-time"><i v-if="isDotEventBar(block.event)" class="event-dot" :style="{ backgroundColor: getEventDotColor(block.event) }"></i>{{ getEventTimeText(block.event, day) }}</span>
-                <span class="event-title"><InlineEmoji :emoji="block.event.icon" /> {{ block.event.summary }}</span>
+                @mousedown.stop
+              >
+                <span class="event-time"
+                  ><i
+                    v-if="isDotEventBar(block.event)"
+                    class="event-dot"
+                    :style="{ backgroundColor: getEventDotColor(block.event) }"
+                  ></i
+                  >{{ getEventTimeText(block.event, day) }}</span
+                >
+                <span class="event-title"
+                  ><InlineEmoji :emoji="block.event.icon" />
+                  {{ block.event.summary }}</span
+                >
               </button>
-              <div v-if="isToday(day)" class="now-line" :style="{ top: nowLineTop }"></div>
+              <div
+                v-if="isToday(day)"
+                class="now-line"
+                :style="{ top: nowLineTop }"
+              ></div>
             </div>
           </div>
         </div>
       </div>
     </Transition>
 
-    <DropdownMenu ref="rfDropdownForContextMenu" @close="contextMenuRange = null">
-      <button type="button" @click="onSelectContextMenu('CreateEvent')">予定を作成</button>
-      <button type="button" @click="onSelectContextMenu('CreateFromTemplate')">テンプレートから作成</button>
-      <button v-if="isContextRangeHoliday" type="button" @click="onSelectContextMenu('UnsetCustomHoliday')">休日から解除</button>
-      <button v-else type="button" @click="onSelectContextMenu('SetCustomHoliday')">休日にする</button>
+    <DropdownMenu
+      ref="rfDropdownForContextMenu"
+      @close="contextMenuRange = null"
+    >
+      <button type="button" @click="onSelectContextMenu('CreateEvent')">
+        予定を作成
+      </button>
+      <button type="button" @click="onSelectContextMenu('CreateFromTemplate')">
+        テンプレートから作成
+      </button>
+      <button
+        v-if="isContextRangeHoliday"
+        type="button"
+        @click="onSelectContextMenu('UnsetCustomHoliday')"
+      >
+        休日から解除
+      </button>
+      <button
+        v-else
+        type="button"
+        @click="onSelectContextMenu('SetCustomHoliday')"
+      >
+        休日にする
+      </button>
     </DropdownMenu>
   </div>
 </template>
 
 <style lang="scss" scoped>
-@use '@/styles/vars.scss' as var;
+@use "@/styles/vars.scss" as var;
 
 $hour-height: 48px;
 $gutter-width: 3.25rem;
@@ -1054,7 +1350,11 @@ $gutter-width: 3.25rem;
     height: calc($hour-height * 24);
     border-right: 1px solid var(--border);
     cursor: pointer;
-    background-image: linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+    background-image: linear-gradient(
+      to bottom,
+      var(--border) 1px,
+      transparent 1px
+    );
     background-size: 100% $hour-height;
 
     &:last-child {
@@ -1139,7 +1439,7 @@ $gutter-width: 3.25rem;
       z-index: 4;
 
       &::before {
-        content: '';
+        content: "";
         position: absolute;
         left: 0;
         top: -3px;

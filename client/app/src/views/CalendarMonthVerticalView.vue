@@ -7,39 +7,53 @@
  * グリッド先頭の月（2ヶ月前）の最初から1段下の行がビューに入った時点で、
  * フォーカスを隣の月へ移し、グリッドを再生成してスクロール位置を調整する。
  */
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
-import dayjs, { toDayjs } from '@/services/dayjs.js';
-import { useCalendarEvents } from '@/composables/useCalendarEvents.js';
-import { useEvents } from '@/composables/useEvents.js';
-import { useCalendarStore } from '@/stores/calendar.js';
-import { useUserStore } from '@/stores/user.js';
-import { USER_TEXT_SIZE_VALUES } from '@/stores/user.js';
-import { useCalendarToolbar } from '@/composables/useCalendarToolbar.js';
-import { buildMonthLayout } from '@/composables/useMonthLayout.js';
-import { isDotEventBar, getEventBarStyle, getEventDotColor } from '@/composables/useEventBarStyle.js';
-import { buildCustomHolidayBody, holidayDatesOf } from '@/services/custom-holidays.js';
-import { isJapaneseHoliday } from '@/services/japanese-holidays.js';
-import DropdownMenu from '@/components/DropdownMenu.vue';
-import IconCaretLeft from '@/components/icons/IconCaretLeft.vue';
-import IconCaretRight from '@/components/icons/IconCaretRight.vue';
-import IconBars from '@/components/icons/IconBars.vue';
-import IconGear from '@/components/icons/IconGear.vue';
-import IconUserGroup from '@/components/icons/IconUserGroup.vue';
-import IconBarsStaggered from '@/components/icons/IconBarsStaggered.vue';
-import IconCalendarDays from '@/components/icons/IconCalendarDays.vue';
-import IconArrowRotateLeft from '@/components/icons/IconArrowRotateLeft.vue';
-import IconEllipsisVertical from '@/components/icons/IconEllipsisVertical.vue';
-import IconMagnifyingGlass from '@/components/icons/IconMagnifyingGlass.vue';
-import IconWandMagicSparkles from '@/components/icons/IconWandMagicSparkles.vue';
-import InlineEmoji from '@/components/InlineEmoji.vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
+import dayjs, { toDayjs } from "@/services/dayjs.js";
+import { useCalendarEvents } from "@/composables/useCalendarEvents.js";
+import { useEvents } from "@/composables/useEvents.js";
+import { useCalendarStore } from "@/stores/calendar.js";
+import { useUserStore } from "@/stores/user.js";
+import { USER_TEXT_SIZE_VALUES } from "@/stores/user.js";
+import { useCalendarToolbar } from "@/composables/useCalendarToolbar.js";
+import { buildMonthLayout } from "@/composables/useMonthLayout.js";
+import {
+  isDotEventBar,
+  getEventBarStyle,
+  getEventDotColor,
+} from "@/composables/useEventBarStyle.js";
+import {
+  buildCustomHolidayBody,
+  holidayDatesOf,
+} from "@/services/custom-holidays.js";
+import { isJapaneseHoliday } from "@/services/japanese-holidays.js";
+import DropdownMenu from "@/components/DropdownMenu.vue";
+import YearMonthJump from "@/components/YearMonthJump.vue";
+import IconCaretLeft from "@/components/icons/IconCaretLeft.vue";
+import IconCaretRight from "@/components/icons/IconCaretRight.vue";
+import IconBars from "@/components/icons/IconBars.vue";
+import IconGear from "@/components/icons/IconGear.vue";
+import IconUserGroup from "@/components/icons/IconUserGroup.vue";
+import IconBarsStaggered from "@/components/icons/IconBarsStaggered.vue";
+import IconCalendarDays from "@/components/icons/IconCalendarDays.vue";
+import IconArrowRotateLeft from "@/components/icons/IconArrowRotateLeft.vue";
+import IconEllipsisVertical from "@/components/icons/IconEllipsisVertical.vue";
+import IconMagnifyingGlass from "@/components/icons/IconMagnifyingGlass.vue";
+import IconWandMagicSparkles from "@/components/icons/IconWandMagicSparkles.vue";
+import InlineEmoji from "@/components/InlineEmoji.vue";
 
 const router = useRouter();
 const userStore = useUserStore();
 const calendarStore = useCalendarStore();
 const eventsService = useEvents();
 
-const calendarTextSizeStyle = computed(() => Object.fromEntries(Object.entries(USER_TEXT_SIZE_VALUES[userStore.calendarTextSize]).map(([name, value]) => [`--text-size-${name}`, value])));
+const calendarTextSizeStyle = computed(() =>
+  Object.fromEntries(
+    Object.entries(USER_TEXT_SIZE_VALUES[userStore.calendarTextSize]).map(
+      ([name, value]) => [`--text-size-${name}`, value],
+    ),
+  ),
+);
 
 const props = defineProps({
   selectPane: { type: Function, default: () => {} },
@@ -68,9 +82,11 @@ const contextMenuRange = ref(null);
 const isFormPicking = computed(() => !!userStore.formDatePick);
 /** @type {ComputedRef<string>} フォーム日付ピック中の案内文 */
 const pickBannerText = computed(() => {
-  const field = userStore.formDatePick?.field ?? '';
-  if (field === 'expiryDate') return `有効期限を選択してください（セルをクリック/タップ）`;
-  const label = field === 'endDate' || field === 'rangeEnd' ? '終了日' : '開始日';
+  const field = userStore.formDatePick?.field ?? "";
+  if (field === "expiryDate")
+    return `有効期限を選択してください（セルをクリック/タップ）`;
+  const label =
+    field === "endDate" || field === "rangeEnd" ? "終了日" : "開始日";
   return `${label}を選択してください（セルをクリック/タップ、ドラッグで期間選択）`;
 });
 /** @type {{date: Dayjs}|null} マウスダウンしたセル（ドラッグ開始判定用） */
@@ -80,7 +96,7 @@ let mouseDownCell = null;
 const { isCompactToolbar, monthTitle } = useCalendarToolbar(rfToolbar);
 
 /** @type {Ref<Dayjs>} フォーカス中の月（月初め） */
-const focusedMonth = ref(userStore.nowUsingDate.startOf('month'));
+const focusedMonth = ref(userStore.nowUsingDate.startOf("month"));
 
 /**
  * @typedef {Object} GridDay
@@ -98,20 +114,42 @@ const focusedMonth = ref(userStore.nowUsingDate.startOf('month'));
  */
 function buildScrollDays() {
   const today = toDayjs();
-  const rangeStart = focusedMonth.value.subtract(2, 'month').startOf('month');
-  const rangeEnd = focusedMonth.value.add(2, 'month').endOf('month');
+  const rangeStart = focusedMonth.value.subtract(2, "month").startOf("month");
+  const rangeEnd = focusedMonth.value.add(2, "month").endOf("month");
   const days = [];
 
   const leadCount = (rangeStart.day() - userStore.firstDayOfWeek + 7) % 7;
   for (let i = 0; i < leadCount; i++) {
-    days.push({ date: rangeStart.subtract(leadCount - i, 'day'), key: `lead-${i}`, isPadding: true, isToday: false, isSelected: false });
+    days.push({
+      date: rangeStart.subtract(leadCount - i, "day"),
+      key: `lead-${i}`,
+      isPadding: true,
+      isToday: false,
+      isSelected: false,
+    });
   }
-  for (let date = rangeStart; !date.isAfter(rangeEnd); date = date.add(1, 'day')) {
-    days.push({ date, key: `day-${date.format('YYYY-MM-DD')}`, isPadding: false, isToday: date.isSame(today, 'day'), isSelected: userStore.nowSelectedDate === date.format('YYYY-MM-DD') });
+  for (
+    let date = rangeStart;
+    !date.isAfter(rangeEnd);
+    date = date.add(1, "day")
+  ) {
+    days.push({
+      date,
+      key: `day-${date.format("YYYY-MM-DD")}`,
+      isPadding: false,
+      isToday: date.isSame(today, "day"),
+      isSelected: userStore.nowSelectedDate === date.format("YYYY-MM-DD"),
+    });
   }
   const trailCount = (7 - (days.length % 7)) % 7;
   for (let i = 1; i <= trailCount; i++) {
-    days.push({ date: rangeEnd.add(i, 'day'), key: `trail-${i}`, isPadding: true, isToday: false, isSelected: false });
+    days.push({
+      date: rangeEnd.add(i, "day"),
+      key: `trail-${i}`,
+      isPadding: true,
+      isToday: false,
+      isSelected: false,
+    });
   }
   return days;
 }
@@ -121,15 +159,18 @@ const days = computed(() => buildScrollDays());
 
 /** @type {ComputedRef<{start: Dayjs, end: Dayjs}>} イベントを取得する範囲（グリッドは軸月±2ヶ月だが、データ取得は±1ヶ月） */
 const visibleRange = computed(() => ({
-  start: focusedMonth.value.subtract(1, 'month').startOf('month'),
-  end: focusedMonth.value.add(1, 'month').endOf('month'),
+  start: focusedMonth.value.subtract(1, "month").startOf("month"),
+  end: focusedMonth.value.add(1, "month").endOf("month"),
 }));
 
 /** 表示範囲のイベント・カスタム休日。取得は composable 側のバックグラウンド処理 */
-const { events, customHolidays, customHolidayDates } = useCalendarEvents(visibleRange);
+const { events, customHolidays, customHolidayDates } =
+  useCalendarEvents(visibleRange);
 
 /** @type {ComputedRef<Map<string, (import('@/composables/useMonthLayout.js').MonthEventSlot|null)[]>>} 日付ごとのイベント配置マップ */
-const layout = computed(() => buildMonthLayout(days.value, events.value, userStore.maxEventBarsPerCell));
+const layout = computed(() =>
+  buildMonthLayout(days.value, events.value, userStore.maxEventBarsPerCell),
+);
 
 /**
  * 指定日のイベントスロットを取得する
@@ -137,7 +178,7 @@ const layout = computed(() => buildMonthLayout(days.value, events.value, userSto
  * @returns {(import('@/composables/useMonthLayout.js').MonthEventSlot|null)[]}
  */
 function getDayEvents(date) {
-  return layout.value.get(date.format('YYYY-MM-DD')) ?? [];
+  return layout.value.get(date.format("YYYY-MM-DD")) ?? [];
 }
 
 /**
@@ -146,28 +187,42 @@ function getDayEvents(date) {
  * @returns {number}
  */
 function getHiddenEventCount(date) {
-  const dayStart = date.startOf('day');
-  const dayEnd = date.endOf('day');
-  const allEvents = events.value.filter((evt) => evt.startDateTime.isBefore(dayEnd) && evt.endDateTime.isAfter(dayStart));
+  const dayStart = date.startOf("day");
+  const dayEnd = date.endOf("day");
+  const allEvents = events.value.filter(
+    (evt) =>
+      evt.startDateTime.isBefore(dayEnd) && evt.endDateTime.isAfter(dayStart),
+  );
   const displayedEventIds = new Set(
     getDayEvents(date)
       .filter(Boolean)
       .map((slot) => slot.event.id),
   );
-  return Math.max(0, allEvents.filter((evt) => !displayedEventIds.has(evt.id)).length);
+  return Math.max(
+    0,
+    allEvents.filter((evt) => !displayedEventIds.has(evt.id)).length,
+  );
 }
 
 /** @type {ComputedRef<Record<string, string>>} 可変セル高時の週ごとの行高を含むグリッドスタイル */
 const gridStyle = computed(() => {
   const rows = [];
-  const isVariable = userStore.calendarCellHeightMode === 'VARIABLE';
+  const isVariable = userStore.calendarCellHeightMode === "VARIABLE";
   for (let index = 0; index < days.value.length; index += 7) {
     const week = days.value.slice(index, index + 7);
-    const eventRowCount = isVariable ? Math.max(...week.map((day) => (day.isPadding ? 0 : getDayEvents(day.date).length)), 0) : userStore.maxEventBarsPerCell;
-    const contentHeight = 24 + eventRowCount * 18 + Math.max(0, eventRowCount - 1) * 2 + 4;
+    const eventRowCount = isVariable
+      ? Math.max(
+          ...week.map((day) =>
+            day.isPadding ? 0 : getDayEvents(day.date).length,
+          ),
+          0,
+        )
+      : userStore.maxEventBarsPerCell;
+    const contentHeight =
+      24 + eventRowCount * 18 + Math.max(0, eventRowCount - 1) * 2 + 4;
     rows.push(`max(var(--calendar-cell-min-height), ${contentHeight}px)`);
   }
-  return { gridTemplateRows: rows.join(' ') };
+  return { gridTemplateRows: rows.join(" ") };
 });
 
 /** @param {HandyCalendarEvent} evt @returns {boolean} 自分以外の参加者がいるか */
@@ -195,12 +250,18 @@ let scrollRafId = null;
  * @returns {void}
  */
 function focusMonth(date, { smooth = false, alignTop = false } = {}) {
-  const target = date.startOf('month');
-  if (target.isSame(focusedMonth.value, 'month')) return;
+  const target = date.startOf("month");
+  if (target.isSame(focusedMonth.value, "month")) return;
   const scroller = rfScroll.value;
-  const monthEl = scroller?.querySelector(`[data-month="${target.format('YYYY-MM')}"]`);
+  const monthEl = scroller?.querySelector(
+    `[data-month="${target.format("YYYY-MM")}"]`,
+  );
   // グリッド再生成前の、対象月ブロックの見かけ上のオフセットを記録する
-  pendingScroll = { key: target.format('YYYY-MM'), delta: !alignTop && monthEl ? monthEl.offsetTop - scroller.scrollTop : null, smooth };
+  pendingScroll = {
+    key: target.format("YYYY-MM"),
+    delta: !alignTop && monthEl ? monthEl.offsetTop - scroller.scrollTop : null,
+    smooth,
+  };
   focusedMonth.value = target;
   userStore.setNowUsingDate(target);
 }
@@ -214,11 +275,14 @@ async function adjustScrollPosition() {
   if (!pending || !scroller) return;
   const monthEl = scroller.querySelector(`[data-month="${pending.key}"]`);
   if (!monthEl) return;
-  const top = pending.delta === null ? monthEl.offsetTop : monthEl.offsetTop - pending.delta;
+  const top =
+    pending.delta === null
+      ? monthEl.offsetTop
+      : monthEl.offsetTop - pending.delta;
   if (pending.smooth) {
     // スムーズスクロール中は端検出を止める。スクロール終了（scrollend）またはユーザー操作で解除する
     isProgrammaticScrolling = true;
-    scroller.scrollTo({ top, behavior: 'smooth' });
+    scroller.scrollTo({ top, behavior: "smooth" });
   } else {
     scroller.scrollTop = top;
     lastScrollTop = top;
@@ -260,7 +324,7 @@ function handleScroll() {
 function updateScrollWindow(direction) {
   const scroller = rfScroll.value;
   if (!scroller) return;
-  const cells = scroller.querySelectorAll('.day-cell');
+  const cells = scroller.querySelectorAll(".day-cell");
   /** @param {number} rowIndex @returns {HTMLElement|null} グリッド内の指定行の先頭セル */
   const rowCell = (rowIndex) => {
     const cell = cells[rowIndex * 7];
@@ -268,14 +332,30 @@ function updateScrollWindow(direction) {
   };
   if (direction > 0) {
     // 下スクロール：グリッド末尾の月（2ヶ月後）の最後から1段上の行がビューに入ったら翌月へ更新する
-    const lastIndex = days.value.findIndex((day) => !day.isPadding && day.date.isSame(focusedMonth.value.add(2, 'month').endOf('month'), 'day'));
+    const lastIndex = days.value.findIndex(
+      (day) =>
+        !day.isPadding &&
+        day.date.isSame(
+          focusedMonth.value.add(2, "month").endOf("month"),
+          "day",
+        ),
+    );
     const cell = rowCell(Math.floor(lastIndex / 7) - 1);
-    if (cell && cell.offsetTop <= scroller.scrollTop + scroller.clientHeight) focusMonth(focusedMonth.value.add(1, 'month'));
+    if (cell && cell.offsetTop <= scroller.scrollTop + scroller.clientHeight)
+      focusMonth(focusedMonth.value.add(1, "month"));
   } else {
     // 上スクロール：グリッド先頭の月（2ヶ月前）の最初から1段下の行がビューに入ったら前月へ更新する
-    const firstIndex = days.value.findIndex((day) => !day.isPadding && day.date.isSame(focusedMonth.value.subtract(2, 'month').startOf('month'), 'day'));
+    const firstIndex = days.value.findIndex(
+      (day) =>
+        !day.isPadding &&
+        day.date.isSame(
+          focusedMonth.value.subtract(2, "month").startOf("month"),
+          "day",
+        ),
+    );
     const cell = rowCell(Math.floor(firstIndex / 7) + 1);
-    if (cell && scroller.scrollTop <= cell.offsetTop) focusMonth(focusedMonth.value.subtract(1, 'month'));
+    if (cell && scroller.scrollTop <= cell.offsetTop)
+      focusMonth(focusedMonth.value.subtract(1, "month"));
   }
 }
 
@@ -306,7 +386,7 @@ function handleEventClick(clickEvent, evt, date) {
     return;
   }
   userStore.setNowSelectedEvent({ eid: evt.id, cid: evt.calendarId });
-  router.push({ name: 'EventDetail' });
+  router.push({ name: "EventDetail" });
 }
 
 /** @param {Dayjs} date 日付セルをクリック/タップした日付 */
@@ -330,8 +410,16 @@ function handleCellClick(date) {
  * @param {Dayjs} end 範囲の終了日（含む側）
  */
 function resolveFormDatePick(start, end) {
-  const pick = userStore.formDatePick ?? { target: 'eventForm', field: 'startDate' };
-  userStore.resolveFormDatePick({ target: pick.target, field: pick.field, start: start.format('YYYY-MM-DD'), end: end.format('YYYY-MM-DD') });
+  const pick = userStore.formDatePick ?? {
+    target: "eventForm",
+    field: "startDate",
+  };
+  userStore.resolveFormDatePick({
+    target: pick.target,
+    field: pick.field,
+    start: start.format("YYYY-MM-DD"),
+    end: end.format("YYYY-MM-DD"),
+  });
 }
 
 /** @param {Dayjs} date @returns {boolean} ドラッグ選択中、またはメニュー表示中の確定済み範囲に含まれるか */
@@ -346,8 +434,8 @@ function isInDragRange(date) {
   } else {
     return false;
   }
-  const [first, last] = start.isAfter(end, 'day') ? [end, start] : [start, end];
-  return !date.isBefore(first, 'day') && !date.isAfter(last, 'day');
+  const [first, last] = start.isAfter(end, "day") ? [end, start] : [start, end];
+  return !date.isBefore(first, "day") && !date.isAfter(last, "day");
 }
 
 /**
@@ -364,7 +452,9 @@ function finalizeDragRange(position) {
   dragEndDate.value = null;
   if (!anchor || !end) return;
   suppressNextCellClick.value = true;
-  const range = anchor.isAfter(end, 'day') ? { start: end, end: anchor } : { start: anchor, end };
+  const range = anchor.isAfter(end, "day")
+    ? { start: end, end: anchor }
+    : { start: anchor, end };
   if (isFormPicking.value) {
     // フォームの日付ピック中はメニューを開かず、選択範囲をフォームへ返す
     resolveFormDatePick(range.start, range.end);
@@ -374,7 +464,10 @@ function finalizeDragRange(position) {
   // mouseup/touchend 直後に発火する click を DropdownMenu が外側クリックと判定して
   // 即座に閉じてしまうため、click ディスパッチ完了後にメニューを開く
   window.setTimeout(() => {
-    rfDropdownForContextMenu.value?.open({ clientX: position.x, clientY: position.y });
+    rfDropdownForContextMenu.value?.open({
+      clientX: position.x,
+      clientY: position.y,
+    });
   }, 0);
 }
 
@@ -382,13 +475,13 @@ function finalizeDragRange(position) {
 function handleCellMouseDown(evt, date) {
   if (userStore.isMobile || userStore.isTablet || evt.button !== 0) return;
   mouseDownCell = { date };
-  window.addEventListener('mouseup', handleGlobalMouseUp, { once: true });
+  window.addEventListener("mouseup", handleGlobalMouseUp, { once: true });
 }
 
 /** @param {Dayjs} date セルへのマウス進入（ドラッグ中は範囲を更新） */
 function handleCellMouseEnter(date) {
   if (!mouseDownCell) return;
-  if (!isRangeDragging.value && !date.isSame(mouseDownCell.date, 'day')) {
+  if (!isRangeDragging.value && !date.isSame(mouseDownCell.date, "day")) {
     isRangeDragging.value = true;
     dragStartDate.value = mouseDownCell.date;
   }
@@ -406,8 +499,10 @@ function handleGlobalMouseUp(evt) {
 function updateTouchDragEnd(evt) {
   const touch = evt.touches?.[0] ?? evt.changedTouches?.[0];
   if (!touch) return;
-  const cell = document.elementFromPoint(touch.clientX, touch.clientY)?.closest?.('.day-cell');
-  const dateKey = cell?.getAttribute('data-date');
+  const cell = document
+    .elementFromPoint(touch.clientX, touch.clientY)
+    ?.closest?.(".day-cell");
+  const dateKey = cell?.getAttribute("data-date");
   if (dateKey) dragEndDate.value = toDayjs(dateKey);
 }
 
@@ -415,18 +510,19 @@ function updateTouchDragEnd(evt) {
 
 /** @param {Dayjs} date 日付セルで選択された日付 */
 function selectDateCell(date) {
-  const selectedDate = date.format('YYYY-MM-DD');
+  const selectedDate = date.format("YYYY-MM-DD");
   const isDifferentDate = userStore.nowSelectedDate !== selectedDate;
 
   userStore.setNowSelectedDate(date);
-  if (router.currentRoute.value.name === 'EventDetail' && isDifferentDate) {
-    router.push({ name: 'Home' });
+  if (router.currentRoute.value.name === "EventDetail" && isDifferentDate) {
+    router.push({ name: "Home" });
   }
 }
 
 /** @param {TouchEvent} evt @param {Dayjs} date 長押し対象の日付 */
 function startCellLongPress(evt, date) {
-  if (!(userStore.isMobile || userStore.isTablet) || evt.touches.length !== 1) return;
+  if (!(userStore.isMobile || userStore.isTablet) || evt.touches.length !== 1)
+    return;
   cancelCellLongPress();
   longPressTimer.value = window.setTimeout(() => {
     longPressTimer.value = null;
@@ -451,7 +547,8 @@ function handleCellTouchMove(evt) {
     return;
   }
   // 縦スクロール用のタッチ移動が検出されたら長押しをキャンセルする
-  if (evt.target instanceof Element && evt.target.closest('.vertical-scroll')) cancelCellLongPress();
+  if (evt.target instanceof Element && evt.target.closest(".vertical-scroll"))
+    cancelCellLongPress();
 }
 
 /** @param {TouchEvent} evt セルのタッチ終了 */
@@ -493,7 +590,12 @@ function openContextMenu(evt, date) {
 /** @type {ComputedRef<string|null>} カスタム休日の作成先カレンダー ID（既定カレンダーが書き込み可ならそれ、なければ先頭の書き込み可カレンダー） */
 const holidayCalendarId = computed(() => {
   const writable = calendarStore.listWritableCalendars;
-  if (writable.some((/** @type {any} */ cal) => cal.id === userStore.defaultCalendarId)) return userStore.defaultCalendarId;
+  if (
+    writable.some(
+      (/** @type {any} */ cal) => cal.id === userStore.defaultCalendarId,
+    )
+  )
+    return userStore.defaultCalendarId;
   return writable[0]?.id ?? null;
 });
 
@@ -501,8 +603,12 @@ const holidayCalendarId = computed(() => {
 const isContextRangeHoliday = computed(() => {
   const range = contextMenuRange.value;
   if (!range) return false;
-  for (let day = range.start; !day.isAfter(range.end, 'day'); day = day.add(1, 'day')) {
-    if (!customHolidayDates.value.has(day.format('YYYY-MM-DD'))) return false;
+  for (
+    let day = range.start;
+    !day.isAfter(range.end, "day");
+    day = day.add(1, "day")
+  ) {
+    if (!customHolidayDates.value.has(day.format("YYYY-MM-DD"))) return false;
   }
   return true;
 });
@@ -513,14 +619,20 @@ async function setCustomHoliday() {
   const calendarId = holidayCalendarId.value;
   if (!range || !calendarId) return;
   if (isContextRangeHoliday.value) {
-    userStore.showToast('この日はすでに休日です');
+    userStore.showToast("この日はすでに休日です");
     return;
   }
   try {
-    await eventsService.createEvent(buildCustomHolidayBody(range.start.format('YYYY-MM-DD'), range.end.format('YYYY-MM-DD')), calendarId);
-    userStore.showToast('休日に設定しました');
+    await eventsService.createEvent(
+      buildCustomHolidayBody(
+        range.start.format("YYYY-MM-DD"),
+        range.end.format("YYYY-MM-DD"),
+      ),
+      calendarId,
+    );
+    userStore.showToast("休日に設定しました");
   } catch {
-    userStore.showToast('休日の設定に失敗しました');
+    userStore.showToast("休日の設定に失敗しました");
   }
 }
 
@@ -529,34 +641,52 @@ async function unsetCustomHoliday() {
   const range = contextMenuRange.value;
   if (!range) return;
   const keys = new Set();
-  for (let day = range.start; !day.isAfter(range.end, 'day'); day = day.add(1, 'day')) keys.add(day.format('YYYY-MM-DD'));
-  const targets = customHolidays.value.filter((evt) => holidayDatesOf(evt).some((key) => keys.has(key)));
-  await Promise.all(targets.map((evt) => eventsService.removeEvent(evt.id, evt.calendarId)));
-  if (targets.length > 0) userStore.showToast('休日を解除しました');
+  for (
+    let day = range.start;
+    !day.isAfter(range.end, "day");
+    day = day.add(1, "day")
+  )
+    keys.add(day.format("YYYY-MM-DD"));
+  const targets = customHolidays.value.filter((evt) =>
+    holidayDatesOf(evt).some((key) => keys.has(key)),
+  );
+  await Promise.all(
+    targets.map((evt) => eventsService.removeEvent(evt.id, evt.calendarId)),
+  );
+  if (targets.length > 0) userStore.showToast("休日を解除しました");
 }
 
 /** @param {string} action コンテキストメニューを選択したときのハンドラ */
 function onSelectContextMenu(action) {
   switch (action) {
     // 選択中の日付範囲で新しい予定を作成（終日、終了日は含む側で渡す）
-    case 'CreateEvent': {
+    case "CreateEvent": {
       userStore.setNowSelectedEvent(null);
-      const start = contextMenuRange.value?.start ?? toDayjs(userStore.nowSelectedDate ?? undefined);
+      const start =
+        contextMenuRange.value?.start ??
+        toDayjs(userStore.nowSelectedDate ?? undefined);
       const end = contextMenuRange.value?.end ?? start;
-      router.push({ name: 'EventCreator', query: { start: start.format('YYYY-MM-DD'), end: end.format('YYYY-MM-DD'), allday: '1' } });
+      router.push({
+        name: "EventCreator",
+        query: {
+          start: start.format("YYYY-MM-DD"),
+          end: end.format("YYYY-MM-DD"),
+          allday: "1",
+        },
+      });
       break;
     }
     // テンプレート一覧を開き、選択したテンプレートで予定を作成
-    case 'CreateFromTemplate':
+    case "CreateFromTemplate":
       userStore.setNowSelectedEvent(null);
-      router.push({ name: 'EventTemplatePicker' });
+      router.push({ name: "EventTemplatePicker" });
       break;
     // 選択中の日付をカスタム休日に設定
-    case 'SetCustomHoliday':
+    case "SetCustomHoliday":
       void setCustomHoliday();
       break;
     // 選択中の日付のカスタム休日を解除
-    case 'UnsetCustomHoliday':
+    case "UnsetCustomHoliday":
       void unsetCustomHoliday();
       break;
     default:
@@ -567,12 +697,18 @@ function onSelectContextMenu(action) {
 
 /** 前月へ移動する（月ブロック先頭までスムーズにスクロール） */
 function goPreviousMonth() {
-  focusMonth(focusedMonth.value.subtract(1, 'month'), { smooth: true, alignTop: true });
+  focusMonth(focusedMonth.value.subtract(1, "month"), {
+    smooth: true,
+    alignTop: true,
+  });
 }
 
 /** 次月へ移動する（月ブロック先頭までスムーズにスクロール） */
 function goNextMonth() {
-  focusMonth(focusedMonth.value.add(1, 'month'), { smooth: true, alignTop: true });
+  focusMonth(focusedMonth.value.add(1, "month"), {
+    smooth: true,
+    alignTop: true,
+  });
 }
 
 /** 今日へ移動する */
@@ -588,11 +724,12 @@ function goToday() {
  * @returns {string[]} クラス名の配列
  */
 function getCellClass(day) {
-  const classes = ['day-cell'];
-  if (day.isPadding) classes.push('is-padding');
-  if (day.isToday) classes.push('is-today');
-  if (day.isSelected) classes.push('is-selected');
-  if (!day.isPadding && isInDragRange(day.date)) classes.push('is-in-drag-range');
+  const classes = ["day-cell"];
+  if (day.isPadding) classes.push("is-padding");
+  if (day.isToday) classes.push("is-today");
+  if (day.isSelected) classes.push("is-selected");
+  if (!day.isPadding && isInDragRange(day.date))
+    classes.push("is-in-drag-range");
   return classes;
 }
 
@@ -602,8 +739,10 @@ function getCellClass(day) {
  * @returns {string|undefined} 適用する色
  */
 function getDayNumberColor(day) {
-  if (isJapaneseHoliday(day.date)) return userStore.getHolidayColor(day.isPadding);
-  if (customHolidayDates.value.has(day.date.format('YYYY-MM-DD'))) return userStore.getCustomHolidayColor(false);
+  if (isJapaneseHoliday(day.date))
+    return userStore.getHolidayColor(day.isPadding);
+  if (customHolidayDates.value.has(day.date.format("YYYY-MM-DD")))
+    return userStore.getCustomHolidayColor(false);
   return userStore.getWeekendColor(day.date.day()) ?? undefined;
 }
 
@@ -618,7 +757,9 @@ watch(
 onMounted(async () => {
   await nextTick();
   // フォーカス中の月ブロック（中央）が見える位置へスクロールする
-  const monthEl = rfScroll.value?.querySelector(`[data-month="${focusedMonth.value.format('YYYY-MM')}"]`);
+  const monthEl = rfScroll.value?.querySelector(
+    `[data-month="${focusedMonth.value.format("YYYY-MM")}"]`,
+  );
   if (monthEl && rfScroll.value) {
     rfScroll.value.scrollTop = monthEl.offsetTop;
     lastScrollTop = rfScroll.value.scrollTop;
@@ -631,122 +772,270 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="calendar-month-vertical-view" :class="{ 'is-dragging': isRangeDragging }">
+  <div
+    class="calendar-month-vertical-view"
+    :class="{ 'is-dragging': isRangeDragging }"
+  >
     <div v-if="isFormPicking" class="form-pick-banner" role="status">
       <span>{{ pickBannerText }}</span>
-      <button type="button" @click="userStore.cancelFormDatePick()">キャンセル</button>
+      <button type="button" @click="userStore.cancelFormDatePick()">
+        キャンセル
+      </button>
     </div>
-    <header ref="rfToolbar" class="month-toolbar" :class="{ 'is-compact': isCompactToolbar }">
+    <header
+      ref="rfToolbar"
+      class="month-toolbar"
+      :class="{ 'is-compact': isCompactToolbar }"
+    >
       <div class="toolbar-left">
-        <button v-if="userStore.isMobile || userStore.isTablet" type="button" title="カレンダーを開閉" aria-label="カレンダーを開閉" @click="props.selectPane('nav')">
+        <button
+          v-if="userStore.isMobile || userStore.isTablet"
+          type="button"
+          title="カレンダーを開閉"
+          aria-label="カレンダーを開閉"
+          @click="props.selectPane('nav')"
+        >
           <IconBars size="1.25rem" />
         </button>
-        <button type="button" title="前月へ戻る" aria-label="前月へ戻る" v-if="userStore.isDesktop" @click="goPreviousMonth">
+        <button
+          type="button"
+          title="前月へ戻る"
+          aria-label="前月へ戻る"
+          v-if="userStore.isDesktop"
+          @click="goPreviousMonth"
+        >
           <IconCaretLeft size="1.25rem" />
         </button>
-        <button type="button" title="次月へ進む" aria-label="次月へ進む" v-if="userStore.isDesktop" @click="goNextMonth">
+        <button
+          type="button"
+          title="次月へ進む"
+          aria-label="次月へ進む"
+          v-if="userStore.isDesktop"
+          @click="goNextMonth"
+        >
           <IconCaretRight size="1.25rem" />
         </button>
       </div>
-      <h1>{{ monthTitle }}</h1>
+      <YearMonthJump :label="monthTitle" />
       <div class="toolbar-right">
         <template v-if="!isCompactToolbar">
-          <button type="button" title="今日に戻る" aria-label="今日に戻る" @click.prevent="goToday">
+          <button
+            type="button"
+            title="今日に戻る"
+            aria-label="今日に戻る"
+            @click.prevent="goToday"
+          >
             <IconArrowRotateLeft size="1.25rem" />
           </button>
-          <button type="button" title="イベントを検索" aria-label="イベントを検索" @click="router.push({ name: 'EventSearch' })">
+          <button
+            type="button"
+            title="イベントを検索"
+            aria-label="イベントを検索"
+            @click="router.push({ name: 'EventSearch' })"
+          >
             <IconMagnifyingGlass size="1.25rem" />
           </button>
-          <button type="button" title="自然言語で登録" aria-label="自然言語で登録" @click="router.push({ name: 'EventQuickAdd' })">
+          <button
+            type="button"
+            title="自然言語で登録"
+            aria-label="自然言語で登録"
+            @click="router.push({ name: 'EventQuickAdd' })"
+          >
             <IconWandMagicSparkles size="1.25rem" />
           </button>
-          <button type="button" title="月表示にする" aria-label="月表示にする" @click="userStore.setMainCalendarView('MONTH')">
+          <button
+            type="button"
+            title="月表示にする"
+            aria-label="月表示にする"
+            @click="userStore.setMainCalendarView('MONTH')"
+          >
             <IconCalendarDays size="1.25rem" />
           </button>
-          <button type="button" title="タイムライン表示にする" aria-label="タイムライン表示にする" @click="userStore.setMainCalendarView('WEEK')">
+          <button
+            type="button"
+            title="タイムライン表示にする"
+            aria-label="タイムライン表示にする"
+            @click="userStore.setMainCalendarView('WEEK')"
+          >
             <IconBarsStaggered size="1.25rem" />
           </button>
-          <button type="button" title="個人設定" aria-label="個人設定" @click="router.push({ name: 'UserConfig' })">
+          <button
+            type="button"
+            title="個人設定"
+            aria-label="個人設定"
+            @click="router.push({ name: 'UserConfig' })"
+          >
             <IconGear size="1.25rem" />
           </button>
         </template>
         <DropdownMenu v-else>
           <template #button>
-            <button type="button" title="月表示の操作" aria-label="月表示の操作">
+            <button
+              type="button"
+              title="月表示の操作"
+              aria-label="月表示の操作"
+            >
               <IconEllipsisVertical size="1.25rem" />
             </button>
           </template>
-          <button type="button" @click="goToday"><IconArrowRotateLeft size="1rem" />今日に戻る</button>
-          <button type="button" @click="router.push({ name: 'EventSearch' })"><IconMagnifyingGlass size="1rem" />イベントを検索</button>
-          <button type="button" @click="router.push({ name: 'EventQuickAdd' })"><IconWandMagicSparkles size="1rem" />自然言語で登録</button>
-          <button type="button" @click="userStore.setMainCalendarView('MONTH')"><IconCalendarDays size="1rem" />月表示にする</button>
-          <button type="button" @click="userStore.setMainCalendarView('WEEK')"><IconBarsStaggered size="1rem" />TL表示にする</button>
-          <button type="button" @click="router.push({ name: 'UserConfig' })"><IconGear size="1rem" />個人設定</button>
+          <button type="button" @click="goToday">
+            <IconArrowRotateLeft size="1rem" />今日に戻る
+          </button>
+          <button type="button" @click="router.push({ name: 'EventSearch' })">
+            <IconMagnifyingGlass size="1rem" />イベントを検索
+          </button>
+          <button type="button" @click="router.push({ name: 'EventQuickAdd' })">
+            <IconWandMagicSparkles size="1rem" />自然言語で登録
+          </button>
+          <button type="button" @click="userStore.setMainCalendarView('MONTH')">
+            <IconCalendarDays size="1rem" />月表示にする
+          </button>
+          <button type="button" @click="userStore.setMainCalendarView('WEEK')">
+            <IconBarsStaggered size="1rem" />TL表示にする
+          </button>
+          <button type="button" @click="router.push({ name: 'UserConfig' })">
+            <IconGear size="1rem" />個人設定
+          </button>
         </DropdownMenu>
       </div>
     </header>
 
-    <div ref="rfScroll" class="vertical-scroll" :style="calendarTextSizeStyle" @scroll.passive="handleScroll" @scrollend="resumeScrollDetection" @wheel="resumeScrollDetection" @touchstart.passive="resumeScrollDetection">
+    <div
+      ref="rfScroll"
+      class="vertical-scroll"
+      :style="calendarTextSizeStyle"
+      @scroll.passive="handleScroll"
+      @scrollend="resumeScrollDetection"
+      @wheel="resumeScrollDetection"
+      @touchstart.passive="resumeScrollDetection"
+    >
       <div class="month-header">
-        <div v-for="(map, i) in userStore.daysMap" :key="i" :style="{ color: map.weekendColor ?? undefined }">
+        <div
+          v-for="(map, i) in userStore.daysMap"
+          :key="i"
+          :style="{ color: map.weekendColor ?? undefined }"
+        >
           {{ map.label }}
         </div>
       </div>
 
-      <div class="month-grid" :class="{ 'variable-cell-height': userStore.calendarCellHeightMode === 'VARIABLE' }" :style="gridStyle">
+      <div
+        class="month-grid"
+        :class="{
+          'variable-cell-height':
+            userStore.calendarCellHeightMode === 'VARIABLE',
+        }"
+        :style="gridStyle"
+      >
         <div
           v-for="day in days"
           :key="day.key"
           :class="getCellClass(day)"
           :data-month="!day.isPadding ? day.date.format('YYYY-MM') : undefined"
-          :data-date="!day.isPadding ? day.date.format('YYYY-MM-DD') : undefined"
+          :data-date="
+            !day.isPadding ? day.date.format('YYYY-MM-DD') : undefined
+          "
           @click="!day.isPadding && handleCellClick(day.date)"
-          @contextmenu="!day.isPadding && handleCellContextMenu($event, day.date)"
+          @contextmenu="
+            !day.isPadding && handleCellContextMenu($event, day.date)
+          "
           @mousedown="!day.isPadding && handleCellMouseDown($event, day.date)"
           @mouseenter="!day.isPadding && handleCellMouseEnter(day.date)"
           @touchstart="!day.isPadding && startCellLongPress($event, day.date)"
           @touchmove="handleCellTouchMove"
           @touchend="finishCellTouch"
-          @touchcancel="finishCellTouch">
+          @touchcancel="finishCellTouch"
+        >
           <template v-if="!day.isPadding">
             <div class="day-num" :style="{ color: getDayNumberColor(day) }">
               {{ day.date.date() }}
             </div>
 
             <div class="events-stack">
-              <div v-for="(slot, i) in getDayEvents(day.date)" :key="i" class="event-slot">
+              <div
+                v-for="(slot, i) in getDayEvents(day.date)"
+                :key="i"
+                class="event-slot"
+              >
                 <div
                   v-if="slot"
                   class="event-bar"
-                  :class="{ 'is-start': slot.isStart, 'is-end': slot.isEnd, 'is-continued': !slot.isStart, 'is-label-start': slot.isLabelStart, 'is-touch-background': userStore.isMobile || userStore.isTablet, 'is-dot': isDotEventBar(slot.event) }"
-                  :style="{ ...getEventBarStyle(slot.event), width: slot.isLabelStart ? `calc(${slot.spanDays * 100}% + ${(slot.spanDays - 1) * 4}px)` : undefined }"
+                  :class="{
+                    'is-start': slot.isStart,
+                    'is-end': slot.isEnd,
+                    'is-continued': !slot.isStart,
+                    'is-label-start': slot.isLabelStart,
+                    'is-touch-background':
+                      userStore.isMobile || userStore.isTablet,
+                    'is-dot': isDotEventBar(slot.event),
+                  }"
+                  :style="{
+                    ...getEventBarStyle(slot.event),
+                    width: slot.isLabelStart
+                      ? `calc(${slot.spanDays * 100}% + ${(slot.spanDays - 1) * 4}px)`
+                      : undefined,
+                  }"
                   @click="(e) => handleEventClick(e, slot.event, day.date)"
-                  @mousedown.stop>
+                  @mousedown.stop
+                >
                   <span v-if="slot.isLabelStart">
-                    <i v-if="isDotEventBar(slot.event)" class="event-dot" :style="{ backgroundColor: getEventDotColor(slot.event) }"></i>
-                    <InlineEmoji :emoji="slot.event.icon" /> {{ slot.event.summary }}
-                    <IconUserGroup v-if="hasOtherAttendees(slot.event)" size="0.75rem" />
+                    <i
+                      v-if="isDotEventBar(slot.event)"
+                      class="event-dot"
+                      :style="{ backgroundColor: getEventDotColor(slot.event) }"
+                    ></i>
+                    <InlineEmoji :emoji="slot.event.icon" />
+                    {{ slot.event.summary }}
+                    <IconUserGroup
+                      v-if="hasOtherAttendees(slot.event)"
+                      size="0.75rem"
+                    />
                   </span>
                 </div>
               </div>
             </div>
-            <span v-if="getHiddenEventCount(day.date) > 0" class="hidden-event-count" :aria-label="`非表示の予定 ${getHiddenEventCount(day.date)}件`"> +{{ getHiddenEventCount(day.date) }} </span>
+            <span
+              v-if="getHiddenEventCount(day.date) > 0"
+              class="hidden-event-count"
+              :aria-label="`非表示の予定 ${getHiddenEventCount(day.date)}件`"
+            >
+              +{{ getHiddenEventCount(day.date) }}
+            </span>
           </template>
         </div>
       </div>
     </div>
 
-    <DropdownMenu ref="rfDropdownForContextMenu" @close="contextMenuRange = null">
-      <button type="button" @click="onSelectContextMenu('CreateEvent')">予定を作成</button>
-      <button type="button" @click="onSelectContextMenu('CreateFromTemplate')">テンプレートから作成</button>
-      <button v-if="isContextRangeHoliday" type="button" @click="onSelectContextMenu('UnsetCustomHoliday')">休日から解除</button>
-      <button v-else type="button" @click="onSelectContextMenu('SetCustomHoliday')">休日にする</button>
+    <DropdownMenu
+      ref="rfDropdownForContextMenu"
+      @close="contextMenuRange = null"
+    >
+      <button type="button" @click="onSelectContextMenu('CreateEvent')">
+        予定を作成
+      </button>
+      <button type="button" @click="onSelectContextMenu('CreateFromTemplate')">
+        テンプレートから作成
+      </button>
+      <button
+        v-if="isContextRangeHoliday"
+        type="button"
+        @click="onSelectContextMenu('UnsetCustomHoliday')"
+      >
+        休日から解除
+      </button>
+      <button
+        v-else
+        type="button"
+        @click="onSelectContextMenu('SetCustomHoliday')"
+      >
+        休日にする
+      </button>
     </DropdownMenu>
   </div>
 </template>
 
 <style lang="scss" scoped>
-@use '@/styles/vars.scss' as var;
+@use "@/styles/vars.scss" as var;
 $event-bar-radius: 4px;
 
 .calendar-month-vertical-view {

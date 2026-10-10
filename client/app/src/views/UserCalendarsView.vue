@@ -1,22 +1,53 @@
 <script setup>
-import { useAuthStore } from '@/stores/auth.js';
-import { useUserStore } from '@/stores/user.js';
-import MiniCalendar from '@/components/MiniCalendar.vue';
-import AskLoginMessage from '@/components/AskLoginMessage.vue';
-import GoogleLogin from '@/components/GoogleLogin.vue';
-import UserCalendarsViewCalendarList from '@/components/items/UserCalendarsViewCalendarList.vue';
-import UserCalendarsViewSessionList from '@/components/items/UserCalendarsViewSessionList.vue';
+import { computed } from "vue";
+import { useAuthStore } from "@/stores/auth.js";
+import { useUserStore } from "@/stores/user.js";
+import MiniCalendar from "@/components/MiniCalendar.vue";
+import AskLoginMessage from "@/components/AskLoginMessage.vue";
+import GoogleLogin from "@/components/GoogleLogin.vue";
+import IconCaretLeft from "@/components/icons/IconCaretLeft.vue";
+import IconCaretRight from "@/components/icons/IconCaretRight.vue";
+import UserCalendarsViewCalendarList from "@/components/items/UserCalendarsViewCalendarList.vue";
+import UserCalendarsViewSessionList from "@/components/items/UserCalendarsViewSessionList.vue";
 
 const authStore = useAuthStore();
 const userStore = useUserStore();
+
+/** @type {ComputedRef<boolean>} デスクトップ表示で Nav ペインが細幅に畳まれているか */
+const isNavCollapsed = computed(
+  () => userStore.isDesktop && userStore.navPaneCollapsed,
+);
 </script>
 
 <template>
-  <div class="user-calendars-view">
+  <div class="user-calendars-view" :class="{ 'is-collapsed': isNavCollapsed }">
     <div class="heading">
-      <p>Orbit カレンダー</p>
+      <template v-if="!isNavCollapsed">
+        <p>Orbit カレンダー</p>
+        <button
+          v-if="userStore.isDesktop"
+          type="button"
+          class="nav-collapse-button"
+          title="Nav ペインを畳む"
+          aria-label="Nav ペインを畳む"
+          @click="userStore.setNavPaneCollapsed(true)"
+        >
+          <IconCaretLeft size="1rem" />
+        </button>
+      </template>
+      <button
+        v-else
+        type="button"
+        class="nav-collapse-button"
+        title="Nav ペインを展開する"
+        aria-label="Nav ペインを展開する"
+        @click="userStore.setNavPaneCollapsed(false)"
+      >
+        <IconCaretRight size="1rem" />
+      </button>
     </div>
 
+    <template v-if="!isNavCollapsed">
       <MiniCalendar v-if="userStore.useMiniCalendar" />
 
       <AskLoginMessage v-if="!authStore.isAuthenticated">
@@ -28,6 +59,7 @@ const userStore = useUserStore();
 
       <UserCalendarsViewCalendarList />
       <UserCalendarsViewSessionList />
+    </template>
   </div>
 </template>
 
@@ -50,7 +82,7 @@ const userStore = useUserStore();
 }
 .heading {
   display: flex;
-  justify-content: flex-start;
+  justify-content: space-between;
   align-items: center;
   padding: var(--space-sm) 0;
 
@@ -60,5 +92,21 @@ const userStore = useUserStore();
     font-size: 1.6rem;
     font-weight: bold;
   }
+}
+
+.nav-collapse-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xxs);
+  border-radius: var(--border-radius);
+
+  &:hover {
+    background-color: var(--bg-2);
+  }
+}
+
+.user-calendars-view.is-collapsed .heading {
+  justify-content: center;
 }
 </style>

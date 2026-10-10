@@ -12,9 +12,9 @@ export function setTokenRefresher(refresher) {
 }
 
 /** @type {string} Google Photos Library API のベース URL */
-export const API_BASE_URL = (import.meta.env.VITE_GOOGLE_PHOTOS_LIBRARY_API_BASE_URL || 'https://photoslibrary.googleapis.com/v1').replace(/\/+$/, '');
+export const API_BASE_URL = (import.meta.env.VITE_GOOGLE_API_BASE_URL_PHOTOSLIBRARY).replace(/\/+$/, '');
 /** @type {string} Google Photos Picker API のベース URL */
-export const PICKER_API_BASE_URL = (import.meta.env.VITE_GOOGLE_PHOTOS_PICKER_API_BASE_URL || 'https://photospicker.googleapis.com/v1').replace(/\/+$/, '');
+export const PICKER_API_BASE_URL = (import.meta.env.VITE_GOOGLE_API_BASE_URL_PHOTOSPICKER).replace(/\/+$/, '');
 
 /**
  * ============================================================================

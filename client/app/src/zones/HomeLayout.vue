@@ -1,10 +1,10 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
-import { useUserStore } from '@/stores/user.js';
-import SmHomeZone from '@/zones/SmHomeZone.vue';
-import MdHomeZone from '@/zones/MdHomeZone.vue';
-import LgHomeZone from '@/zones/LgHomeZone.vue';
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
+import { useUserStore } from "@/stores/user.js";
+import SmHomeZone from "@/zones/SmHomeZone.vue";
+import MdHomeZone from "@/zones/MdHomeZone.vue";
+import LgHomeZone from "@/zones/LgHomeZone.vue";
 
 const route = useRoute();
 const userStore = useUserStore();
@@ -18,7 +18,11 @@ const subResizeStartWidth = ref(360);
 const MOBILE_SUB_MIN_HEIGHT = 160;
 /** 収納時にメニューバーの下に残す余白（コンテンツのボーダー・下マージン分） */
 const MOBILE_SUB_COLLAPSED_GAP = 12;
-const mobileSubPaneHeight = ref(typeof window !== 'undefined' ? Math.min(300, Math.max(MOBILE_SUB_MIN_HEIGHT, window.innerHeight * 0.34)) : 300);
+const mobileSubPaneHeight = ref(
+  typeof window !== "undefined"
+    ? Math.min(300, Math.max(MOBILE_SUB_MIN_HEIGHT, window.innerHeight * 0.34))
+    : 300,
+);
 const isCollapsingMobileSub = ref(false);
 const isResizingMobileSub = ref(false);
 const mobileSubResizeStartX = ref(0);
@@ -30,10 +34,12 @@ const mobileSubResizeStartTime = ref(0);
 const mobileSubContent = ref(null);
 /** @type {import('vue').Ref<{x: number, y: number}|null>} */
 const navSwipeStart = ref(null);
-const activePane = ref('main');
+const activePane = ref("main");
 
 /** @type {ComputedRef<boolean>} モバイル下部ペインがメニューバーだけ残して収納されているか */
-const isMobileSubCollapsed = computed(() => mobileSubPaneHeight.value < MOBILE_SUB_MIN_HEIGHT);
+const isMobileSubCollapsed = computed(
+  () => mobileSubPaneHeight.value < MOBILE_SUB_MIN_HEIGHT,
+);
 
 const layoutComponent = computed(() => {
   if (userStore.isMobile) return SmHomeZone;
@@ -52,14 +58,20 @@ function selectPane(pane) {
  */
 function collapsedSubPaneHeight() {
   const content = mobileSubContent.value;
-  const menuBar = content instanceof HTMLElement ? content.querySelector('.menu-bar') : null;
-  if (!(content instanceof HTMLElement) || !(menuBar instanceof HTMLElement)) return 56;
-  return Math.round(menuBar.getBoundingClientRect().bottom - content.getBoundingClientRect().top + MOBILE_SUB_COLLAPSED_GAP);
+  const menuBar =
+    content instanceof HTMLElement ? content.querySelector(".menu-bar") : null;
+  if (!(content instanceof HTMLElement) || !(menuBar instanceof HTMLElement))
+    return 56;
+  return Math.round(
+    menuBar.getBoundingClientRect().bottom -
+      content.getBoundingClientRect().top +
+      MOBILE_SUB_COLLAPSED_GAP,
+  );
 }
 
 /** モバイル表示の下部ペインを MenuBar だけ残して下へ収納する */
 function collapseMobileSubPane() {
-  if (!userStore.isMobile || activePane.value === 'sub') return;
+  if (!userStore.isMobile || activePane.value === "sub") return;
   isCollapsingMobileSub.value = true;
   mobileSubPaneHeight.value = collapsedSubPaneHeight();
   window.setTimeout(() => {
@@ -79,7 +91,12 @@ function expandMobileSubPane() {
 
 /** @param {TouchEvent} evt */
 function startNavSwipe(evt) {
-  if (userStore.isDesktop || activePane.value !== 'nav' || evt.touches.length !== 1) return;
+  if (
+    userStore.isDesktop ||
+    activePane.value !== "nav" ||
+    evt.touches.length !== 1
+  )
+    return;
   const touch = evt.touches[0];
   navSwipeStart.value = { x: touch.clientX, y: touch.clientY };
 }
@@ -91,18 +108,21 @@ function moveNavSwipe(evt) {
   const touch = evt.touches[0];
   const deltaX = touch.clientX - start.x;
   const deltaY = touch.clientY - start.y;
-  if (deltaX < -12 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25) evt.preventDefault();
+  if (deltaX < -12 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25)
+    evt.preventDefault();
 }
 
 /** @param {TouchEvent} evt */
 function finishNavSwipe(evt) {
   const start = navSwipeStart.value;
   navSwipeStart.value = null;
-  if (!start || activePane.value !== 'nav' || evt.changedTouches.length !== 1) return;
+  if (!start || activePane.value !== "nav" || evt.changedTouches.length !== 1)
+    return;
   const touch = evt.changedTouches[0];
   const deltaX = touch.clientX - start.x;
   const deltaY = touch.clientY - start.y;
-  if (deltaX <= -60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25) activePane.value = 'main';
+  if (deltaX <= -60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25)
+    activePane.value = "main";
 }
 
 /** ナビゲーションのスワイプをキャンセルする */
@@ -112,13 +132,18 @@ function cancelNavSwipe() {
 
 /** @param {TouchEvent} evt */
 function handleMobileSubContentTouchStart(evt) {
-  if (evt.target instanceof Element && evt.target.closest('.menu-bar')) return;
+  if (evt.target instanceof Element && evt.target.closest(".menu-bar")) return;
   evt.stopPropagation();
 }
 
 /** @param {TouchEvent} evt */
 function startMobileSubResize(evt) {
-  if (!userStore.isMobile || activePane.value === 'sub' || evt.touches.length !== 1) return;
+  if (
+    !userStore.isMobile ||
+    activePane.value === "sub" ||
+    evt.touches.length !== 1
+  )
+    return;
   const touch = evt.touches[0];
   isResizingMobileSub.value = true;
   mobileSubResizeStartX.value = touch.clientX;
@@ -134,14 +159,26 @@ function resizeMobileSub(evt) {
   const touch = evt.touches[0];
   if (evt.cancelable) evt.preventDefault();
   const maxHeight = Math.max(240, window.innerHeight);
-  const nextHeight = mobileSubResizeStartHeight.value + mobileSubResizeStartY.value - touch.clientY;
+  const nextHeight =
+    mobileSubResizeStartHeight.value +
+    mobileSubResizeStartY.value -
+    touch.clientY;
   // 収納状態からのドラッグは収納高さを下限として自由に動かし、離した時にスナップ判定する
-  const minHeight = isMobileSubCollapsed.value ? mobileSubResizeStartHeight.value : MOBILE_SUB_MIN_HEIGHT;
-  if (nextHeight >= maxHeight && mobileSubContent.value instanceof HTMLElement) {
+  const minHeight = isMobileSubCollapsed.value
+    ? mobileSubResizeStartHeight.value
+    : MOBILE_SUB_MIN_HEIGHT;
+  if (
+    nextHeight >= maxHeight &&
+    mobileSubContent.value instanceof HTMLElement
+  ) {
     mobileSubPaneHeight.value = maxHeight;
-    mobileSubContent.value.scrollTop += mobileSubResizeLastY.value - touch.clientY;
+    mobileSubContent.value.scrollTop +=
+      mobileSubResizeLastY.value - touch.clientY;
   } else {
-    mobileSubPaneHeight.value = Math.min(maxHeight, Math.max(minHeight, nextHeight));
+    mobileSubPaneHeight.value = Math.min(
+      maxHeight,
+      Math.max(minHeight, nextHeight),
+    );
   }
   mobileSubResizeLastY.value = touch.clientY;
 }
@@ -156,7 +193,7 @@ function stopMobileSubResize(evt) {
   isResizingMobileSub.value = false;
   const touch = evt?.changedTouches?.[0];
   // タップ・フリック判定は touchend のみ（touchcancel では座標が不正確なため何もしない）
-  if (!touch || evt?.type !== 'touchend') return;
+  if (!touch || evt?.type !== "touchend") return;
   const deltaX = touch.clientX - mobileSubResizeStartX.value;
   const deltaY = touch.clientY - mobileSubResizeStartY.value;
   const elapsed = Date.now() - mobileSubResizeStartTime.value;
@@ -166,7 +203,12 @@ function stopMobileSubResize(evt) {
     return;
   }
   // 収納中のタップ → 画面の半分まで再表示
-  if (isMobileSubCollapsed.value && Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10 && elapsed < 400) {
+  if (
+    isMobileSubCollapsed.value &&
+    Math.abs(deltaX) < 10 &&
+    Math.abs(deltaY) < 10 &&
+    elapsed < 400
+  ) {
     expandMobileSubPane();
     return;
   }
@@ -182,16 +224,20 @@ function stopMobileSubResize(evt) {
 
 /** @param {unknown} routeName */
 function selectPaneForRoute(routeName) {
-  if (userStore.isMobile) activePane.value = routeName === 'Home' ? 'main' : 'sub';
-  else activePane.value = 'main';
+  // EventQuickAdd はカレンダーグリッド上にフローティング表示するため、モバイルでも中央ペインを背面に出す
+  if (userStore.isMobile)
+    activePane.value =
+      routeName === "Home" || routeName === "EventQuickAdd" ? "main" : "sub";
+  else activePane.value = "main";
 }
 
 /** @param {PointerEvent} evt */
 function startResizeNav(evt) {
   isResizingNav.value = true;
-  if (evt.currentTarget instanceof HTMLElement) evt.currentTarget.setPointerCapture(evt.pointerId);
-  document.body.style.cursor = 'col-resize';
-  document.body.style.userSelect = 'none';
+  if (evt.currentTarget instanceof HTMLElement)
+    evt.currentTarget.setPointerCapture(evt.pointerId);
+  document.body.style.cursor = "col-resize";
+  document.body.style.userSelect = "none";
 }
 
 /** @param {PointerEvent} evt */
@@ -199,20 +245,24 @@ function startResizeSub(evt) {
   isResizingSub.value = true;
   subResizeStartX.value = evt.clientX;
   subResizeStartWidth.value = subWidth.value;
-  if (evt.currentTarget instanceof HTMLElement) evt.currentTarget.setPointerCapture(evt.pointerId);
-  document.body.style.cursor = 'col-resize';
-  document.body.style.userSelect = 'none';
+  if (evt.currentTarget instanceof HTMLElement)
+    evt.currentTarget.setPointerCapture(evt.pointerId);
+  document.body.style.cursor = "col-resize";
+  document.body.style.userSelect = "none";
 }
 
 /** @param {PointerEvent} evt */
 function handleResizeMove(evt) {
   if (isResizingNav.value) {
     const newWidth = evt.clientX;
-    if (userStore.isDesktop && newWidth >= 260 && newWidth <= 600) navWidth.value = newWidth; // デスクトップは 260px～600px の範囲でリサイズ可能
+    if (userStore.isDesktop && newWidth >= 260 && newWidth <= 600)
+      navWidth.value = newWidth; // デスクトップは 260px～600px の範囲でリサイズ可能
     else if (newWidth >= 260 && newWidth <= 460) navWidth.value = newWidth; // タブレットは 260px～460px の範囲でリサイズ可能
   } else if (isResizingSub.value && subResizeStartX.value !== null) {
-    const newWidth = subResizeStartWidth.value + subResizeStartX.value - evt.clientX;
-    if (userStore.isDesktop && newWidth >= 260 && newWidth <= 600) subWidth.value = newWidth; // デスクトップは 260px～600px の範囲でリサイズ可能
+    const newWidth =
+      subResizeStartWidth.value + subResizeStartX.value - evt.clientX;
+    if (userStore.isDesktop && newWidth >= 260 && newWidth <= 600)
+      subWidth.value = newWidth; // デスクトップは 260px～600px の範囲でリサイズ可能
     else if (newWidth >= 260 && newWidth <= 460) subWidth.value = newWidth; // タブレットは 260px～460px の範囲でリサイズ可能
   }
 }
@@ -222,8 +272,8 @@ function stopResize() {
   isResizingNav.value = false;
   isResizingSub.value = false;
   subResizeStartX.value = null;
-  document.body.style.cursor = '';
-  document.body.style.userSelect = '';
+  document.body.style.cursor = "";
+  document.body.style.userSelect = "";
 }
 
 watch(navWidth, (width) => userStore.setNavPaneWidth(width));
@@ -241,8 +291,9 @@ watch(
 watch(
   () => userStore.formDatePick,
   (picking) => {
-    if (picking) activePane.value = 'main';
-    else if (userStore.isMobile && route.name !== 'Home') activePane.value = 'sub';
+    if (picking) activePane.value = "main";
+    else if (userStore.isMobile && route.name !== "Home")
+      activePane.value = "sub";
   },
 );
 watch(
@@ -251,13 +302,13 @@ watch(
 );
 
 onMounted(() => {
-  window.addEventListener('pointermove', handleResizeMove);
-  window.addEventListener('pointerup', stopResize);
+  window.addEventListener("pointermove", handleResizeMove);
+  window.addEventListener("pointerup", stopResize);
 });
 
 onUnmounted(() => {
-  window.removeEventListener('pointermove', handleResizeMove);
-  window.removeEventListener('pointerup', stopResize);
+  window.removeEventListener("pointermove", handleResizeMove);
+  window.removeEventListener("pointerup", stopResize);
 });
 </script>
 
@@ -282,7 +333,8 @@ onUnmounted(() => {
     :handle-mobile-sub-content-touch-start="handleMobileSubContentTouchStart"
     :start-mobile-sub-resize="startMobileSubResize"
     :resize-mobile-sub="resizeMobileSub"
-    :stop-mobile-sub-resize="stopMobileSubResize" />
+    :stop-mobile-sub-resize="stopMobileSubResize"
+  />
 </template>
 
 <style lang="scss">

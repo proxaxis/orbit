@@ -1,13 +1,13 @@
-name: orbit_prod
+name: orbit_production
 
 services:
   # Redis
   redis:
     image: redis:7-alpine
-    container_name: orbit_redis_prod
+    container_name: orbit_redis_production
+    restart: unless-stopped
     volumes:
       - nv_redis:/data
-    restart: unless-stopped
     command: redis-server --port 16379
 
   # Server
@@ -15,18 +15,17 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    image: orbit-server:${RELEASE_VERSION:-temp}
-    container_name: orbit_server_prod
+    image: orbit-server:production
+    container_name: orbit_server_production
     restart: unless-stopped
     ports:
       - "18787:18787"
     env_file:
-      - .env
+      - .env.production
     environment:
       - NODE_ENV=production
     volumes:
-      - ./server/app:/app
-      - /app/node_modules
+      - nv_realm:/app/.realm
     depends_on:
       - redis
     tty: true
@@ -37,18 +36,15 @@ services:
     build:
       context: ./client
       dockerfile: Dockerfile
-    image: orbit-client:${RELEASE_VERSION:-temp}
-    container_name: orbit_client_prod
+    image: orbit-client:production
+    container_name: orbit_client_production
     restart: unless-stopped
     ports:
       - "15173:15173"
     env_file:
-      - .env
+      - .env.production
     environment:
       - NODE_ENV=production
-    # volumes:
-    #   - ./client/app:/app
-    #   - /app/node_modules
     depends_on:
       - server
     tty: true
@@ -57,14 +53,16 @@ services:
   # Cloudflare Tunnel
   tunnel:
     image: cloudflare/cloudflared:latest
-    container_name: orbit_tunnel_prod
+    container_name: orbit_tunnel_production
     restart: unless-stopped
+    env_file:
+      - .env
     command: tunnel --no-autoupdate run
     environment:
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
-      - client
       - server
-
+      - client
 volumes:
   nv_redis:
+  nv_realm:

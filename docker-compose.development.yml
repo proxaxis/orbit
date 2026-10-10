@@ -1,10 +1,10 @@
-name: orbit
+name: orbit_development
 
 services:
   # Redis
   redis:
     image: redis:7-alpine
-    container_name: orbit_redis
+    container_name: orbit_redis_dev
     volumes:
       - nv_redis:/data
 
@@ -13,17 +13,18 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    image: orbit-server:latest
-    container_name: orbit_server
+    image: orbit-server:development
+    container_name: orbit_server_dev
     ports:
       - "8787:8787"
     env_file:
-      - .env
+      - .env.development
     environment:
       - NODE_ENV=development
     volumes:
       - ./server/app:/app
       - /app/node_modules
+      - nv_realm:/app/.realm
     depends_on:
       - redis
     tty: true
@@ -35,12 +36,12 @@ services:
     build:
       context: ./client
       dockerfile: Dockerfile
-    image: orbit-client:latest
-    container_name: orbit_client
+    image: orbit-client:development
+    container_name: orbit_client_dev
     ports:
       - "5173:5173"
     env_file:
-      - .env
+      - .env.development
     environment:
       - NODE_ENV=development
     volumes:
@@ -54,3 +55,4 @@ services:
 
 volumes:
   nv_redis:
+  nv_realm:

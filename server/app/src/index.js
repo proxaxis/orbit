@@ -8,13 +8,63 @@ import { google } from 'googleapis';
 import Redis from 'ioredis';
 import webpush from 'web-push';
 
+/**
+ * 環境変数
+ * @typedef {object} EnvironmentVariables
+ * @property {string} NODE_ENV
+ * @property {string} GOOGLE_CLIENT_ID
+ * @property {string} GOOGLE_CLIENT_SECRET
+ * @property {string} GOOGLE_REDIRECT_URI_AUTH
+ * @property {string} GOOGLE_REDIRECT_URI_PHOTOS
+ * @property {string} REDIS_HOST
+ * @property {number} REDIS_PORT
+ * @property {string} REALM_PATH
+ * @property {string} BFF_SESSION_SECRET
+ * @property {number} BFF_APP_PORT
+ * @property {string} VITE_CLIENT_APP_BASE_URL
+ * @property {string} VAPID_PUBLIC_KEY
+ * @property {string} VAPID_PRIVATE_KEY
+ * @property {string} VAPID_SUBJECT
+ */
+
+/** @type {EnvironmentVariables} @throws {Error} 未定義について本番環境では例外を投げる */
+const env = (() => {
+  const names = [
+    'NODE_ENV',
+    'VITE_CLIENT_APP_BASE_URL',
+    'GOOGLE_CLIENT_ID',
+    'GOOGLE_CLIENT_SECRET',
+    'GOOGLE_REDIRECT_URI_AUTH',
+    'GOOGLE_REDIRECT_URI_PHOTOS',
+    'BFF_SESSION_SECRET',
+    'BFF_APP_PORT',
+    'REDIS_HOST',
+    'REDIS_PORT',
+    'REALM_PATH',
+    'VAPID_PUBLIC_KEY',
+    'VAPID_PRIVATE_KEY',
+    'VAPID_SUBJECT',
+  ];
+
+  const vars = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+
+  const missing = names.filter((name) => !vars[name]);
+  if (process.env.NODE_ENV === 'production' && missing.length) throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+
+  return /** @type {EnvironmentVariables} */ ({
+    ...vars,
+    REDIS_PORT: Number(vars.REDIS_PORT),
+    BFF_APP_PORT: Number(vars.BFF_APP_PORT),
+  });
+})();
+
 const app = new Hono();
 
 // Redis クライアント初期化
 const redis = new Redis({
-  host: process.env.REDIS_HOST,
-  port: Number(process.env.REDIS_PORT),
-  password: process.env.REDIS_PASSWORD,
+  host: env.REDIS_HOST,
+  port: env.REDIS_PORT,
+  password: undefined,
   lazyConnect: false,
 });
 
@@ -35,16 +85,7 @@ const getPhotoSharingKey = (/** @type {string} */ sessionId) =>
 const getPhotoSharingStateKey = (/** @type {string} */ state) => `photo-sharing-state:${state}`;
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30日（Cookieの有効期限と揃える）
 const PHOTO_SHARING_STATE_TTL_SECONDS = 60 * 10; // state の有効期限は10分
-const SESSION_SECRET =
-  process.env.SESSION_SECRET ?? 'E3LgvqwIuHPlBTmUBKtoi0KM99HcIObfAPeEaEy732YKx6YDm20sxIfCHKlWxmrF';
-
-// 認可完了後にリダイレクトするフロントエンドのオリジン
-const APP_ORIGIN = process.env.APP_ORIGIN ?? process.env.CLIENT_URL ?? '';
-
-// 追加スコープ認可のコールバック URI（Google Cloud Console に登録が必要）
-const PHOTO_SHARING_REDIRECT_URI =
-  process.env.PHOTO_SHARING_REDIRECT_URI ??
-  `${new URL(process.env.GOOGLE_REDIRECT_URI).origin}/enable?t=photo-sharing`;
+const SESSION_SECRET = env.BFF_SESSION_SECRET;
 
 const PHOTO_SHARING_SCOPES = [
   'https://www.googleapis.com/auth/photoslibrary.appendonly',
@@ -57,20 +98,20 @@ const PHOTO_SHARING_SCOPES = [
 // applicationServerKey が変わると既存購読への送信が拒否されるため、
 // 本番では VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY を固定して設定すること
 const vapidKeys =
-  process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY
+  env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY
     ? {
-        publicKey: process.env.VAPID_PUBLIC_KEY,
-        privateKey: process.env.VAPID_PRIVATE_KEY,
+        publicKey: env.VAPID_PUBLIC_KEY,
+        privateKey: env.VAPID_PRIVATE_KEY,
       }
     : webpush.generateVAPIDKeys();
-if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {
   console.warn(
     'VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY are not set; using ephemeral VAPID keys. ' +
       'Existing push subscriptions will break on restart.'
   );
 }
 webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT ?? 'mailto:webpush@localhost',
+  env.VAPID_SUBJECT ?? 'mailto:webpush@localhost',
   vapidKeys.publicKey,
   vapidKeys.privateKey
 );
@@ -118,7 +159,7 @@ const parsePromptParam = (raw) => {
 app.use(
   '*',
   cors({
-    origin: APP_ORIGIN,
+    origin: env.VITE_CLIENT_APP_BASE_URL,
     credentials: true,
   })
 );
@@ -126,10 +167,10 @@ app.use(
 /**
  * Google OAuth2 クライアント初期化
  */
-const getOAuth2Client = (redirectUri = process.env.GOOGLE_REDIRECT_URI) =>
+const getOAuth2Client = (redirectUri = env.GOOGLE_REDIRECT_URI_AUTH) =>
   new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
+    env.GOOGLE_CLIENT_ID,
+    env.GOOGLE_CLIENT_SECRET,
     redirectUri
   );
 
@@ -276,7 +317,7 @@ app.get('/auth/login', (c) => {
 });
 
 // OAuth コールバック - 認可コードからトークンを取得し、Redisに保存して HttpOnly Cookie を発行
-app.get('/auth/callback', async (c) => {
+app.get('/auth', async (c) => {
   const code = c.req.query('code');
   if (!code) {
     return c.text('Authorization code missing', 400);
@@ -305,14 +346,14 @@ app.get('/auth/callback', async (c) => {
     SESSION_SECRET,
     {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: env.NODE_ENV === 'production',
       sameSite: 'Lax',
       path: '/',
       maxAge: SESSION_TTL_SECONDS,
     }
   );
 
-  return c.redirect(APP_ORIGIN);
+  return c.redirect(`${env.VITE_CLIENT_APP_BASE_URL}/authorized`);
 });
 
 // Photo Sharing の追加スコープ認可を開始 - 既存セッションに Photos の権限を追加するため
@@ -339,7 +380,7 @@ app.get('/auth/photo-sharing', async (c) => {
     PHOTO_SHARING_STATE_TTL_SECONDS
   );
 
-  const client = getOAuth2Client(PHOTO_SHARING_REDIRECT_URI);
+  const client = getOAuth2Client(env.GOOGLE_REDIRECT_URI_PHOTOS);
 
   const authUrl = client.generateAuthUrl({
     access_type: 'offline',
@@ -354,7 +395,6 @@ app.get('/auth/photo-sharing', async (c) => {
 
 // 追加スコープ認可のコールバック - t パラメータで種別を判別してトークンを交換し、
 // Photos 用リフレッシュトークンをセッションに紐づけて保存する。
-// 成否にかかわらずフロントの /enable?t=photo-sharing へリダイレクトする
 app.get('/enable', async (c) => {
   const t = c.req.query('t');
 
@@ -362,13 +402,12 @@ app.get('/enable', async (c) => {
     return c.text('Unsupported enable type', 400);
   }
 
-  const frontRedirect = `${APP_ORIGIN}/enable?t=photo-sharing`;
   const code = c.req.query('code');
   const state = c.req.query('state');
 
   // code / state がない場合（ユーザーが同意を拒否した場合等）もフロントへ戻す
   if (!code || !state) {
-    return c.redirect(frontRedirect);
+    return c.redirect(`${env.VITE_CLIENT_APP_BASE_URL}/unauthorized?t=photo-sharing`);
   }
 
   // state から認可フローを開始したセッションを復元（ワンタイム利用）
@@ -380,11 +419,11 @@ app.get('/enable', async (c) => {
 
   if (!sessionId || !(await redis.exists(getSessionKey(sessionId)))) {
     console.warn('Photo sharing callback with invalid or expired state');
-    return c.redirect(frontRedirect);
+    return c.redirect(`${env.VITE_CLIENT_APP_BASE_URL}/unauthorized?t=photo-sharing`);
   }
 
   try {
-    const client = getOAuth2Client(PHOTO_SHARING_REDIRECT_URI);
+    const client = getOAuth2Client(env.GOOGLE_REDIRECT_URI_PHOTOS);
     const { tokens } = await client.getToken(code);
 
     if (tokens.refresh_token) {
@@ -401,7 +440,7 @@ app.get('/enable', async (c) => {
     console.error('Failed to exchange photo sharing authorization code:', err);
   }
 
-  return c.redirect(frontRedirect);
+  return c.redirect(`${env.VITE_CLIENT_APP_BASE_URL}/authorized?t=photo-sharing`);
 });
 
 // 有効な Google Access Token を取得および更新
@@ -602,12 +641,11 @@ const isDirectRun =
   import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (isDirectRun) {
-  const port = Number(process.env.SERVER_PORT);
-  console.log(`Server is running on ${port}`);
+  console.log(`Server is running on ${env.BFF_APP_PORT}`);
 
   serve({
     fetch: app.fetch,
-    port,
+    port: env.BFF_APP_PORT,
     hostname: '0.0.0.0',
   });
 }

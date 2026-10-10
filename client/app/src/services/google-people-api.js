@@ -12,7 +12,7 @@ export function setTokenRefresher(refresher) {
 }
 
 /** @type {string|undefined} Google People API のベース URL */
-export const API_BASE_URL = import.meta.env.VITE_GOOGLE_PEOPLE_API_BASE_URL;
+export const API_BASE_URL = import.meta.env.VITE_GOOGLE_API_BASE_URL_PEOPLE;
 
 /**
  * ============================================================================
