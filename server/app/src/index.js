@@ -606,7 +606,7 @@ app.get('/login', (c) => {
 
 // メイン OAuth コールバック - 認可コードからトークンを取得し、Realm に
 // User/OAuthGrant/Session を保存して署名付き HttpOnly Cookie を発行する
-app.get('/auth', async (c) => {
+app.get('/login-result', async (c) => {
   const unauthorized = () =>
     c.redirect(`${env.VITE_CLIENT_APP_BASE_URL}/unauthorized`);
 
@@ -667,7 +667,7 @@ const startAdditionalAuth = (/** @type {string} */ type) => async (/** @type {an
 
   // 未ログインの場合はメインのログインフローへリダイレクト
   if (!session) {
-    return c.redirect('/auth/login');
+    return c.redirect('/login');
   }
 
   // state を発行してセッションと認可タイプに紐づけ、コールバックでの CSRF を防ぐ
@@ -1482,7 +1482,7 @@ app.post('/api/push/subscriptions', async (c) => {
 // ユーザーの他に有効なセッションが残っていなければ、保持している
 // リフレッシュトークンは Google 側でも revoke してグラントを削除する
 // （revoke に失敗してもログアウト自体は成功とする）
-app.post('/auth/logout', async (c) => {
+app.post('/logout', async (c) => {
   const sessionId = await getSignedCookie(c, SESSION_SECRET, 'session_id');
 
   if (sessionId) {

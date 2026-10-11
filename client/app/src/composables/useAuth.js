@@ -186,7 +186,7 @@ export function useAuth() {
    */
   async function logout() {
     try {
-      const res = await fetch(`${BFF_BASE_URL}/auth/logout`, { method: 'POST', credentials: 'include' });
+      const res = await fetch(`${BFF_BASE_URL}/logout`, { method: 'POST', credentials: 'include' });
       if (!res.ok) throw new Error(`Logout failed: ${res.status}`);
       return true;
     } catch (err) {
