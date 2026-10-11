@@ -587,7 +587,7 @@ schedulePushDrain(0);
 
 // ログイン開始 - Google の OAuth 認証画面へリダイレクト
 // ?prompt= を指定すると検証のうえ認可 URL へ転送する（アカウント切り替え用）
-app.get('/auth/login', (c) => {
+app.get('/login', (c) => {
   const { prompt, error } = parsePromptParam(c.req.query('prompt'));
   if (error) {
     return c.text(error, 400);

@@ -6,7 +6,7 @@ const authStore = useAuthStore();
 
 /** Google ログインへリダイレクトする */
 function handleLogin() {
-  window.location.href = `${BFF_BASE_URL}/auth`;
+  window.location.href = `${BFF_BASE_URL}/auth/login`;
 }
 </script>
 
