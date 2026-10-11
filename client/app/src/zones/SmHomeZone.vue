@@ -1,5 +1,6 @@
 <script setup>
 import QuickAddFab from '@/components/QuickAddFab.vue';
+import IconEllipsis from '@/components/icons/IconEllipsis.vue';
 import { useUserStore } from '@/stores/user.js';
 
 const userStore = useUserStore();
@@ -9,8 +10,7 @@ const props = defineProps({
   mobileSubPaneHeight: { type: Number, required: true },
   isCollapsingMobileSub: { type: Boolean, required: true },
   isMobileSubCollapsed: { type: Boolean, required: true },
-  hideMobileSub: { type: Boolean, required: true },
-  mobileSubContent: { type: Object, required: true },
+  setMobileSubContent: { type: Function, required: true },
   selectPane: { type: Function, required: true },
   collapseMobileSubPane: { type: Function, required: true },
   startNavSwipe: { type: Function, required: true },
@@ -56,8 +56,8 @@ function onContentTouchStart(evt) {
   props.handleMobileSubContentTouchStart(evt);
 }
 /** @param {Element|import('vue').ComponentPublicInstance|null} element */
-function setMobileSubContent(element) {
-  if (element instanceof HTMLElement && props.mobileSubContent && 'value' in props.mobileSubContent) props.mobileSubContent.value = element;
+function onSubContentRef(element) {
+  props.setMobileSubContent(element);
 }
 </script>
 
@@ -83,13 +83,14 @@ function setMobileSubContent(element) {
     <aside
       class="sub-pane"
       v-show="!userStore.formDatePick"
-      :class="{ 'is-collapsing': props.isCollapsingMobileSub, 'is-collapsed': props.isMobileSubCollapsed && props.activePane !== 'sub', 'is-hidden': props.hideMobileSub }"
+      :class="{ 'is-collapsing': props.isCollapsingMobileSub, 'is-collapsed': props.isMobileSubCollapsed && props.activePane !== 'sub' }"
       :style="{ flexBasis: `${props.mobileSubPaneHeight}px` }"
       @touchstart="onSubTouchStart"
       @touchmove="onSubTouchMove"
       @touchend="onSubTouchEnd"
       @touchcancel="onSubTouchEnd">
-      <div :ref="setMobileSubContent" class="aside-content sub-pane-content" @touchstart="onContentTouchStart">
+      <div :ref="onSubContentRef" class="aside-content sub-pane-content" @touchstart="onContentTouchStart">
+        <div class="sub-pane-handle" @touchstart.stop="onSubTouchStart" @touchmove.stop="onSubTouchMove" @touchend.stop="onSubTouchEnd" @touchcancel.stop="onSubTouchEnd"><IconEllipsis /></div>
         <router-view name="sub" v-slot="{ Component }">
           <component :is="Component" :select-pane="props.selectPane" :collapse-mobile-sub-pane="props.collapseMobileSubPane" />
         </router-view>
@@ -143,10 +144,18 @@ function setMobileSubContent(element) {
         display: none;
       }
     }
+  }
 
-    // 中身が body へ Teleport されて空の殻だけになった場合はペイン自体を隠す
-    &.is-hidden {
-      display: none;
+  // 下部ペイン上部のドラッグハンドル（content 内先頭に置き、タッチは aside 側のリサイズハンドラへ伝搬させる）
+  .sub-pane-handle {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: var(--space-xxs) 0;
+    touch-action: none;
+
+    :deep(.icon-ellipsis) {
+      fill: var(--text-light);
     }
   }
 

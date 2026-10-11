@@ -12,9 +12,9 @@ import { processEventOperations, readEventOperations, writeEventOperations } fro
 import { syncAllStoredShareSpecs } from '@/services/share-sync.js';
 
 /** @type {string} アプリシェルのキャッシュ名 */
-const CACHE_NAME = 'orbit-shell-v1';
+const CACHE_NAME = 'orbit-shell-v2';
 /** @type {string[]} プリキャッシュするアプリシェル */
-const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.ico', '/icon-192.png', '/icon-512.png'];
+const APP_SHELL = ['/', '/index.html', '/manifest.default.webmanifest', '/manifest.dark.webmanifest', '/favicon.ico', '/android-chrome-192x192.png', '/android-chrome-512x512.png'];
 
 /**
  * Service Worker が使う Google API アクセストークンを取得する。
@@ -88,8 +88,8 @@ async function deliverDueNotifications() {
     await self.registration.showNotification(title, {
       body,
       tag: `orbit-event-${entry.key}`,
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
+      icon: '/android-chrome-192x192.png',
+      badge: '/android-chrome-192x192.png',
       data: { eid: entry.eid, cid: entry.cid, url: eventDetailUrl(entry.eid, entry.cid) },
     });
   }
@@ -173,8 +173,8 @@ async function handlePushMessage(event) {
     const data = options.data ?? {};
     await self.registration.showNotification(notification.title, {
       ...options,
-      icon: options.icon ?? '/icon-192.png',
-      badge: options.badge ?? '/icon-192.png',
+      icon: options.icon ?? '/android-chrome-192x192.png',
+      badge: options.badge ?? '/android-chrome-192x192.png',
       data: { ...data, url: data.url ?? eventDetailUrl(data.eid, data.cid) },
     });
   }
@@ -202,7 +202,13 @@ self.addEventListener('install', (/** @type {any} */ event) => {
 });
 
 self.addEventListener('activate', (/** @type {any} */ event) => {
-  event.waitUntil(self.clients.claim().then(() => deliverDueNotifications()));
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((name) => name.startsWith('orbit-shell-') && name !== CACHE_NAME).map((name) => caches.delete(name))))
+      .then(() => self.clients.claim())
+      .then(() => deliverDueNotifications()),
+  );
 });
 
 // ページが閉じている間の起き上がり経路（対応ブラウザのみ）

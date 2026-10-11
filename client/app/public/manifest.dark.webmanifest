@@ -5,17 +5,19 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#ff3434",
+  "background_color": "#000000",
   "theme_color": "#ff3434",
   "icons": [
     {
       "src": "/android-chrome-192x192.png",
       "sizes": "192x192",
+  "purpose": "maskable",
       "type": "image/png"
     },
     {
       "src": "/android-chrome-512x512.png",
       "sizes": "512x512",
+  "purpose": "maskable",
       "type": "image/png"
     }
   ]

@@ -106,8 +106,8 @@ export async function syncPushSchedule(entries) {
       options: {
         body: `${dayjs(entry.start).format('M月D日 (ddd) HH:mm')} 開始（${entry.minutes > 0 ? `${entry.minutes}分前` : '開始時刻'}）`,
         tag: `orbit-event-${entry.key}`,
-        icon: '/icon-192.png',
-        badge: '/icon-192.png',
+        icon: '/android-chrome-192x192.png',
+        badge: '/android-chrome-192x192.png',
         data: { eid: entry.eid, cid: entry.cid, key: entry.key, url: `${import.meta.env.BASE_URL}evt/detail?eid=${encodeURIComponent(entry.eid)}&cid=${encodeURIComponent(entry.cid)}` },
       },
     },

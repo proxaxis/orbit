@@ -57,6 +57,7 @@ export function toShareCopyBody(evt, sourceKey, role) {
     end: evt.end,
     ...(isFreeBusy ? {} : { description: evt.description, location: evt.location }),
     transparency: evt.transparency,
+    visibility: evt.visibility,
     extendedProperties: {
       private: {
         [SOURCE_PROP]: sourceKey,

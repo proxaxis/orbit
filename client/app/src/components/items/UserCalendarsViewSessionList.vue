@@ -112,8 +112,7 @@ async function stopShare(spec) {
       <div class="accordion-content">
         <div class="session-calendar-search">
           <div class="session-search-row">
-            <SuggestPulldown v-model="sessionCalendarQuery" :suggestions="peopleStore.suggestions" :item-key="(person) => person.resourceName" placeholder="カレンダーを検索..."
-              @update:model-value="searchPeopleForSessionCalendar" @enter="searchSessionCalendar" @select="selectPersonSuggestion">
+            <SuggestPulldown v-model="sessionCalendarQuery" :suggestions="peopleStore.suggestions" :item-key="(person) => person.resourceName" placeholder="カレンダーを検索..." @update:model-value="searchPeopleForSessionCalendar" @enter="searchSessionCalendar" @select="selectPersonSuggestion">
               <template #suggestion="{ item: person }">{{ person.names?.[0]?.displayName || person.emailAddresses?.[0]?.value }}</template>
             </SuggestPulldown>
             <button type="button" :disabled="userStore.isLoading" @click="searchSessionCalendar"><IconCloudArrowDown />追加</button>
@@ -122,8 +121,14 @@ async function stopShare(spec) {
 
         <ul v-if="authStore.isAuthenticated" class="session-calendar-list">
           <li v-for="c in calendarStore.sessionCalendars" :key="c.id" :title="c.description">
+            <input
+              type="checkbox"
+              :id="`iptbx-session-${c.id}`"
+              :checked="!userStore.hiddenCalendarIds.includes(c.id)"
+              :style="{ accentColor: c.backgroundColor, borderColor: c.backgroundColor }"
+              @change="userStore.setCalendarVisibility(c.id, /** @type {HTMLInputElement} */ ($event.target).checked)" />
             <div class="list-item">
-              <label :title="c.description">
+              <label :for="`iptbx-session-${c.id}`" :title="c.description">
                 <CalendarRibbon :cid="c.id" :useMenuSlot="true">
                   <template #menu>
                     <DropdownMenu>

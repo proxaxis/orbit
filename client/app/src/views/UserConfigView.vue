@@ -36,6 +36,7 @@ const draft = reactive({
   uiTextSize: userStore.uiTextSize,
   calendarTextSize: userStore.calendarTextSize,
   quickAddButtonSide: userStore.quickAddButtonSide,
+  formSubmitKey: userStore.formSubmitKey,
   labels: [...userStore.weekdayLabels],
   weekendDays: userStore.weekendDays.map((day) => ({ ...day })),
   customHolidayColor: userStore.customHolidayColor,
@@ -86,6 +87,7 @@ function save() {
   userStore.calendarTextSize = draft.calendarTextSize;
   theme.applyTextSizes();
   userStore.setQuickAddButtonSide(draft.quickAddButtonSide);
+  userStore.formSubmitKey = draft.formSubmitKey;
   userStore.weekendDays = draft.weekendDays.map((day) => ({ ...day }));
   userStore.customHolidayColor = draft.customHolidayColor;
   userStore.holidayColor = draft.holidayColor;
@@ -181,6 +183,13 @@ function save() {
             <select v-model="draft.quickAddButtonSide">
               <option value="right">右下</option>
               <option value="left">左下</option>
+            </select>
+          </label>
+          <label
+            >フォームの送信キー（デスクトップ）
+            <select v-model="draft.formSubmitKey">
+              <option value="CTRL_ENTER">Ctrl + Enter</option>
+              <option value="ENTER">Enter</option>
             </select>
           </label>
         </section>

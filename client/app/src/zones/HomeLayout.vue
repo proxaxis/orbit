@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useUserStore } from '@/stores/user.js';
 import SmHomeZone from '@/zones/SmHomeZone.vue';
@@ -28,15 +28,17 @@ const mobileSubResizeLastY = ref(0);
 const mobileSubResizeStartTime = ref(0);
 /** @type {import('vue').Ref<HTMLElement|null>} */
 const mobileSubContent = ref(null);
+
+/** @param {Element|import('vue').ComponentPublicInstance|null} element モバイル下部ペインのコンテンツ要素（ref コールバック） */
+function setMobileSubContent(element) {
+  mobileSubContent.value = element instanceof HTMLElement ? element : null;
+}
 /** @type {import('vue').Ref<{x: number, y: number}|null>} */
 const navSwipeStart = ref(null);
 const activePane = ref('main');
 
 /** @type {ComputedRef<boolean>} モバイル下部ペインがメニューバーだけ残して収納されているか */
 const isMobileSubCollapsed = computed(() => mobileSubPaneHeight.value < MOBILE_SUB_MIN_HEIGHT);
-
-/** @type {ComputedRef<boolean>} モバイル下部ペインを完全に隠すか（EventQuickAdd はカードを body へ Teleport するため空の殻が残るだけ） */
-const isMobileSubPaneHidden = computed(() => userStore.isMobile && route.name === 'EventQuickAdd');
 
 const layoutComponent = computed(() => {
   if (userStore.isMobile) return SmHomeZone;
@@ -50,14 +52,18 @@ function selectPane(pane) {
 }
 
 /**
- * 収納時の下部ペインの高さ（MenuBar だけが見える高さ）を実測する
+ * 収納時の下部ペインの高さ（ハンドルと MenuBar に、ハンドル1つ分の余白を足した高さ）を実測する
  * @returns {number} 収納時のペイン高さ(px)
  */
 function collapsedSubPaneHeight() {
   const content = mobileSubContent.value;
   const menuBar = content instanceof HTMLElement ? content.querySelector('.menu-bar') : null;
   if (!(content instanceof HTMLElement) || !(menuBar instanceof HTMLElement)) return 56;
-  return Math.round(menuBar.getBoundingClientRect().bottom - content.getBoundingClientRect().top + MOBILE_SUB_COLLAPSED_GAP);
+  // ペイン上端から MenuBar 下端までに、ハンドル1つ分の高さを上乗せする
+  const paneTop = (content.parentElement ?? content).getBoundingClientRect().top;
+  const handle = content.querySelector('.sub-pane-handle');
+  const handleHeight = handle instanceof HTMLElement ? handle.getBoundingClientRect().height : 0;
+  return Math.round(menuBar.getBoundingClientRect().bottom - paneTop + handleHeight + MOBILE_SUB_COLLAPSED_GAP);
 }
 
 /** モバイル表示の下部ペインを MenuBar だけ残して下へ収納する */
@@ -115,6 +121,7 @@ function cancelNavSwipe() {
 
 /** @param {TouchEvent} evt */
 function handleMobileSubContentTouchStart(evt) {
+  // つまみ（MenuBar）上のタッチは aside 側のリサイズハンドラへ伝搬させる
   if (evt.target instanceof Element && evt.target.closest('.menu-bar')) return;
   evt.stopPropagation();
 }
@@ -183,10 +190,13 @@ function stopMobileSubResize(evt) {
   }
 }
 
+/** モバイルで下部ペインをボトムシートとして使うルート（中央ペイン側を active にする） */
+const MOBILE_BOTTOM_SHEET_ROUTES = new Set(['Home', 'EventQuickAdd']);
+
 /** @param {unknown} routeName */
 function selectPaneForRoute(routeName) {
-  // EventQuickAdd はカレンダーグリッド上にフローティング表示するため、モバイルでも中央ペインを背面に出す
-  if (userStore.isMobile) activePane.value = routeName === 'Home' || routeName === 'EventQuickAdd' ? 'main' : 'sub';
+  // ボトムシート系ルートはモバイルでも中央ペイン（カレンダー）側を active にしておく
+  if (userStore.isMobile) activePane.value = MOBILE_BOTTOM_SHEET_ROUTES.has(routeName) ? 'main' : 'sub';
   else activePane.value = 'main';
 }
 
@@ -234,8 +244,12 @@ watch(navWidth, (width) => userStore.setNavPaneWidth(width));
 watch(subWidth, (width) => userStore.setSubPaneWidth(width));
 watch(
   () => route.name,
-  (name) => {
+  (name, prevName) => {
     selectPaneForRoute(name);
+    // 下部ペインが収納されたまま QuickAdd へ遷移した場合は、入力できるよう半分まで開く
+    if (name === 'EventQuickAdd') expandMobileSubPane();
+    // Home へ戻ったときは下部ペインを収納する（初回表示時は開いたまま。高さ計測のため遷移後のコンテンツで実行）
+    if (name === 'Home' && prevName) nextTick(() => collapseMobileSubPane());
     // 別画面へ遷移した場合は未完了の日付ピック要求を破棄する
     if (userStore.formDatePick) userStore.cancelFormDatePick();
   },
@@ -246,7 +260,7 @@ watch(
   () => userStore.formDatePick,
   (picking) => {
     if (picking) activePane.value = 'main';
-    else if (userStore.isMobile && route.name !== 'Home') activePane.value = 'sub';
+    else if (userStore.isMobile && !MOBILE_BOTTOM_SHEET_ROUTES.has(route.name)) activePane.value = 'sub';
   },
 );
 watch(
@@ -274,8 +288,7 @@ onUnmounted(() => {
     :mobile-sub-pane-height="mobileSubPaneHeight"
     :is-collapsing-mobile-sub="isCollapsingMobileSub"
     :is-mobile-sub-collapsed="isMobileSubCollapsed"
-    :hide-mobile-sub="isMobileSubPaneHidden"
-    :mobile-sub-content="mobileSubContent"
+    :set-mobile-sub-content="setMobileSubContent"
     :select-pane="selectPane"
     :collapse-mobile-sub-pane="collapseMobileSubPane"
     :start-resize-nav="startResizeNav"

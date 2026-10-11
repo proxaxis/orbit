@@ -58,6 +58,30 @@ export function useAppBootstrap() {
   }
 
   /**
+   * デスクトップでのフォーム送信キーを制御するイベントハンドラ。
+   * Ctrl+Enter（mac は Cmd+Enter）は常にフォームを送信し、
+   * 送信キー設定が CTRL_ENTER の間は Enter 単独による暗黙送信を抑止する。
+   * @param {KeyboardEvent} evt キーダウンイベント
+   * @returns {void}
+   */
+  function handleFormSubmitKeydown(evt) {
+    if (evt.key !== 'Enter' || evt.isComposing || evt.defaultPrevented || !userStore.isDesktop) return;
+    const target = evt.target;
+    if (!(target instanceof HTMLElement)) return;
+    const form = target.closest('form');
+    if (!form) return;
+    if (evt.ctrlKey || evt.metaKey) {
+      evt.preventDefault();
+      form.requestSubmit();
+      return;
+    }
+    if (userStore.formSubmitKey !== 'CTRL_ENTER') return;
+    // textarea の改行・セレクトの開閉・フォーカス中ボタン自体の起動は許可する
+    if (target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || target instanceof HTMLButtonElement) return;
+    evt.preventDefault();
+  }
+
+  /**
    * Service Worker からのメッセージを処理する。
    * バックグラウンドで実行された同期の結果をページ側へ反映する。
    * @param {MessageEvent} event Service Worker からのメッセージ
@@ -101,6 +125,7 @@ export function useAppBootstrap() {
     // ユーザ設定の適用
     theme.applyAllAppearance();
     window.addEventListener('resize', handleWindowResize);
+    window.addEventListener('keydown', handleFormSubmitKeydown);
     if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
     initApiClients();
     initEventNotifications();
@@ -144,6 +169,7 @@ export function useAppBootstrap() {
   function stop() {
     if (!userStore.checkUserEnvironment()) return;
     window.removeEventListener('resize', handleWindowResize);
+    window.removeEventListener('keydown', handleFormSubmitKeydown);
     if ('serviceWorker' in navigator) navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
     if (mQueryList) mQueryList.removeEventListener('change', handleSystemThemeChange);
     if (mCoarsePointerQuery) mCoarsePointerQuery.removeEventListener('change', handleCoarsePointerChange);

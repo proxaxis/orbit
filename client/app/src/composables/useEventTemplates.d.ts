@@ -21,6 +21,8 @@ declare global {
     durationMinutes: number;
     /** タイムゾーン */
     timeZone: string;
+    /** Google イベントの公開設定 */
+    visibility: 'default' | 'public' | 'private' | 'confidential';
     /** 招待先メールアドレスと表示名 */
     attendees: { email: string; displayName?: string }[];
     /** 通知設定（入力行の {value, unit} 形式） */

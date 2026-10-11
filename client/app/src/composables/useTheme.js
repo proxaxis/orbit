@@ -26,6 +26,10 @@ export function useTheme() {
     else document.documentElement.classList.remove('dark');
 
     document.documentElement.setAttribute('data-theme', userStore.theme.toLowerCase());
+
+    // ユーザのテーマに応じて PWA マニフェストを切り替える
+    const manifest = document.querySelector('link[rel="manifest"]');
+    if (manifest) manifest.setAttribute('href', userStore.theme === 'DARK' ? '/manifest.dark.webmanifest' : '/manifest.default.webmanifest');
   }
 
   /**

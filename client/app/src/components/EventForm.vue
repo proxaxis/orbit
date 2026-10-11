@@ -112,6 +112,8 @@ const formData = reactive({
   startDateTime: dayjs(),
   endDateTime: dayjs(),
   timeZone: '',
+  /** @type {'default'|'public'|'private'|'confidential'} Google イベントの公開設定 */
+  visibility: 'default',
 });
 
 const initialCalendarId = computed(() => {
@@ -459,6 +461,7 @@ function submitForm() {
   else delete privateProperties.privacyNote;
   const body = {
     summary: formData.summary.trim(),
+    visibility: formData.visibility,
     // イベント個別の色。未選択で編集中のイベントに色が設定済みなら明示的にクリアする（PUT は完全置換のため省略でも解除される）
     ...(eventColorId.value ? { colorId: eventColorId.value } : originalEvent.value?.eventColorId ? { colorId: null } : {}),
     description: appendTagsToDescription(formData.description.trim(), tags) || undefined,
@@ -545,6 +548,7 @@ function applyTemplate(template) {
     icon: event.icon ?? '',
     isAllDay: Boolean(event.isAllDay),
     timeZone: event.timeZone || userStore.timeZone,
+    visibility: event.visibility ?? 'default',
   });
   if (event.recurrence) Object.assign(recurrence, event.recurrence);
   attendees.value = (event.attendees ?? []).filter((attendee) => typeof attendee.email === 'string').map((attendee) => ({ email: attendee.email, ...(attendee.displayName ? { displayName: attendee.displayName } : {}), responseStatus: 'needsAction' }));
@@ -576,6 +580,7 @@ async function saveAsTemplate({ name, description }) {
         isAllDay: formData.isAllDay,
         durationMinutes: formData.endDateTime.diff(formData.startDateTime, 'minute'),
         timeZone: formData.timeZone,
+        visibility: formData.visibility,
         attendees: attendees.value,
         reminders: reminders.value,
         preservedReminderOverrides,
@@ -665,6 +670,7 @@ onMounted(async () => {
         startDateTime: draftStart ?? (hasRange ? rangeStart : userStore.nowSelectedDate ? toDayjs(userStore.nowSelectedDate) : toDayjs()),
         endDateTime: draftEnd ?? (rangeEnd?.isValid?.() ? rangeEnd : userStore.nowSelectedDate ? toDayjs(userStore.nowSelectedDate).add(1, 'hour') : toDayjs().add(1, 'hour')),
         timeZone: userStore.timeZone,
+        visibility: 'default',
       });
       Object.assign(recurrence, { frequency: '', interval: 1, weekdays: [], monthDay: '', month: '', count: '', until: '', exclusions: '', holidayAdjustment: '' });
       eventColorId.value = '';
@@ -702,6 +708,8 @@ onMounted(async () => {
         // 終日イベントの raw end は排他のため、フォームでは「終了日（含む）」へ変換する
         endDateTime: originalEvent.value?.isAllDay ? originalEvent.value?.endDateTime?.subtract(1, 'day') : originalEvent.value?.endDateTime,
         timeZone: originalEvent.value?.timeZone ?? userStore.timeZone,
+        // 'confidential' 等の UI 未対応の値もそのまま保持し、保存時に再送信する
+        visibility: originalEvent.value?.raw?.visibility ?? 'default',
       });
       const parsedRecurrence = parseRecurrence(originalEvent.value?.raw?.recurrence, originalEvent.value?.raw?.extendedProperties?.shared);
       Object.assign(recurrence, { ...parsedRecurrence, exclusions: parsedRecurrence.exclusions.join(', ') });
@@ -833,6 +841,17 @@ watch(() => formData.summary, updateTitleSuggestions);
           <label v-if="!formData.isAllDay"
             ><span>タイムゾーン</span>
             <TimezoneSelecter v-model="formData.timeZone" />
+          </label>
+        </section>
+        <!-- 公開設定 -->
+        <section>
+          <label
+            ><span>公開設定</span>
+            <select v-model="formData.visibility">
+              <option value="default">デフォルトの公開設定</option>
+              <option value="public">公開</option>
+              <option value="private">非公開</option>
+            </select>
           </label>
         </section>
         <!-- 繰り返し設定 -->

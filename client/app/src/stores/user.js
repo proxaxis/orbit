@@ -285,6 +285,9 @@ export const useUserStore = defineStore('user', () => {
   /** @type {Ref<'right'|'left'>} @description 自然言語登録フローティングボタンの配置（右下 / 左下） */
   const quickAddButtonSide = ref('right');
 
+  /** @type {Ref<'CTRL_ENTER'|'ENTER'>} @description デスクトップでのフォーム送信キー */
+  const formSubmitKey = ref('CTRL_ENTER');
+
   /** @type {Ref<{index: number, color: string}[]>} @description 曜日ごとの定休日と文字色の設定 */
   const weekendDays = ref([
     { index: 6, color: '#0a0dd6' },
@@ -474,6 +477,7 @@ export const useUserStore = defineStore('user', () => {
       navPaneCollapsed: navPaneCollapsed.value,
       subPaneWidth: subPaneWidth.value,
       quickAddButtonSide: quickAddButtonSide.value,
+      formSubmitKey: formSubmitKey.value,
     };
   }
 
@@ -538,6 +542,7 @@ export const useUserStore = defineStore('user', () => {
     if (typeof saved.navPaneCollapsed === 'boolean') navPaneCollapsed.value = saved.navPaneCollapsed;
     if (Number.isInteger(saved.subPaneWidth) && saved.subPaneWidth >= 260 && saved.subPaneWidth <= 600) subPaneWidth.value = saved.subPaneWidth;
     if (saved.quickAddButtonSide === 'right' || saved.quickAddButtonSide === 'left') quickAddButtonSide.value = saved.quickAddButtonSide;
+    if (saved.formSubmitKey === 'CTRL_ENTER' || saved.formSubmitKey === 'ENTER') formSubmitKey.value = saved.formSubmitKey;
   }
 
   /** キャッシュから設定を読み込み state に反映する */
@@ -892,6 +897,7 @@ export const useUserStore = defineStore('user', () => {
     navPaneCollapsed,
     subPaneWidth,
     quickAddButtonSide,
+    formSubmitKey,
     weekendDays,
     customHolidayColor,
     holidayColor,

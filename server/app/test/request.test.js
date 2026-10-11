@@ -39,7 +39,7 @@ const {
   upsertUser,
   upsertGrant,
   getGrant,
-} = await import('../src/index.js');
+} = await import('@/index.js');
 
 // --- 上流 Google API のスタブ ---
 // BFF のプロキシが使う globalThis.fetch を差し替え、呼び出しを記録する

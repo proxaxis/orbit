@@ -4,9 +4,11 @@
  * テンプレート名（必須）と説明を入力して保存する。
  */
 import { ref } from 'vue';
+import { useUserStore } from '@/stores/user.js';
 import IconXMark from '@/components/icons/IconXMark.vue';
 
 const emit = defineEmits(['save', 'cancel']);
+const userStore = useUserStore();
 
 /** @type {Ref<string>} テンプレート名 */
 const name = ref('');
@@ -18,6 +20,17 @@ function submitTemplate() {
   const trimmedName = name.value.trim();
   if (!trimmedName) return;
   emit('save', { name: trimmedName, description: description.value.trim() });
+}
+
+/**
+ * Enter キーでの送信をフォーム送信キー設定に従って処理する
+ * @param {KeyboardEvent} evt キーダウンイベント
+ * @returns {void}
+ */
+function handleEnterSubmit(evt) {
+  // デスクトップの Ctrl+Enter モードでは Enter 単独では送信しない
+  if (userStore.isDesktop && userStore.formSubmitKey === 'CTRL_ENTER' && !evt.ctrlKey && !evt.metaKey) return;
+  submitTemplate();
 }
 </script>
 
@@ -32,7 +45,7 @@ function submitTemplate() {
       </header>
       <label>
         <span>テンプレート名</span>
-        <input v-model="name" autofocus required placeholder="テンプレートの名前を入力" @keydown.enter.prevent="submitTemplate" />
+        <input v-model="name" autofocus required placeholder="テンプレートの名前を入力" @keydown.enter.prevent="handleEnterSubmit" />
       </label>
       <label>
         <span>説明</span>

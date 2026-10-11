@@ -172,8 +172,8 @@ async function deliverNotification(evt, start, minutes, key) {
   const options = {
     body,
     tag: `orbit-event-${key}`,
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    icon: '/android-chrome-192x192.png',
+    badge: '/android-chrome-192x192.png',
     // 通知タップ時にイベント詳細ページを開くための情報
     data: {
       eid: evt?.id ?? null,

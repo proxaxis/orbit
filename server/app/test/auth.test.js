@@ -36,7 +36,7 @@ const {
   upsertUser,
   upsertGrant,
   getGrant,
-} = await import('../src/index.js');
+} = await import('@/index.js');
 
 let redisAvailable = false;
 
@@ -95,16 +95,16 @@ const cleanupLogin = (/** @type {string} */ userId, /** @type {string} */ sessio
   });
 };
 
-describe('GET /auth/login', () => {
+describe('GET /login', () => {
   it('redirects to Google with the default prompt=consent when prompt is not given', async () => {
-    const res = await app.request('/auth/login');
+    const res = await app.request('/login');
     const url = googleAuthUrl(res);
     assert.equal(url.searchParams.get('prompt'), 'consent');
     assert.equal(url.searchParams.get('access_type'), 'offline');
   });
 
   it('does not request People or Drive scopes at main login', async () => {
-    const res = await app.request('/auth/login');
+    const res = await app.request('/login');
     const url = googleAuthUrl(res);
     const scope = url.searchParams.get('scope') ?? '';
     assert.match(scope, /auth\/calendar/);
@@ -113,33 +113,33 @@ describe('GET /auth/login', () => {
   });
 
   it('forwards ?prompt=select_account to the Google authorization URL', async () => {
-    const res = await app.request('/auth/login?prompt=select_account');
+    const res = await app.request('/login?prompt=select_account');
     const url = googleAuthUrl(res);
     assert.equal(url.searchParams.get('prompt'), 'select_account');
   });
 
   it('accepts multiple space-separated valid tokens', async () => {
     const res = await app.request(
-      `/auth/login?prompt=${encodeURIComponent('consent select_account')}`
+      `/login?prompt=${encodeURIComponent('consent select_account')}`
     );
     const url = googleAuthUrl(res);
     assert.equal(url.searchParams.get('prompt'), 'consent select_account');
   });
 
   it('treats an empty prompt as not specified', async () => {
-    const res = await app.request('/auth/login?prompt=');
+    const res = await app.request('/login?prompt=');
     const url = googleAuthUrl(res);
     assert.equal(url.searchParams.get('prompt'), 'consent');
   });
 
   it('returns 400 for an invalid prompt value', async () => {
-    const res = await app.request('/auth/login?prompt=invalid_value');
+    const res = await app.request('/login?prompt=invalid_value');
     assert.equal(res.status, 400);
   });
 
   it('returns 400 when any token in a list is invalid', async () => {
     const res = await app.request(
-      `/auth/login?prompt=${encodeURIComponent('select_account bogus')}`
+      `/login?prompt=${encodeURIComponent('select_account bogus')}`
     );
     assert.equal(res.status, 400);
   });
@@ -227,18 +227,18 @@ describe('GET /api/token', () => {
 });
 
 describe('GET /auth/photo-sharing', () => {
-  it('redirects to /auth/login when there is no session', async () => {
+  it('redirects to /login when there is no session', async () => {
     const res = await app.request('/auth/photo-sharing');
     assert.equal(res.status, 302);
-    assert.equal(res.headers.get('location'), '/auth/login');
+    assert.equal(res.headers.get('location'), '/login');
   });
 });
 
 describe('GET /auth/people', () => {
-  it('redirects to /auth/login when there is no session', async () => {
+  it('redirects to /login when there is no session', async () => {
     const res = await app.request('/auth/people');
     assert.equal(res.status, 302);
-    assert.equal(res.headers.get('location'), '/auth/login');
+    assert.equal(res.headers.get('location'), '/login');
   });
 
   it('redirects to Google with the People scopes when logged in', async (t) => {
@@ -266,10 +266,10 @@ describe('GET /auth/people', () => {
 });
 
 describe('GET /auth/drive', () => {
-  it('redirects to /auth/login when there is no session', async () => {
+  it('redirects to /login when there is no session', async () => {
     const res = await app.request('/auth/drive');
     assert.equal(res.status, 302);
-    assert.equal(res.headers.get('location'), '/auth/login');
+    assert.equal(res.headers.get('location'), '/login');
   });
 
   it('redirects to Google with the drive.appdata scope when logged in', async (t) => {
@@ -335,9 +335,9 @@ describe('GET /enable', () => {
   });
 });
 
-describe('POST /auth/logout', () => {
+describe('POST /logout', () => {
   it('clears the session cookie even without a session', async () => {
-    const res = await app.request('/auth/logout', { method: 'POST' });
+    const res = await app.request('/logout', { method: 'POST' });
     assert.equal(res.status, 200);
     const setCookie = res.headers.get('set-cookie');
     assert.ok(setCookie, 'Set-Cookie header should be present');
@@ -351,7 +351,7 @@ describe('POST /auth/logout', () => {
       upsertGrant(userId, 'main', { refreshToken: 'fake-refresh-token' });
       upsertGrant(userId, 'photo-sharing', { refreshToken: 'fake-photo-token' });
 
-      const res = await app.request('/auth/logout', {
+      const res = await app.request('/logout', {
         method: 'POST',
         headers: { Cookie: cookie },
       });
@@ -376,7 +376,7 @@ describe('POST /auth/logout', () => {
     try {
       upsertGrant(userId, 'main', { refreshToken: 'fake-refresh-token' });
 
-      const res = await app.request('/auth/logout', {
+      const res = await app.request('/logout', {
         method: 'POST',
         headers: { Cookie: cookie },
       });

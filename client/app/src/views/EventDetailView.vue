@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import dayjs from '@/services/dayjs.js';
 import { useEventActions } from '@/composables/useEventActions.js';
+import { parseGoogleMapsLink, fetchPlaceInfo } from '@/services/google-maps.js';
 import EventDetailViewPhotoAlbum from '@/components/items/EventDetailViewPhotoAlbum.vue';
 import MenuBar from '@/components/MenuBar.vue';
 import CalendarRibbon from '@/components/CalendarRibbon.vue';
@@ -42,6 +43,24 @@ const hasOtherAttendees = computed(() => eventActions.hasOtherAttendees(event.va
 const canWriteCalendar = computed(() => calendarStore.listWritableCalendars.some((calendar) => calendar.id === event.value?.calendarId));
 
 const myAttendee = computed(() => event.value?.raw?.attendees?.find((attendee) => attendee.self) ?? null);
+
+/** 場所に保存された Google Maps URL から取り出せるリンクカード情報（なければ null） */
+const mapsPlaceBase = computed(() => parseGoogleMapsLink(event.value?.location ?? ''));
+
+/** @type {Ref<{name: string, address: string}|null>} BFF のスクレイピングで解決した場所情報 */
+const mapsPlaceResolved = ref(null);
+
+/** リンクカードの表示情報。URL 解析の結果を即時表示し、BFF で解決できた名前・住所で上書きする */
+const mapsPlace = computed(() => {
+  const base = mapsPlaceBase.value;
+  if (!base) return null;
+  const resolved = mapsPlaceResolved.value;
+  return {
+    url: base.url,
+    name: resolved?.name || base.name,
+    address: resolved?.address || base.address,
+  };
+});
 
 /** イベントに有効な通知設定（分）のリスト。カレンダー既定使用時は既定値を展開する */
 const reminderMinutesList = computed(() => {
@@ -143,6 +162,18 @@ async function loadEvent() {
 
 onMounted(loadEvent);
 
+// Google Maps URL があれば BFF で場所名・住所を解決する（短縮 URL など URL から取れない場合の補完）
+watch(
+  mapsPlaceBase,
+  async (base) => {
+    mapsPlaceResolved.value = null;
+    if (!base) return;
+    const info = await fetchPlaceInfo(base.url);
+    if (info && mapsPlaceBase.value?.url === base.url) mapsPlaceResolved.value = info;
+  },
+  { immediate: true },
+);
+
 // 通知タップなどで表示中に別のイベントが選択された場合は読み込み直す
 watch(
   () => userStore.nowSelectedEvent,
@@ -216,7 +247,14 @@ watch(
             <IconLocationDot />
           </dt>
           <dd>
-            {{ event.location }}
+            <template v-if="!mapsPlace || event.location.trim() !== mapsPlace.url">{{ event.location }}</template>
+            <a v-if="mapsPlace" class="map-link-card" :href="mapsPlace.url" target="_blank" rel="noopener noreferrer">
+              <span class="map-link-text">
+                <strong>{{ mapsPlace.name }}</strong>
+                <small v-if="mapsPlace.address">{{ mapsPlace.address }}</small>
+              </span>
+              <IconArrowUpRightFromSquare class="map-link-external" />
+            </a>
           </dd>
           <button title="場所をコピー" @click="userStore.writeClipboard(event?.location ?? '')">
             <IconClone size="1rem" />
@@ -395,6 +433,48 @@ dl {
     }
   }
 }
+.map-link-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  border-radius: var(--border-radius);
+  color: var(--text);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  .map-link-icon {
+    fill: var(--danger);
+    flex-shrink: 0;
+    font-size: 1.2rem;
+  }
+
+  .map-link-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+
+    strong {
+      font-size: var(--text-size-sm);
+      overflow-wrap: anywhere;
+    }
+
+    small {
+      color: var(--text-light);
+      font-size: var(--text-size-xs);
+      overflow-wrap: anywhere;
+    }
+  }
+
+  .map-link-external {
+    margin-left: auto;
+    fill: var(--text-light);
+    flex-shrink: 0;
+  }
+}
+
 small,
 .attendance-section p {
   color: var(--text-light);

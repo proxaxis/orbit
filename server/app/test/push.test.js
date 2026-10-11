@@ -36,7 +36,7 @@ const {
   drainDuePushNotifications,
   createSession: createRealmSession,
   upsertUser,
-} = await import('../src/index.js');
+} = await import('@/index.js');
 
 let redisAvailable = false;
 
@@ -279,7 +279,7 @@ describe('POST /api/push/subscriptions', () => {
       });
       assert.ok(await redis.get(`push:subscription:${h}`));
 
-      const res = await app.request('/auth/logout', {
+      const res = await app.request('/logout', {
         method: 'POST',
         headers: { Cookie: cookie },
       });

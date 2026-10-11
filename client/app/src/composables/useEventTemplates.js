@@ -88,6 +88,7 @@ export function useEventTemplates() {
  * @param {boolean} params.snapshot.isAllDay 終日かどうか
  * @param {number} params.snapshot.durationMinutes 所要時間（分）
  * @param {string} params.snapshot.timeZone タイムゾーン
+ * @param {string} params.snapshot.visibility 公開設定
  * @param {{email: string, displayName?: string}[]} params.snapshot.attendees 招待先
  * @param {{value: number, unit: 'minute'|'hour'|'day'}[]} params.snapshot.reminders 通知設定
  * @param {{method: string, minutes: number}[]} params.snapshot.preservedReminderOverrides popup 以外のリマインダー
@@ -114,6 +115,7 @@ export function createEventTemplate({ name, description, snapshot }) {
       isAllDay: Boolean(snapshot.isAllDay),
       durationMinutes: Math.max(1, Number(snapshot.durationMinutes) || 60),
       timeZone: snapshot.timeZone ?? '',
+      visibility: ['default', 'public', 'private', 'confidential'].includes(snapshot.visibility) ? snapshot.visibility : 'default',
       attendees: (snapshot.attendees ?? []).map((attendee) => ({ email: attendee.email, ...(attendee.displayName ? { displayName: attendee.displayName } : {}) })),
       reminders: (snapshot.reminders ?? []).map((reminder) => ({ ...reminder })),
       preservedReminderOverrides: (snapshot.preservedReminderOverrides ?? []).map((override) => ({ ...override })),
