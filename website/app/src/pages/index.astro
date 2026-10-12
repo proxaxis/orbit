@@ -1,124 +1,146 @@
 ---
-import { Image } from 'astro:assets';
-import { APP_URL } from '../consts';
-import BaseLayout from '../layouts/BaseLayout.astro';
-import logo from '../assets/logos/icon_round_2048x2048.png';
+import { Image } from "astro:assets";
+import { APP_URL } from "../consts";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import logo from "../assets/logos/icon_round_2048x2048.png";
 
-import IconGoogle from '../components/icons/IconGoogle.vue';
-import IconCalendarDays from '../components/icons/IconCalendarDays.vue';
-import IconWandMagicSparkles from '../components/icons/IconWandMagicSparkles.vue';
-import IconUserGroup from '../components/icons/IconUserGroup.vue';
-import IconCloudArrowDown from '../components/icons/IconCloudArrowDown.vue';
-import IconMagnifyingGlass from '../components/icons/IconMagnifyingGlass.vue';
-import IconFileCirclePlus from '../components/icons/IconFileCirclePlus.vue';
-import IconGear from '../components/icons/IconGear.vue';
-import IconBell from '../components/icons/IconBell.vue';
-import IconImage from '../components/icons/IconImage.vue';
-import IconAngleRight from '../components/icons/IconAngleRight.vue';
-import IconUserLock from '../components/icons/IconUserLock.vue';
-import IconArrowUpRightFromSquare from '../components/icons/IconArrowUpRightFromSquare.vue';
+import IconGoogle from "../components/icons/IconGoogle.vue";
+import IconCalendarDays from "../components/icons/IconCalendarDays.vue";
+import IconWandMagicSparkles from "../components/icons/IconWandMagicSparkles.vue";
+import IconUserGroup from "../components/icons/IconUserGroup.vue";
+import IconCloudArrowDown from "../components/icons/IconCloudArrowDown.vue";
+import IconMagnifyingGlass from "../components/icons/IconMagnifyingGlass.vue";
+import IconFileCirclePlus from "../components/icons/IconFileCirclePlus.vue";
+import IconGear from "../components/icons/IconGear.vue";
+import IconBell from "../components/icons/IconBell.vue";
+import IconImage from "../components/icons/IconImage.vue";
+import IconAngleRight from "../components/icons/IconAngleRight.vue";
+import IconUserLock from "../components/icons/IconUserLock.vue";
+import IconArrowUpRightFromSquare from "../components/icons/IconArrowUpRightFromSquare.vue";
 
-import shotMonth from '../../docs/assets/10-home-month.png';
-import shotVertical from '../../docs/assets/11-home-month-vertical.png';
-import shotWeek from '../../docs/assets/12-home-week-timeline.png';
-import shotQuickAdd from '../../docs/assets/25-quick-add.png';
-import shotShare from '../../docs/assets/30-share-manage.png';
-import shotShareConfig from '../../docs/assets/31-sharing-config.png';
-import shotMobileHome from '../../docs/assets/60-mobile-home.png';
-import shotMobileDetail from '../../docs/assets/61-mobile-event-detail.png';
-import shotDetail from '../../docs/assets/20-event-detail.png';
-import shotCreator from '../../docs/assets/22-event-creator.png';
-import shotSearch from '../../docs/assets/24-event-search.png';
-import shotTemplates from '../../docs/assets/26-event-templates.png';
-import shotConfig from '../../docs/assets/40-user-config.png';
-import shotContextMenu from '../../docs/assets/50-context-menu.png';
+import shotMonth from "../../docs/assets/10-home-month.png";
+import shotVertical from "../../docs/assets/11-home-month-vertical.png";
+import shotWeek from "../../docs/assets/12-home-week-timeline.png";
+import shotQuickAdd from "../../docs/assets/25-quick-add.png";
+import shotShare from "../../docs/assets/30-share-manage.png";
+import shotShareConfig from "../../docs/assets/31-sharing-config.png";
+import shotMobileHome from "../../docs/assets/60-mobile-home.png";
+import shotMobileDetail from "../../docs/assets/61-mobile-event-detail.png";
+import shotDetail from "../../docs/assets/20-event-detail.png";
+import shotCreator from "../../docs/assets/22-event-creator.png";
+import shotSearch from "../../docs/assets/24-event-search.png";
+import shotTemplates from "../../docs/assets/26-event-templates.png";
+import shotConfig from "../../docs/assets/40-user-config.png";
+import shotContextMenu from "../../docs/assets/50-context-menu.png";
 
 const features = [
   {
     Icon: IconGoogle,
-    title: 'Google カレンダーと同期',
-    text: 'Google アカウントでログインするだけで使えます。予定の閲覧・編集はすべてサーバー経由で安全に代行します。',
+    title: "Googleカレンダーと同期",
+    text: "Googleアカウントでログインするだけで使えます. 大切な予定のデータはGoogleのシステムに保存されます.",
   },
   {
     Icon: IconCalendarDays,
-    title: '3 つの表示モード',
-    text: '月表示・縦スクロール月表示・週タイムライン表示をワンタップで切り替え。好みの視点で予定を俯瞰できます。',
+    title: "3つの表示モード",
+    text: "月間表示、縦スクロール表示、週間タイムライン表示を簡単に切り替えられるので、好みの視点で予定を俯瞰できます.",
   },
   {
     Icon: IconWandMagicSparkles,
-    title: '自然言語で登録',
-    text: '「明日の15時に歯医者」と入力するだけ。端末上の AI が日時や内容を解析してフォームに流し込みます。',
+    title: "自然言語で登録",
+    text: "「明日の15時に歯医者」と入力するだけです. AIが日時や内容を解析して予定作成を支援します.",
   },
   {
     Icon: IconUserGroup,
-    title: '期間を指定して共有',
-    text: '共有するのは、指定した期間の予定だけをコピーしたカレンダー。空き時間のみの表示や有効期限の設定もできます。',
+    title: "期間を指定して共有",
+    text: "相手に共有するのは、あなたが指定した期間の予定. 空き時間のみの表示や有効期限の設定も可能です.",
   },
   {
     Icon: IconCloudArrowDown,
-    title: 'オフライン対応',
-    text: '一度取得した予定はオフラインでも閲覧できます。オフライン中の編集は、オンラインに戻ると自動で再送されます。',
+    title: "オフライン",
+    text: "カレンダーはオフラインでも使用できます. オフライン中は予定の作成、更新、削除が可能で、オンラインに戻ると自動で同期されます.",
   },
   {
     Icon: IconBell,
-    title: 'プッシュ通知',
-    text: 'アプリを閉じていても Web Push で通知が届きます。通知のタイミングは予定ごとに複数設定できます。',
+    title: "通知",
+    text: "予定の時間が近づくとデバイスに通知が届きます. 通知のタイミングは予定ごとに複数設定できます.",
   },
   {
     Icon: IconMagnifyingGlass,
-    title: '横断検索とタグ',
-    text: 'タイトル・説明・場所に加え、#タグ でも予定を横断検索できます。過去から未来まで、目的の予定にすぐたどり着けます。',
+    title: "横断検索とタグ",
+    text: "予定のタイトル、説明、場所に加え、#タグでも予定を横断検索できます. 過去から未来まで、目的の予定にすぐにたどり着けます.",
   },
   {
     Icon: IconFileCirclePlus,
-    title: 'テンプレート',
-    text: 'よく使う予定はテンプレートに保存。いつでもワンタップで同じ内容の予定を作成できます。',
+    title: "テンプレート",
+    text: "よく使う予定はテンプレートに保存できます. いつでもワンタップで同じ内容の予定を作成できます.",
   },
   {
     Icon: IconImage,
-    title: '写真アルバム連携',
-    text: '予定に Google Photos のアルバムを紐づけて、イベントの思い出を一緒に管理できます。',
+    title: "写真アルバム連携",
+    text: "予定にGoogle Photosのアルバムを紐づけて、イベントの思い出を管理できます. 予定の参加者と共有すれば、アルバムの写真を一緒に楽しめます.",
   },
   {
     Icon: IconGear,
-    title: '多彩なカスタマイズ',
-    text: 'テーマやフォント、週の開始曜日、カスタム休日まで、細部を自分好みに調整できます。',
+    title: "多彩なカスタマイズ",
+    text: "ダークテーマはもちろん、文字を大きくしたり、月曜始まりにしたり、休暇を登録したり、細部を自分専用に調整できます.",
   },
 ];
 
 const screenshots = [
-  { src: shotDetail, alt: '予定の詳細画面' },
-  { src: shotCreator, alt: '予定の作成フォーム' },
-  { src: shotSearch, alt: '予定の検索画面' },
-  { src: shotTemplates, alt: 'テンプレート一覧' },
-  { src: shotContextMenu, alt: '日付のコンテキストメニュー' },
-  { src: shotConfig, alt: '個人設定画面' },
+  { src: shotDetail, alt: "予定の詳細画面" },
+  { src: shotCreator, alt: "予定の作成フォーム" },
+  { src: shotSearch, alt: "予定の検索画面" },
+  { src: shotTemplates, alt: "テンプレート一覧" },
+  { src: shotContextMenu, alt: "日付のコンテキストメニュー" },
+  { src: shotConfig, alt: "個人設定画面" },
 ];
 ---
 
-<BaseLayout title="Orbit カレンダー - Google カレンダーと同期するカレンダーアプリ">
+<BaseLayout
+  title="Orbit カレンダー"
+  ogImage={shotMonth}
+  description="Orbit カレンダーは、自然言語での予定登録、期間を限定した共有、デバイスを超えた同期で、あなたの予定管理を拡張するカレンダーアプリです."
+>
   {/* ヒーロー */}
   <section class="hero">
     <div class="hero-inner">
-      <Image src={logo} alt="Orbit Calendar ロゴ" width={104} height={104} class="hero-logo" />
+      <Image
+        src={logo}
+        alt="Orbit Calendar ロゴ"
+        width={208}
+        height={208}
+        class="hero-logo"
+      />
       <h1 class="hero-title">
-        あなたの日常を<span class="accent">軌道</span>にのせよう
+        日常を<span class="accent">軌道</span>にのせよう
       </h1>
       <p class="hero-sub">
-        Orbit Calendar は Google カレンダーと同期するカレンダーアプリです。<br
+        Orbitカレンダーは予定登録と共有にこだわったカレンダーアプリです.<br
           class="only-pc"
-        />自然言語での予定登録、期間を限定した共有、オフラインでも使える PWA で、予定管理をもっと自由に。
+        />
+        通常の機能はもちろん、自然言語での予定登録、期間を限定した共有、デバイスを超えた同期で、あなたの予定管理をパワフルに拡張します.
       </p>
       <div class="hero-actions">
-        <a href={APP_URL} class="btn btn-primary" target="_blank" rel="noopener">
+        <a
+          href={APP_URL}
+          class="btn btn-primary"
+          target="_blank"
+          rel="noopener"
+        >
           アプリを開く <IconArrowUpRightFromSquare size="0.85rem" />
         </a>
         <a href="#features" class="btn btn-ghost">特徴を見る</a>
-        <a href="#screenshots" class="btn btn-ghost">スクリーンショット</a>
+        <a href="#screenshots" class="btn btn-ghost">画面イメージを見る</a>
       </div>
     </div>
     <div class="hero-shot">
-      <Image src={shotMonth} alt="Orbit Calendar ホーム画面(月表示)" widths={[640, 1120]} sizes="(max-width: 1120px) 100vw, 1120px" loading="eager" />
+      <Image
+        src={shotMonth}
+        alt="Orbit Calendar ホーム画面(月表示)"
+        widths={[640, 1120]}
+        sizes="(max-width: 1120px) 100vw, 1120px"
+        loading="eager"
+      />
     </div>
   </section>
 
@@ -126,7 +148,7 @@ const screenshots = [
   <section id="features" class="section section-alt">
     <div class="section-inner">
       <h2 class="section-title">特徴</h2>
-      <p class="section-lead">予定管理に必要なものを、ひとつのアプリに。</p>
+      <p class="section-lead">予定管理に必要なものは揃っています</p>
       <div class="feature-grid">
         {
           features.map((feature) => (
@@ -146,46 +168,67 @@ const screenshots = [
   {/* 表示モード */}
   <section class="section">
     <div class="section-inner">
-      <h2 class="section-title">見たい形で、見たいだけ</h2>
+      <h2 class="section-title">好みの表示方法で予定を確認</h2>
       <p class="section-lead">
-        月表示、縦スクロール月表示、週タイムライン表示の 3 つのビューを切り替えられます。<br
+        月間表示、縦スクロール表示、週間タイムライン表示の3つのビューを切り替えられます.<br
           class="only-pc"
-        />日付セルをドラッグして期間を選んだり、右クリックのメニューからすばやく予定を作成できます。
+        />日付セルをドラッグして期間を選んだり、右クリックのメニューからすばやく予定を作成できます.
       </p>
       <div class="view-grid">
         <figure>
-          <Image src={shotMonth} alt="月表示" widths={[480, 720]} sizes="(max-width: 767px) 100vw, 33vw" />
-          <figcaption>月表示</figcaption>
+          <Image
+            src={shotMonth}
+            alt="月間表示"
+            widths={[480, 720]}
+            sizes="(max-width: 767px) 100vw, 33vw"
+          />
+          <figcaption>月間表示</figcaption>
         </figure>
         <figure>
-          <Image src={shotVertical} alt="縦スクロール月表示" widths={[480, 720]} sizes="(max-width: 767px) 100vw, 33vw" />
-          <figcaption>縦スクロール月表示</figcaption>
+          <Image
+            src={shotVertical}
+            alt="縦スクロール表示"
+            widths={[480, 720]}
+            sizes="(max-width: 767px) 100vw, 33vw"
+          />
+          <figcaption>縦スクロール表示</figcaption>
         </figure>
         <figure>
-          <Image src={shotWeek} alt="週タイムライン表示" widths={[480, 720]} sizes="(max-width: 767px) 100vw, 33vw" />
-          <figcaption>週タイムライン表示</figcaption>
+          <Image
+            src={shotWeek}
+            alt="週間タイムライン表示"
+            widths={[480, 720]}
+            sizes="(max-width: 767px) 100vw, 33vw"
+          />
+          <figcaption>週間タイムライン表示</figcaption>
         </figure>
       </div>
     </div>
   </section>
 
-  {/* Quick Add */}
+  {/* 自然言語入力 */}
   <section class="section section-alt">
     <div class="section-inner split">
       <div class="split-text">
-        <h2 class="section-title">「明日の15時に歯医者」<br />それだけで予定が作れる</h2>
+        <h2 class="section-title">
+          明日の15時に歯医者に行く
+        </h2>
         <p>
-          Quick Add は、入力した言葉から予定を作る機能です。日時はルールベースで解析し、それ以外の内容は端末上の
-          AI (WebLLM) が読み取って、作成フォームへ流し込みます。
+          自然言語登録は、入力した言葉から予定を作る機能です. AIが入力を分析して、予定作成を支援します. 「明日の15時に歯医者に行く」と入力すれば、自動で予定が作成されます.
         </p>
         <ul class="check-list">
-          <li>内容を確認・修正してから保存できます</li>
-          <li>WebGPU 非対応ブラウザでは簡易解析に自動切り替え</li>
-          <li>PWA インストール時は AI モデルを事前キャッシュ</li>
+          <li>内容の確認と修正をしてから保存できます</li>
+          <li>デバイスがWebGPUに非対応の場合でも簡易解析が利用できます</li>
+          <li>データは端末内で処理され、外部に送信されることはありません</li>
         </ul>
       </div>
       <div class="split-media">
-        <Image src={shotQuickAdd} alt="自然言語で予定を登録 (Quick Add)" widths={[560, 900]} sizes="(max-width: 1023px) 100vw, 50vw" />
+        <Image
+          src={shotQuickAdd}
+          alt="自然言語で予定を登録"
+          widths={[560, 900]}
+          sizes="(max-width: 1023px) 100vw, 50vw"
+        />
       </div>
     </div>
   </section>
@@ -194,19 +237,25 @@ const screenshots = [
   <section class="section">
     <div class="section-inner split split-reverse">
       <div class="split-text">
-        <h2 class="section-title">見せたい期間だけ、<br />見せたい人に</h2>
+        <h2 class="section-title">3日~15日の予定を山田さんに</h2>
         <p>
-          指定した期間の予定だけをコピーした「コピーカレンダー」を作り、相手の Google
-          アカウントへ共有できます。有効期限が切れると、共有カレンダーは自動で削除されます。
+          指定した期間の予定だけを相手のGoogleアカウントへ共有できます. 設定した有効期限が切れると、共有は自動で解除されます.
         </p>
         <ul class="check-list">
-          <li>「予定の詳細を閲覧」と「予定の有無のみ(空き時間)」のどちらかを選べます</li>
-          <li>複数カレンダーをまとめて共有</li>
-          <li>作成後は定期的に自動同期</li>
+          <li>
+            そのまま共有するだけでなく、予定内容を伏せて共有することもできます
+          </li>
+          <li>複数カレンダーがあってもまとめて共有できます</li>
+          <li>期間内の予定が変わっても自動で相手に同期されます</li>
         </ul>
       </div>
       <div class="split-media">
-        <Image src={shotShare} alt="期間を指定して共有" widths={[560, 900]} sizes="(max-width: 1023px) 100vw, 50vw" />
+        <Image
+          src={shotShare}
+          alt="期間を指定して共有"
+          widths={[560, 900]}
+          sizes="(max-width: 1023px) 100vw, 50vw"
+        />
       </div>
     </div>
   </section>
@@ -215,29 +264,37 @@ const screenshots = [
   <section class="section section-alt">
     <div class="section-inner split">
       <div class="split-text">
-        <h2 class="section-title">スマホでは、アプリのように</h2>
+        <h2 class="section-title">スマートフォンで更に便利に</h2>
         <p>
-          スマホでは 1 カラムの表示に最適化しています。ホーム画面に追加すればフルスクリーンで動作し、プッシュ通知やオフライン起動も使える
-          PWA アプリです。
+          アプリはスマートフォンにも最適化しています. アプリをインストールして使用すれば、プッシュ通知やオフライン表示も可能です. もちろん、ブラウザからもアクセスできます.
         </p>
         <ul class="check-list">
-          <li>ボトムシートで予定一覧・詳細をサッと確認</li>
-          <li>ドロワーからカレンダーリストにアクセス</li>
-          <li>設定は Google Drive に同期。別のデバイスでも同じ使い心地です</li>
+          <li>画面の高さを活用して、小さくても快適に予定を管理できます</li>
+          <li>設定はGoogle Driveに同期して、別のデバイスでも同じ使い心地です</li>
         </ul>
       </div>
       <div class="split-media mobile-shots">
-        <Image src={shotMobileHome} alt="モバイルのホーム画面" widths={[280, 560]} sizes="(max-width: 1023px) 45vw, 240px" />
-        <Image src={shotMobileDetail} alt="モバイルの予定詳細画面" widths={[280, 560]} sizes="(max-width: 1023px) 45vw, 240px" />
+        <Image
+          src={shotMobileHome}
+          alt="モバイルのホーム画面"
+          widths={[280, 560]}
+          sizes="(max-width: 1023px) 45vw, 240px"
+        />
+        <Image
+          src={shotMobileDetail}
+          alt="モバイルの予定詳細画面"
+          widths={[280, 560]}
+          sizes="(max-width: 1023px) 45vw, 240px"
+        />
       </div>
     </div>
   </section>
 
-  {/* スクリーンショット */}
+  {/* 画面イメージ */}
   <section id="screenshots" class="section">
     <div class="section-inner">
-      <h2 class="section-title">スクリーンショット</h2>
-      <p class="section-lead">詳細確認から設定まで、すべての画面がここに。</p>
+      <h2 class="section-title">画面イメージ</h2>
+      <p class="section-lead">詳細確認から設定まで、まずは見てみてください</p>
       <div class="shot-grid">
         {
           screenshots.map((shot) => (
@@ -264,8 +321,10 @@ const screenshots = [
       </div>
       <h2 class="section-title">プライバシーファースト</h2>
       <p class="section-lead">
-        広告配信、行動追跡、アクセス解析のための情報収集は一切行いません。<br class="only-pc" />
-        OAuth トークンはサーバー上にのみ保管し、クライアントには開示しません。
+        広告配信、行動追跡、アクセス解析のための情報収集は一切行いません.<br
+          class="only-pc"
+        />
+        トークンはサーバにのみ保管し、クライアントには開示しません.<br class="only-pc" />予定データはGoogleのシステムに保存され、プラットフォームでは保存されません.
       </p>
       <div class="hero-actions">
         <a href="/privacy" class="btn btn-ghost">
@@ -281,20 +340,33 @@ const screenshots = [
   {/* CTA */}
   <section class="section cta-section">
     <div class="section-inner">
-      <h2 class="cta-title">さあ、予定を軌道に乗せよう。</h2>
-      <p class="section-lead">Google アカウントがあれば、すぐに始められます。</p>
+      <h2 class="cta-title">さあ、日常を軌道にのせよう</h2>
+      <p class="section-lead">
+        Googleアカウントがあれば、すぐに始められます
+      </p>
       <div class="hero-actions">
-        <a href={APP_URL} class="btn btn-primary" target="_blank" rel="noopener">
+        <a
+          href={APP_URL}
+          class="btn btn-primary"
+          target="_blank"
+          rel="noopener"
+        >
           アプリを開く <IconArrowUpRightFromSquare size="0.85rem" />
         </a>
       </div>
-      <Image src={shotShareConfig} alt="カレンダーの共有設定画面" widths={[640, 1000]} sizes="(max-width: 1000px) 100vw, 1000px" class="cta-shot" />
+      <Image
+        src={shotShareConfig}
+        alt="カレンダーの共有設定画面"
+        widths={[640, 1000]}
+        sizes="(max-width: 1000px) 100vw, 1000px"
+        class="cta-shot"
+      />
     </div>
   </section>
 </BaseLayout>
 
 <style lang="scss">
-  @use '../styles/vars' as *;
+  @use "../styles/vars" as *;
 
   #features,
   #screenshots {
@@ -648,7 +720,7 @@ const screenshots = [
       font-size: 0.92rem;
 
       &::before {
-        content: '';
+        content: "";
         position: absolute;
         left: 0;
         top: 0.45em;
