@@ -9,7 +9,7 @@ COPY ./app .
 
 RUN chown -R node:node /app
 
-RUN mkdir /app/.realm
+RUN mkdir -p /app/.realm
 
 RUN chown -R node:node /app/.realm
 
