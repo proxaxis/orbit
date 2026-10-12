@@ -17,4 +17,4 @@ USER node
 EXPOSE 4321
 EXPOSE 14321
 
-CMD ["node", "./dist/server/entry.mjs"]
+CMD ["npm", "run", "dev", "--host", "0.0.0.0", "--port", "14321"]
