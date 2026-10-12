@@ -17,4 +17,4 @@ USER node
 EXPOSE 4321
 EXPOSE 14321
 
-CMD ["npm", "run", "preview", "--", "--port 14321"]
+CMD ["npm", "run", "preview", "--", "--port 14321", "--host 0.0.0.0"]
