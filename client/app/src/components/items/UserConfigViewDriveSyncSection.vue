@@ -33,15 +33,14 @@ function startDriveAuth() {
   window.location.href = `${BFF_APP_BASE_URL}/auth/drive`;
 }
 
-/** クラウド同期を無効化し、保存済みの Drive トークンを破棄する */
+/** クラウド同期を無効化し、無効化状態を他デバイスへ伝播させてから保存済みの Drive トークンを破棄する */
 async function disableDriveSync() {
   const confirmed = await userStore.confirm({
     title: 'クラウド同期を無効化',
     message: '設定やセッションカレンダーの Drive への同期を停止します. Drive 上のデータは残ります.',
   });
   if (!confirmed) return;
-  driveSync.stopDriveSync();
-  userStore.setUseDriveSync(false);
+  await driveSync.disableDriveSync();
   auth.clearDriveToken();
 }
 </script>

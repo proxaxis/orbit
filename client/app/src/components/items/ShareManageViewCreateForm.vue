@@ -192,10 +192,9 @@ async function submitShare() {
     return;
   }
 
-  const firstCalendar = calendarStore.list.find((cal) => cal.id === form.calendarIds[0]);
   try {
     await share.createShare({
-      title: form.title.trim() || `${firstCalendar?.summary ?? 'カレンダー'} の共有 (${form.rangeStart}〜${form.rangeEnd})`,
+      title: form.title.trim() || `${calendarStore.getCalendarName(form.calendarIds[0]) || 'カレンダー'} の共有 (${form.rangeStart}〜${form.rangeEnd})`,
       recipient,
       calendarIds: [...form.calendarIds],
       rangeStart: form.rangeStart,

@@ -5,6 +5,7 @@
 import { useCalendars } from '@/composables/useCalendars.js';
 import { useCalendarStore } from '@/stores/calendar.js';
 import { useUserStore } from '@/stores/user.js';
+import { isBirthdayCalendarId } from '@/services/birthday-calendar.js';
 
 /**
  * @typedef {Object} CalendarDetailForm
@@ -53,6 +54,11 @@ export function useCalendarDetail() {
    * @returns {Promise<GoogleCalendarResource|null>} 更新されたカレンダー本体
    */
   async function saveCalendarDetail(calendarId, form, { isOwner, canEdit }, currentEntry) {
+    // 誕生日カレンダーは Google 管理の特殊カレンダーで更新対象にできない
+    if (isBirthdayCalendarId(calendarId)) {
+      userStore.setError(true, new Error('誕生日カレンダーの設定は変更できません。'));
+      return null;
+    }
     userStore.setLoading(true, 'Saving the calendar settings...');
     try {
       const newListEntry = await calendars.updateCalendarListEntry(calendarId, {
@@ -71,12 +77,13 @@ export function useCalendarDetail() {
       }
       const entry = currentEntry ?? newListEntry;
       if (!entry) throw new Error('The selected calendar could not be found.');
+      // 別名（summaryOverride）は API 応答の値をそのまま保持し、
+      // 表示名の解決は stores/calendar.js の getCalendarName に委ねる
       calendarStore.updateCalendar({
         ...entry,
         ...(newListEntry ?? {}),
         id: calendarId,
-        summary: isOwner ? form.summary.trim() : (newListEntry?.summaryOverride ?? form.summary.trim()),
-        ...(isOwner ? { summaryOverride: undefined } : { summaryOverride: form.summary.trim() }),
+        summary: isOwner ? form.summary.trim() : (newListEntry?.summary ?? entry.summary),
         colorId: newListEntry?.colorId ?? form.colorId,
         backgroundColor: newListEntry?.backgroundColor,
         foregroundColor: newListEntry?.foregroundColor,
@@ -97,6 +104,11 @@ export function useCalendarDetail() {
    * @returns {Promise<boolean>} 削除を実行したかどうか
    */
   async function removeCalendarWithConfirm(calendarId, deleteItself) {
+    // 誕生日カレンダーは Google 管理の特殊カレンダーで削除できない
+    if (isBirthdayCalendarId(calendarId)) {
+      userStore.setError(true, new Error('誕生日カレンダーは削除できません。'));
+      return false;
+    }
     const message = deleteItself ? 'このカレンダー自体を削除します. 予定や共有設定も利用できなくなります. 実行しますか？' : 'このカレンダーを自分のカレンダーリストから削除しますか？';
     const confirmed = await userStore.confirm({
       title: deleteItself ? 'カレンダーを削除' : 'カレンダーリストから削除',

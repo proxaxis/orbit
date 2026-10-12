@@ -13,7 +13,9 @@ import * as gCalAPI from '@/services/google-calendar-api.js';
  */
 function operationFor(op) {
   if (op === 'insert') return gCalAPI.insertEvent;
-  if (op === 'update') return gCalAPI.updateEvent;
+  // 更新は PATCH を使う。PUT は完全置換のため参加者の出欠回答など
+  // 部分更新ペイロードだと start/end 不足で失敗してしまう
+  if (op === 'update') return gCalAPI.patchEvent;
   if (op === 'remove') return gCalAPI.deleteEvent;
   return null;
 }

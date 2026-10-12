@@ -69,7 +69,6 @@ async function switchAccount() {
 </template>
 
 <style lang="scss" scoped>
-
 .hint {
   font-size: var(--text-size-sm);
   margin-bottom: var(--space-sm);

@@ -53,6 +53,8 @@ export const CACHE_KEYS = Object.freeze({
   REMOTE_SYNC_CHECKED_AT: 'orbit-remote-sync-checked-at',
   /** Drive へ最後に書き込んだ/適用した同期データの updatedAt の保存キー */
   DRIVE_SYNC_AT: 'orbit-drive-sync-at',
+  /** WebLLM モデルのインストール日時・ダウンロード拒否日時の保存キー */
+  LLM_STATE: 'orbit-llm-state',
 });
 
 /**

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
-import { useAuthStore, BFF_BASE_URL } from '@/stores/auth.js';
+import { useAuthStore, BFF_APP_BASE_URL } from '@/stores/auth.js';
 import { useUserStore } from '@/stores/user.js';
 import { useAuth } from '@/composables/useAuth.js';
 
@@ -40,7 +40,7 @@ describe('useAuthStore', () => {
     expect(token).toBe('token-abc');
     expect(authStore.token).toBe('token-abc');
     expect(authStore.isAuthenticated).toBe(true);
-    expect(String(fetchMock.mock.calls[0][0])).toBe(`${BFF_BASE_URL}/api/token`);
+    expect(String(fetchMock.mock.calls[0][0])).toBe(`${BFF_APP_BASE_URL}/api/token`);
   });
 
   it('fetchToken 失敗時は未認証になりエラーを記録する', async () => {
@@ -62,7 +62,7 @@ describe('useAuthStore', () => {
     expect(authStore.isPhotoSharingAuthorized).toBe(true);
     // 通常の認証とは別管理
     expect(authStore.isAuthenticated).toBe(false);
-    expect(String(fetchMock.mock.calls[0][0])).toBe(`${BFF_BASE_URL}/api/token?t=photo-sharing`);
+    expect(String(fetchMock.mock.calls[0][0])).toBe(`${BFF_APP_BASE_URL}/api/token?t=photo-sharing`);
   });
 
   it('fetchPhotoToken はトークンが無いレスポンスで null を返す', async () => {
@@ -100,7 +100,7 @@ describe('useAuthStore', () => {
     expect(authStore.token).toBe('');
     expect(authStore.photoToken).toBe('');
     const [url, init] = fetchMock.mock.calls[2];
-    expect(String(url)).toBe(`${BFF_BASE_URL}/auth/logout`);
+    expect(String(url)).toBe(`${BFF_APP_BASE_URL}/logout`);
     expect(init.method).toBe('POST');
   });
 

@@ -12,6 +12,7 @@ import CalendarRibbon from '@/components/CalendarRibbon.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
 import AskLoginMessage from '@/components/AskLoginMessage.vue';
 import { getCalendarListColorIdByColor, getRandomCalendarListColorId } from '@/services/google-calendar-colors.js';
+import { BIRTHDAY_CALENDAR_ENTRY, isBirthdayCalendarId } from '@/services/birthday-calendar.js';
 import AccordionMenu from '@/components/AccordionMenu.vue';
 import IconFloppyDisk from '@/components/icons/IconFloppyDisk.vue';
 import IconRotateLeft from '@/components/icons/IconRotateLeft.vue';
@@ -39,6 +40,8 @@ const form = reactive({
 const theCalendarId = computed(() => (typeof route.query.cid === 'string' ? route.query.cid : null));
 /** @type {ComputedRef<GoogleCalendarListEntry|null>} */
 const storedCalendarEntry = computed(() => calendarStore.list.find((calendar) => calendar.id === theCalendarId.value) ?? null);
+/** @type {ComputedRef<boolean>} 誕生日カレンダーかどうか（特殊カレンダーで表示・非表示のみ可能） */
+const isBirthdayCalendar = computed(() => isBirthdayCalendarId(theCalendarId.value));
 /** @type {ComputedRef<boolean>} カレンダーのオーナーかどうか */
 const isOwner = computed(() => storedCalendarEntry.value?.accessRole === 'owner' || storedCalendarEntry.value?.primary === true);
 /** @type {ComputedRef<boolean>} カレンダーを編集できる権限を持っているかどうか */
@@ -88,6 +91,11 @@ watch(
   async () => {
     source.value = { listEntry: null, calendar: null };
     if (!theCalendarId.value || typeof theCalendarId.value !== 'string' || !authStore.isAuthenticated) return;
+    // 誕生日カレンダーは Google 側管理の特殊カレンダーで API 参照は不要（変更もできない）
+    if (isBirthdayCalendar.value) {
+      source.value = { listEntry: storedCalendarEntry.value ?? { ...BIRTHDAY_CALENDAR_ENTRY }, calendar: null };
+      return;
+    }
 
     source.value = await calendarDetail.loadCalendarDetail(theCalendarId.value, storedCalendarEntry.value);
     if (source.value.listEntry || source.value.calendar) {
@@ -128,7 +136,12 @@ watch(
         <p v-else>カレンダーが選択されていません</p>
       </div>
 
-      <form @submit.prevent="save">
+      <div v-if="isBirthdayCalendar" class="special-calendar-note">
+        <p>このカレンダーは Google が連絡先の誕生日・記念日から自動生成する特殊なカレンダーです。</p>
+        <p>変更できるのはカレンダーの表示・非表示のみです。カレンダーリストのチェックボックスから切り替えてください。</p>
+      </div>
+
+      <form v-else @submit.prevent="save">
         <div class="form-heading">
           <h2>基本情報</h2>
           <span v-if="!canEditCalendar">読み取り専用</span>
@@ -185,6 +198,13 @@ watch(
 </template>
 
 <style lang="scss" scoped>
+.special-calendar-note {
+  p {
+    font-size: var(--text-size-sm);
+    color: var(--text-light);
+  }
+}
+
 .section-heading {
   display: flex;
   flex-direction: column;

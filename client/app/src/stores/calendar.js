@@ -8,6 +8,7 @@ import { shallowRef, computed } from 'vue';
 import { useUserStore } from '@/stores/user.js';
 import { useShareStore } from '@/stores/share.js';
 import { CACHE_KEYS, writeCache } from '@/composables/useCache.js';
+import { BIRTHDAY_CALENDAR_ENTRY, isBirthdayCalendarId } from '@/services/birthday-calendar.js';
 
 export const useCalendarStore = defineStore('calendar', () => {
   const userStore = useUserStore();
@@ -19,9 +20,13 @@ export const useCalendarStore = defineStore('calendar', () => {
   /** @type {ShallowRef<Set<GoogleCalendarListEntry>>} @description 一時利用するセッションカレンダー */
   const _sessionCalendars = shallowRef(new Set());
 
-  /** @type {ComputedRef<GoogleCalendarListEntry[]>} @description 表示順を適用したカレンダーリスト */
+  /** @type {ComputedRef<GoogleCalendarListEntry[]>} @description 表示順を適用したカレンダーリスト（誕生日カレンダーの仮想エントリを含む） */
   const list = computed(() => {
-    const calendars = Array.from(new Map([...Array.from(_gCalendarsList.value ?? new Set()), ...Array.from(_sessionCalendars.value)].map((calendar) => [calendar.id, calendar])).values());
+    const gCalendars = _gCalendarsList.value;
+    const calendars = Array.from(new Map([...Array.from(gCalendars ?? new Set()), ...Array.from(_sessionCalendars.value)].map((calendar) => [calendar.id, calendar])).values());
+    // 誕生日カレンダーは calendarList に含まれなくても events.list で参照できる特殊カレンダー。
+    // Google のリストに無い場合は仮想エントリを末尾に足して表示・非表示を操作できるようにする
+    if (gCalendars && !calendars.some((calendar) => isBirthdayCalendarId(calendar.id))) calendars.push({ ...BIRTHDAY_CALENDAR_ENTRY });
     const order = userStore.calendarOrder;
     return calendars.sort((left, right) => {
       const leftIndex = order.indexOf(left.id);
@@ -110,7 +115,7 @@ export const useCalendarStore = defineStore('calendar', () => {
    */
   function addCalendar(calendar) {
     if (!calendar?.id) return;
-    _gCalendarsList.value = new Set([...list.value, calendar]);
+    _gCalendarsList.value = new Set([...list.value, calendar].filter((item) => !(/** @type {{ birthday?: boolean }} */ (item).birthday)));
     writeCache(CACHE_KEYS.CALENDARS, Array.from(_gCalendarsList.value));
   }
 
@@ -121,7 +126,8 @@ export const useCalendarStore = defineStore('calendar', () => {
    */
   function updateCalendar(calendar) {
     if (!calendar?.id) return;
-    _gCalendarsList.value = new Set(list.value.map((item) => (item.id === calendar.id ? calendar : item)));
+    // 誕生日カレンダーの仮想エントリは Google 由来でないため一覧へ書き戻さない
+    _gCalendarsList.value = new Set(list.value.map((item) => (item.id === calendar.id ? calendar : item)).filter((item) => !(/** @type {{ birthday?: boolean }} */ (item).birthday)));
     writeCache(CACHE_KEYS.CALENDARS, Array.from(_gCalendarsList.value));
   }
 
@@ -132,8 +138,19 @@ export const useCalendarStore = defineStore('calendar', () => {
    */
   function removeCalendar(calendarId) {
     if (!calendarId) return;
-    _gCalendarsList.value = new Set(list.value.filter((calendar) => calendar.id !== calendarId));
+    _gCalendarsList.value = new Set(list.value.filter((calendar) => calendar.id !== calendarId && !(/** @type {{ birthday?: boolean }} */ (calendar).birthday)));
     writeCache(CACHE_KEYS.CALENDARS, Array.from(_gCalendarsList.value));
+  }
+
+  /**
+   * カレンダーの表示名を取得する。共有カレンダーなどでユーザーが付けた
+   * 別名（summaryOverride）がある場合はそちらを優先する
+   * @param {string} calendarId カレンダー ID
+   * @returns {string} 表示名（見つからない場合は空文字）
+   */
+  function getCalendarName(calendarId) {
+    const calendar = list.value.find((cal) => cal.id === calendarId);
+    return calendar?.summaryOverride || calendar?.summary || '';
   }
 
   /**
@@ -163,6 +180,7 @@ export const useCalendarStore = defineStore('calendar', () => {
     addCalendar,
     updateCalendar,
     removeCalendar,
+    getCalendarName,
     getCalendarColor,
   };
 });

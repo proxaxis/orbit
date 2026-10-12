@@ -14,6 +14,7 @@ import { useUserStore } from '@/stores/user.js';
 import { CACHE_KEYS, readCache, writeCache } from '@/composables/useCache.js';
 import { notifyEventDataChanged } from '@/composables/useEvents.js';
 import { useCalendars } from '@/composables/useCalendars.js';
+import { eventsQueryForCalendar } from '@/services/birthday-calendar.js';
 
 /** @type {boolean} 初期化済みフラグ */
 let syncInitialized = false;
@@ -51,8 +52,8 @@ async function checkCalendarListChanges() {
   const calendarStore = useCalendarStore();
   const response = await gCalAPI.listCalendarList(authStore.token);
   const listEntries = Array.isArray(response?.items) ? response.items : [];
-  // セッションカレンダーは calendarList に含まれないため比較対象から除く
-  const ownCalendars = calendarStore.list.filter((/** @type {any} */ calendar) => !calendar.session);
+  // セッションカレンダーと誕生日カレンダーの仮想エントリは calendarList に含まれないため比較対象から除く
+  const ownCalendars = calendarStore.list.filter((/** @type {any} */ calendar) => !calendar.session && !calendar.birthday);
   if (calendarListFingerprint(ownCalendars) === calendarListFingerprint(listEntries)) return false;
   // アカウント切替の検出と前アカウント由来キャッシュの破棄を先に行う
   await useCalendars().syncAccountIdentity(listEntries);
@@ -74,7 +75,7 @@ async function checkEventUpdates() {
   try {
     const results = await gCalAPI.listEventsBatch(
       authStore.token,
-      calendarStore.list.map((/** @type {any} */ calendar) => ({ calendarId: calendar.id, query: { updatedMin: since, showDeleted: true } })),
+      calendarStore.list.map((/** @type {any} */ calendar) => ({ calendarId: calendar.id, query: eventsQueryForCalendar(calendar.id, { updatedMin: since, showDeleted: true }) })),
     );
     return results.some((result) => result.ok && result.items.length > 0);
   } catch (error) {

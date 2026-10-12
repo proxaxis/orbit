@@ -9,14 +9,20 @@ import { useCalendarStore } from '@/stores/calendar.js';
 import { useUserStore } from '@/stores/user.js';
 import { useShareStore } from '@/stores/share.js';
 import { useShare } from '@/composables/useShare.js';
+import { useClipboard } from '@/composables/useClipboard.js';
+import { useShareLink } from '@/composables/useShareLink.js';
+import { buildShareAcceptUrl } from '@/services/share-sync.js';
 import IconArrowRotateLeft from '@/components/icons/IconArrowRotateLeft.vue';
 import IconClipboard from '@/components/icons/IconClipboard.vue';
+import IconShareNodes from '@/components/icons/IconShareNodes.vue';
 import IconTrash from '@/components/icons/IconTrash.vue';
 
 const calendarStore = useCalendarStore();
 const userStore = useUserStore();
 const shareStore = useShareStore();
 const share = useShare();
+const clipboard = useClipboard();
+const { shareOrCopyLink } = useShareLink();
 
 const roleOptions = [
   { value: 'freeBusyReader', label: '予定の有無のみ（空き時間）' },
@@ -30,7 +36,7 @@ const copiedCalendarId = ref(null);
 
 /** @param {OrbitShareSpec} spec @returns {string} 共有条件の概要テキスト */
 function specSummary(spec) {
-  const names = spec.calendarIds.map((id) => calendarStore.list.find((cal) => cal.id === id)?.summary ?? id).join(', ');
+  const names = spec.calendarIds.map((id) => calendarStore.getCalendarName(id) || id).join(', ');
   return `${spec.rangeStart} 〜 ${spec.rangeEnd} / ${names}`;
 }
 
@@ -45,6 +51,12 @@ async function copyCalendarId(calendarId) {
   } catch (error) {
     console.warn('Failed to copy calendar ID.', error);
   }
+}
+
+/** @param {OrbitShareSpec} spec 共有リンクを Web Share で送るか、クリップボードへコピーする */
+async function shareLink(spec) {
+  const url = buildShareAcceptUrl(spec?.copyCalendarId);
+  await shareOrCopyLink(url, `「${spec.title}」が共有されました。リンクを開いて登録してください。`);
 }
 
 /** @param {OrbitShareSpec} spec 共有を手動で今すぐ同期する */
@@ -96,6 +108,7 @@ async function revokeShare(spec) {
           <button type="button" title="カレンダー ID をコピー" @click="copyCalendarId(spec.copyCalendarId)"><IconClipboard />{{ copiedCalendarId === spec.copyCalendarId ? 'コピーしました' : 'ID をコピー' }}</button>
         </div>
         <div class="spec-actions">
+          <button v-if="spec.copyCalendarId && !share.isExpired(spec)" type="button" :disabled="processingSpecId === spec.id" @click="shareLink(spec)"><IconShareNodes />共有リンク</button>
           <button type="button" :disabled="processingSpecId === spec.id" @click="syncNow(spec)"><IconArrowRotateLeft />今すぐ同期</button>
           <button type="button" class="revoke" :disabled="processingSpecId === spec.id" @click="revokeShare(spec)"><IconTrash />共有を解除</button>
         </div>

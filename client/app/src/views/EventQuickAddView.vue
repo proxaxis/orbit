@@ -61,7 +61,10 @@ async function runQuickAdd() {
     </form>
 
     <p v-if="isQuickAdding" class="quick-add-status">解析中...</p>
-    <p v-else-if="quickAddEngineState.status === 'loading'" class="quick-add-status">AIモデル読込中: {{ quickAddEngineState.message }}</p>
+    <template v-else-if="quickAddEngineState.status === 'loading'">
+      <p class="quick-add-status">AIモデル読込中: {{ quickAddEngineState.message }}</p>
+      <progress class="quick-add-progress" :value="quickAddEngineState.progress" max="1" />
+    </template>
     <p v-else-if="quickAddEngineState.status === 'unsupported'" class="quick-add-status">このブラウザは AI 解析（WebGPU）に対応していないため、簡易解析で登録します</p>
   </div>
 </template>
@@ -95,6 +98,13 @@ async function runQuickAdd() {
   padding: var(--space-sm);
   color: var(--text-light);
   text-align: center;
+}
+
+.quick-add-progress {
+  width: 60%;
+  height: 0.5rem;
+  margin: 0 auto;
+  accent-color: var(--primary);
 }
 
 .icon-x-mark-wrapper {

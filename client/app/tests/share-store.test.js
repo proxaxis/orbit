@@ -21,7 +21,7 @@ vi.mock('@/composables/useCache.js', () => ({
   registerBackgroundSync: vi.fn(async () => false),
 }));
 vi.mock('@/stores/auth.js', () => ({
-  BFF_BASE_URL: '',
+  BFF_APP_BASE_URL: '',
   useAuthStore: () => ({ token: 'cal-token', isAuthenticated: true }),
 }));
 

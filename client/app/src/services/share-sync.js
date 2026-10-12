@@ -41,6 +41,22 @@ export function isShareSpecExpired(spec) {
 }
 
 /**
+ * 受信者が開いて登録確認を行うための共有リンクを生成する。
+ * リンクにはカレンダー ID と登録先モードのみを含め、カレンダー情報は受信者側で取得する。
+ * @param {string|null|undefined} calendarId 共有対象のカレンダー ID
+ * @param {{baseUrl?: string, mode?: 'session'|'list'}} [options] baseUrl: アプリのベース URL（省略時は現在のオリジン）、mode: 登録先（'session'=セッションカレンダー、'list'=カレンダーリスト）
+ * @returns {string|null} 共有リンク（ID が無ければ null）
+ */
+export function buildShareAcceptUrl(calendarId, { baseUrl, mode } = {}) {
+  if (!calendarId) return null;
+  const base = baseUrl ?? (typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
+  const url = new URL('/share/accept', base);
+  url.searchParams.set('cid', calendarId);
+  if (mode === 'list') url.searchParams.set('mode', 'list');
+  return url.toString();
+}
+
+/**
  * コピー元イベントをコピー先カレンダー用のペイロードに変換する。
  * 出席者や会議データはコピーしない（招待通知や権限が漏れるのを防ぐため）。
  * freeBusyReader の場合は詳細を伏せて「予定あり」としてコピーする。

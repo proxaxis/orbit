@@ -123,7 +123,7 @@ export async function processEventOperations(operations, token) {
   for (const operation of operations) {
     try {
       if (operation.type === 'create') {
-        const result = await gCalAPI.insertEvent(token, operation.calendarId, operation.body ?? {});
+        const result = await gCalAPI.insertEvent(token, operation.calendarId, operation.body ?? {}, { sendUpdates: 'all' });
         if (result?.id && operation.localId) {
           /** @type {any} ローカル保存済みのイベント */
           const local = (await getStoredEvents()).find((/** @type {any} */ event) => event.id === operation.localId);
@@ -140,9 +140,10 @@ export async function processEventOperations(operations, token) {
           }
         }
       } else if (operation.type === 'update') {
-        await gCalAPI.updateEvent(token, operation.calendarId, operation.eventId ?? '', operation.body ?? {});
+        // 更新は PATCH を使う（PUT の完全置換では部分更新が失敗するため）
+        await gCalAPI.patchEvent(token, operation.calendarId, operation.eventId ?? '', operation.body ?? {}, { sendUpdates: 'all' });
       } else if (operation.type === 'remove') {
-        await gCalAPI.deleteEvent(token, operation.calendarId, operation.eventId ?? '');
+        await gCalAPI.deleteEvent(token, operation.calendarId, operation.eventId ?? '', { sendUpdates: 'all' });
       }
       synced = true;
     } catch (error) {

@@ -10,6 +10,7 @@ import UserConfigViewAccountSection from '@/components/items/UserConfigViewAccou
 import UserConfigViewPhotoSharingSection from '@/components/items/UserConfigViewPhotoSharingSection.vue';
 import UserConfigViewPeopleSection from '@/components/items/UserConfigViewPeopleSection.vue';
 import UserConfigViewDriveSyncSection from '@/components/items/UserConfigViewDriveSyncSection.vue';
+import UserConfigViewLlmSection from '@/components/items/UserConfigViewLlmSection.vue';
 import UserConfigViewNotificationSection from '@/components/items/UserConfigViewNotificationSection.vue';
 import UserConfigViewSyncSection from '@/components/items/UserConfigViewSyncSection.vue';
 import UserConfigViewDataSection from '@/components/items/UserConfigViewDataSection.vue';
@@ -247,6 +248,10 @@ function save() {
 
       <AccordionMenu label="クラウド同期">
         <UserConfigViewDriveSyncSection />
+      </AccordionMenu>
+
+      <AccordionMenu label="AI 解析モデル">
+        <UserConfigViewLlmSection />
       </AccordionMenu>
 
       <AccordionMenu label="通知設定">

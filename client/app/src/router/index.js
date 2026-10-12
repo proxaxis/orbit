@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { takePendingShareAccept } from '@/services/share-accept.js';
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -81,6 +82,15 @@ const router = createRouter({
           },
         },
         {
+          path: '/share/accept',
+          name: 'ShareAccept',
+          components: {
+            default: () => import('@/views/CalendarMainView.vue'),
+            nav: () => import('@/views/UserCalendarsView.vue'),
+            sub: () => import('@/views/ShareAcceptView.vue'),
+          },
+        },
+        {
           path: '/cal/share',
           name: 'ShareManage',
           components: {
@@ -155,6 +165,14 @@ const router = createRouter({
       component: () => import('@/views/AccessUnauthorizedView.vue'),
     },
   ],
+});
+
+// 未ログインで共有受け入れリンクを開いた場合に備え、ログイン後のホーム遷移を受け入れ画面へ戻す
+router.beforeEach((to) => {
+  if (to.name !== 'Home') return true;
+  const pending = takePendingShareAccept();
+  if (!pending) return true;
+  return { name: 'ShareAccept', query: { cid: pending.cid, ...(pending.mode === 'list' ? { mode: 'list' } : {}) }, replace: true };
 });
 
 export default router;

@@ -4,9 +4,12 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth.js';
 import { useCalendarStore } from '@/stores/calendar.js';
 import { useAclRules } from '@/composables/useAclRules.js';
+import { useShareLink } from '@/composables/useShareLink.js';
+import { buildShareAcceptUrl } from '@/services/share-sync.js';
 import MenuBar from '@/components/MenuBar.vue';
 import CalendarRibbon from '@/components/CalendarRibbon.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
+import IconShareNodes from '@/components/icons/IconShareNodes.vue';
 import AskLoginMessage from '@/components/AskLoginMessage.vue';
 import SharingConfigViewAddForm from '@/components/items/SharingConfigViewAddForm.vue';
 import SharingConfigViewRuleList from '@/components/items/SharingConfigViewRuleList.vue';
@@ -16,6 +19,7 @@ const router = useRouter();
 const authStore = useAuthStore();
 const calendarStore = useCalendarStore();
 const { loadRules } = useAclRules();
+const { shareOrCopyLink } = useShareLink();
 
 /** @type {ComputedRef<string>} クエリまたは先頭の書き込み可能カレンダーから決まる設定対象 ID */
 const theCalendarId = computed(() => {
@@ -44,6 +48,12 @@ function onSelectCalendar(event) {
 }
 
 watch([theCalendarId, () => authStore.token], () => loadRules(theCalendarId.value), { immediate: true });
+
+/** 対象カレンダーの登録用リンクを Web Share で送るか、クリップボードへコピーする */
+async function shareLink() {
+  const url = buildShareAcceptUrl(theCalendarId.value, { mode: 'list' });
+  await shareOrCopyLink(url, `カレンダー「${calendarStore.getCalendarName(theCalendarId.value)}」が共有されました。リンクを開いて登録してください。`);
+}
 </script>
 
 <template>
@@ -65,7 +75,7 @@ watch([theCalendarId, () => authStore.token], () => loadRules(theCalendarId.valu
     <section v-if="authStore.isAuthenticated">
       <label class="calendar-select">
         <select :value="theCalendarId" :disabled="!calendarStore.listWritableCalendars.length" @change="onSelectCalendar($event)">
-          <option v-for="cal in calendarStore.listWritableCalendars" :key="cal.id" :value="cal.id">{{ cal.summary }}</option>
+          <option v-for="cal in calendarStore.listWritableCalendars" :key="cal.id" :value="cal.id">{{ calendarStore.getCalendarName(cal.id) }}</option>
         </select>
         <small>設定対象のカレンダー:</small>
         <div class="calendar-ribbon-wrapper" v-if="theCalendar">
@@ -77,6 +87,10 @@ watch([theCalendarId, () => authStore.token], () => loadRules(theCalendarId.valu
       <p v-if="requestedCalendarNotEditable" class="empty-state">指定されたカレンダーは共有設定を変更できません（書き込み権限がありません）</p>
       <p v-else-if="!calendarStore.listWritableCalendars.length" class="empty-state">共有設定を変更できるカレンダーがありません</p>
       <template v-else-if="theCalendarId">
+        <div class="share-link-row">
+          <button type="button" @click="shareLink"><IconShareNodes />登録用リンクを共有</button>
+          <small>リンクを開いた相手に登録確認が表示され、相手のカレンダーリストへ追加されます。リンク自体に権限は含まれないため、先に共有相手を登録してください。</small>
+        </div>
         <SharingConfigViewAddForm :calendar-id="theCalendarId" />
         <SharingConfigViewRuleList :calendar-id="theCalendarId" />
       </template>
@@ -98,6 +112,33 @@ section {
 
   .calendar-ribbon-wrapper {
     margin-left: var(--space-xs);
+  }
+}
+
+.share-link-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xxs);
+  padding: var(--space-sm) 0;
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    background-color: var(--bg-2);
+    border-radius: var(--border-radius);
+    font-size: var(--text-size-sm);
+
+    &:hover {
+      background-color: var(--bg-3);
+    }
+  }
+
+  small {
+    font-size: var(--text-size-xs);
+    color: var(--text-light);
   }
 }
 

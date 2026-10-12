@@ -2,6 +2,7 @@ import { ref } from 'vue';
 import dayjs from '@/services/dayjs.js';
 import emojiData from '@/assets/emoji-data.json';
 import { useUserStore } from '@/stores/user.js';
+import { CACHE_KEYS, readCache, writeCache } from '@/composables/useCache.js';
 
 /**
  * カレンダー入力テキストの網羅的正規化・置換前処理
@@ -545,8 +546,8 @@ export function toQuickAddDraft(d, normalized, schedule) {
  * @property {boolean} isAllDay 終日予定かどうか（LLM の判定。true の場合時刻は空）
  */
 
-/** @type {import('vue').Ref<{status: 'idle'|'loading'|'ready'|'error'|'unsupported', message: string}>} WebLLM エンジンの状態 */
-export const quickAddEngineState = ref({ status: 'idle', message: '' });
+/** @type {import('vue').Ref<{status: 'idle'|'loading'|'ready'|'error'|'unsupported', message: string, progress: number}>} WebLLM エンジンの状態（progress はモデル読み込みの進捗 0〜1） */
+export const quickAddEngineState = ref({ status: 'idle', message: '', progress: 0 });
 
 /** @type {Promise<any>|null} 初期化中・初期化済みのエンジン Promise（多重起動防止） */
 let enginePromise = null;
@@ -564,6 +565,7 @@ export function ensureQuickAddEngine() {
     quickAddEngineState.value = {
       status: 'unsupported',
       message: 'このブラウザは WebGPU に対応していません',
+      progress: 0,
     };
     return Promise.reject(new Error('WebGPU is not supported in this browser'));
   }
@@ -571,28 +573,37 @@ export function ensureQuickAddEngine() {
     quickAddEngineState.value = {
       status: 'loading',
       message: 'モデルを読み込んでいます...',
+      progress: 0,
     };
     // 初回実行まで本体をバンドルしないよう動的 import する
     const webllm = await import('@mlc-ai/web-llm');
     const engine = new webllm.MLCEngine();
-    engine.setInitProgressCallback((/** @type {{text: string}} */ report) => {
-      quickAddEngineState.value = { status: 'loading', message: report.text };
+    engine.setInitProgressCallback((/** @type {{text: string, progress: number}} */ report) => {
+      quickAddEngineState.value = { status: 'loading', message: report.text, progress: report.progress ?? 0 };
     });
     await engine.reload(QUICK_ADD_MODEL);
-    quickAddEngineState.value = {
-      status: 'ready',
-      message: '解析の準備ができました',
-    };
+    // 読み込み中にアンインストールされて detach された場合は状態を更新しない
+    if (enginePromise === task) {
+      markLlmModelInstalled();
+      quickAddEngineState.value = {
+        status: 'ready',
+        message: '解析の準備ができました',
+        progress: 1,
+      };
+    }
     return engine;
   })();
   enginePromise = task;
   task.catch((err) => {
     // 失敗時は次回呼び出しで再試行できるよう Promise を破棄する
-    if (enginePromise === task) enginePromise = null;
-    quickAddEngineState.value = {
-      status: 'error',
-      message: String(err?.message ?? err),
-    };
+    if (enginePromise === task) {
+      enginePromise = null;
+      quickAddEngineState.value = {
+        status: 'error',
+        message: String(err?.message ?? err),
+        progress: 0,
+      };
+    }
   });
   return task;
 }
@@ -607,23 +618,146 @@ let reaskedAtFirstUse = false;
 let confirmPromise = null;
 
 /**
- * モデルダウンロードの説明と確認をユーザへ表示する
+ * @typedef {Object} LlmModelState 端末へ永続化する WebLLM モデルの状態
+ * @property {string} installedAt インストール日時（ISO8601。未記録・未インストールは空文字）
+ * @property {string} declinedAt ダウンロード確認を最後に拒否した日時（ISO8601。未拒否は空文字）
+ */
+
+/** @type {import('vue').Ref<boolean|null>} モデルが端末にインストール済みか（null = 未確認） */
+export const llmModelInstalled = ref(null);
+
+/** @type {import('vue').Ref<string>} モデルのインストール日時（ISO8601。未インストール・未記録は空文字） */
+export const llmModelInstalledAt = ref('');
+
+/** @type {Promise<LlmModelState>|null} 永続化状態の読み込み結果（最新値を保持して多重読み込みを防ぐ） */
+let llmStatePromise = null;
+
+/**
+ * 永続化したモデル状態を読み込む。書き込み済みなら最新値を返す
+ * @returns {Promise<LlmModelState>} モデル状態
+ */
+function loadLlmModelState() {
+  if (!llmStatePromise) {
+    llmStatePromise = readCache(CACHE_KEYS.LLM_STATE, {}).then((saved) => ({
+      installedAt: typeof saved?.installedAt === 'string' ? saved.installedAt : '',
+      declinedAt: typeof saved?.declinedAt === 'string' ? saved.declinedAt : '',
+    }));
+    llmStatePromise.then((state) => {
+      llmModelInstalledAt.value = state.installedAt;
+    });
+  }
+  return llmStatePromise;
+}
+
+/**
+ * モデル状態を更新して永続化する
+ * @param {Partial<LlmModelState>} patch 更新する項目
+ * @returns {Promise<void>}
+ */
+async function writeLlmModelState(patch) {
+  const next = { ...(await loadLlmModelState()), ...patch };
+  llmStatePromise = Promise.resolve(next);
+  llmModelInstalledAt.value = next.installedAt;
+  await writeCache(CACHE_KEYS.LLM_STATE, next);
+}
+
+/**
+ * モデル読み込み成功時にインストール状態と日付を記録する（記録済みの日付は保持する）
+ * @returns {Promise<void>}
+ */
+async function markLlmModelInstalled() {
+  try {
+    llmModelInstalled.value = true;
+    if (!(await loadLlmModelState()).installedAt) await writeLlmModelState({ installedAt: new Date().toISOString(), declinedAt: '' });
+  } catch {
+    // 日付の記録失敗はモデル利用を妨げない
+  }
+}
+
+/**
+ * モデルのキャッシュ実態を確認し、インストール状態を更新する。
+ * モデルは残っているが日付記録がない既存ユーザは、検出日をインストール日として補完する。
+ * @returns {Promise<boolean|null>} インストール済みなら true。確認できない環境では null
+ */
+export async function checkLlmModelInstalled() {
+  const state = await loadLlmModelState();
+  try {
+    const webllm = await import('@mlc-ai/web-llm');
+    llmModelInstalled.value = await webllm.hasModelInCache(QUICK_ADD_MODEL);
+    if (llmModelInstalled.value && !state.installedAt) await writeLlmModelState({ installedAt: new Date().toISOString() });
+    // ブラウザの容量制限などでモデルキャッシュが消えた場合は、古いインストール日を消す
+    if (!llmModelInstalled.value && state.installedAt) await writeLlmModelState({ installedAt: '' });
+  } catch {
+    // 確認自体に失敗した場合は現在値を維持する
+  }
+  return llmModelInstalled.value;
+}
+
+/**
+ * モデルをインストールする（個人設定のボタン操作自体がダウンロードへの明示的な同意なので確認は挟まない）
+ * @returns {Promise<any>} MLCEngine インスタンス
+ */
+export async function installLlmModel() {
+  engineConsent = 'granted';
+  const engine = await ensureQuickAddEngine();
+  await markLlmModelInstalled();
+  return engine;
+}
+
+/**
+ * モデルをアンインストールする。ロード済みエンジンは解放し、キャッシュと記録を削除する
+ * @returns {Promise<void>}
+ */
+export async function uninstallLlmModel() {
+  const webllm = await import('@mlc-ai/web-llm');
+  if (enginePromise) {
+    const task = enginePromise;
+    enginePromise = null;
+    await task.then((engine) => engine.unload()).catch(() => {});
+  }
+  await webllm.deleteModelAllInfoInCache(QUICK_ADD_MODEL);
+  engineConsent = null;
+  reaskedAtFirstUse = false;
+  llmModelInstalled.value = false;
+  await writeLlmModelState({ installedAt: '', declinedAt: '' });
+  quickAddEngineState.value = { status: 'idle', message: '', progress: 0 };
+}
+
+/**
+ * ダウンロード確認の表示を抑制すべき期間内（拒否から1ヶ月以内）かを判定する
+ * @param {string} declinedAt 拒否日時（ISO8601。空・不正なら抑制しない）
+ * @param {dayjs.Dayjs} [now=dayjs()] 現在時刻
+ * @returns {boolean} 抑制中なら true
+ */
+export function isLlmPromptSuppressed(declinedAt, now = dayjs()) {
+  if (!declinedAt) return false;
+  const declined = dayjs(declinedAt);
+  return declined.isValid() && declined.add(1, 'month').isAfter(now);
+}
+
+/**
+ * モデルダウンロードの説明と確認をユーザへ表示する。
+ * 直近1ヶ月以内に拒否されている場合はダイアログを出さずに否として扱う
+ * （起動のたびに確認が表示されないよう、拒否日時を永続化する）。
  * @returns {Promise<boolean>} 同意されたか
  */
 function confirmEngineDownload() {
   if (confirmPromise) return confirmPromise;
-  const task = useUserStore()
-    .confirm({
+  const task = (async () => {
+    if (isLlmPromptSuppressed((await loadLlmModelState()).declinedAt)) {
+      engineConsent = 'declined';
+      return false;
+    }
+    const ok = await useUserStore().confirm({
       title: 'AI 解析モデルのダウンロード',
       message: 'クイック登録の AI 解析には、端末上で動作する言語モデル（約 400MB）のダウンロードが必要です。\n' + 'モデルはブラウザにキャッシュされ、以降はオフラインでも利用できます。モバイル回線では通信量にご注意ください。\n' + 'ダウンロードしますか？',
-    })
-    .then((ok) => {
-      engineConsent = ok ? 'granted' : 'declined';
-      return ok;
-    })
-    .finally(() => {
-      confirmPromise = null;
     });
+    engineConsent = ok ? 'granted' : 'declined';
+    await writeLlmModelState(ok ? { declinedAt: '' } : { declinedAt: new Date().toISOString() });
+    return ok;
+  })().finally(() => {
+    confirmPromise = null;
+  });
   confirmPromise = task;
   return task;
 }
@@ -767,6 +901,7 @@ export async function parseScheduleText(text) {
       quickAddEngineState.value = {
         status: 'loading',
         message: 'AI の出力をやり直しています...',
+        progress: 1,
       };
       messages.push(
         { role: 'assistant', content: reply || '(空の応答)' },
@@ -799,6 +934,7 @@ export async function parseScheduleText(text) {
     quickAddEngineState.value = {
       status: 'ready',
       message: '解析の準備ができました',
+      progress: 1,
     };
     return { normalized, draft, usedFallback: false };
   }

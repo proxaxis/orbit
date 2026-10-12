@@ -26,8 +26,8 @@ const visible = computed(() => route.name !== 'EventQuickAdd' && !userStore.form
 <style lang="scss" scoped>
 .quick-add-fab {
   position: absolute;
-  right: var(--space-md);
-  bottom: var(--space-md);
+  right: var(--space-lg);
+  bottom: var(--space-lg);
   z-index: 20;
   width: 3rem;
   height: 3rem;
@@ -44,7 +44,7 @@ const visible = computed(() => route.name !== 'EventQuickAdd' && !userStore.form
 
   &.is-left {
     right: auto;
-    left: var(--space-md);
+    left: var(--space-lg);
   }
 
   &:hover,

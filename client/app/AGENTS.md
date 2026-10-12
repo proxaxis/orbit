@@ -106,6 +106,7 @@ tests/             # vitest テスト(@/services や @/composables 中心)
 
 - `docs/` …ユーザーマニュアル(`manual.md`)とスクリーンショット(`assets/`)。
 - `tools/screenshot.mjs` …本番環境の画面撮影スクリプト(Puppeteer)。ログイン済み Cookie を `/tmp/orbit-cookie.txt`(リポジトリ外)に置いて `node tools/screenshot.mjs [名前フィルタ]` で実行。BFF は `bff-orbit.proxaxis.me` の別サブドメインのため Cookie は親ドメインで設定する。
+- `tools/sync-check.mjs` / `tools/sync-check-ext.mjs` …2ブラウザコンテキスト間の同期検証スクリプト(Puppeteer)。`ORBIT_COOKIE_A`/`ORBIT_COOKIE_B` に各セッションの `session_id` の値を渡して実行する(dev サーバ + BFF が起動していること)。Cookie は環境変数でのみ渡しファイルに保存しない。
 - `dist/` はビルド成果物なので手編集しない。`cloudflared` バイナリと `tunnel.txt` は開発用トンネル用。
 - `checkJs` による型検査が効くため、JSDoc 型を正確に保つこと(グローバル型は `env.d.ts`、サービス別型は各 `.d.ts`)。
 - Git リポジトリではない(`.git` なし)環境のため、変更履歴はファイルで確認できない。

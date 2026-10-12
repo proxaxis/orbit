@@ -16,6 +16,7 @@ import { getStoredEvents, processEventOperations, readEventOperations, removeSto
 import { runEventOperation } from '@/services/event-sync-worker.js';
 import { parseEventTags, stripTagsFromDescription } from '@/services/event-tags.js';
 import { isCustomHolidayEvent } from '@/services/custom-holidays.js';
+import { eventsQueryForCalendar } from '@/services/birthday-calendar.js';
 
 /** @type {boolean} オフライン同期の初期化済みフラグ */
 let syncInitialized = false;
@@ -132,7 +133,7 @@ function toHandyEvent(evt, calendarId, calendarColor) {
     startDateTime: dayjs(evt.start?.dateTime ?? evt.start?.date),
     endDateTime: dayjs(evt.end?.dateTime ?? evt.end?.date),
     isAllDay: !!evt.start?.date,
-    icon: evt.extendedProperties?.shared?.icon ?? undefined,
+    icon: evt.extendedProperties?.shared?.icon ?? (evt.eventType === 'birthday' ? '🎂' : undefined),
     eventColorId: evt.colorId,
     calendarColorId: calendarColor.colorId,
     calendarBackgroundColor: calendarColor.backgroundColor,
@@ -208,7 +209,7 @@ export function useEvents() {
     try {
       results = await gCalAPI.listEventsBatch(
         authStore.token,
-        targets.map(({ gCalId }) => ({ calendarId: gCalId, query: { ...query, timeMin, timeMax } })),
+        targets.map(({ gCalId }) => ({ calendarId: gCalId, query: { ...eventsQueryForCalendar(gCalId, query), timeMin, timeMax } })),
       );
     } catch (error) {
       // バッチ自体の失敗（BFF 到達不可など）はローカル表示分だけで続行する
@@ -420,7 +421,7 @@ export function useEvents() {
    */
   async function syncCreatedEvent(localId, gCalendarId, body, calendarColor) {
     try {
-      const event = await runEventApiInBackground('insert', gCalendarId, body);
+      const event = await runEventApiInBackground('insert', gCalendarId, body, { sendUpdates: 'all' });
       await removeStoredEvent(localId, gCalendarId);
       if (!event) return null;
       const created = { ...toHandyEvent(event, gCalendarId, calendarColor), timeZone: event.start?.timeZone ?? undefined };
@@ -450,7 +451,7 @@ export function useEvents() {
    */
   async function syncUpdatedEvent(gEventId, gCalendarId, body) {
     try {
-      const event = await runEventApiInBackground('update', gCalendarId, gEventId, body);
+      const event = await runEventApiInBackground('update', gCalendarId, gEventId, body, { sendUpdates: 'all' });
       if (event) {
         const updated = { ...toHandyEvent(event, gCalendarId, calendarStore.getCalendarColor(gCalendarId)), timeZone: event.start?.timeZone ?? undefined };
         await upsertStoredEvent(updated);
@@ -474,7 +475,7 @@ export function useEvents() {
    */
   async function syncRemovedEvent(gEventId, gCalendarId) {
     try {
-      await runEventApiInBackground('remove', gCalendarId, gEventId);
+      await runEventApiInBackground('remove', gCalendarId, gEventId, { sendUpdates: 'all' });
       // 削除前の通知は API 反映前に出ているため、古い一覧で再読込されないよう再通知する
       eventStore.invalidateEventCache();
       notifyEventDataChanged();
@@ -586,7 +587,7 @@ export function useEvents() {
     try {
       results = await gCalAPI.listEventsBatch(
         authStore.token,
-        calendarStore.list.map((/** @type {any} */ cal) => ({ calendarId: cal.id, query: { q: query, singleEvents: true } })),
+        calendarStore.list.map((/** @type {any} */ cal) => ({ calendarId: cal.id, query: eventsQueryForCalendar(cal.id, { q: query, singleEvents: true }) })),
       );
     } catch (error) {
       console.warn('Event search failed.', error);

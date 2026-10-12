@@ -9,7 +9,7 @@ const props = defineProps({
   },
 });
 
-const emo = computed(() => props.emoji ? twemoji.parse(props.emoji, { size: '72x72', folder: 'svg', ext: '.svg' }) : '');
+const emo = computed(() => (props.emoji ? twemoji.parse(props.emoji, { size: '72x72', folder: 'svg', ext: '.svg' }) : ''));
 </script>
 
 <template>

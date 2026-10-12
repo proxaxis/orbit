@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import * as photosAPI from '@/services/google-photo-api.js';
-import { useAuthStore, BFF_BASE_URL } from '@/stores/auth.js';
+import { useAuthStore, BFF_APP_BASE_URL } from '@/stores/auth.js';
 
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -35,7 +35,7 @@ describe('google-photo-api', () => {
     requestSeq = 0;
     fetchMock = vi.fn().mockImplementation(async (url, init) => {
       const u = String(url);
-      if (init?.method === 'POST' && u === `${BFF_BASE_URL}/request`) {
+      if (init?.method === 'POST' && u === `${BFF_APP_BASE_URL}/request`) {
         // キュー投入: 202 + requestId を即時応答
         const requestId = `req-${++requestSeq}`;
         upstreamResults.set(requestId, upstreamQueue.shift() ?? makeUpstream({}));
@@ -81,7 +81,7 @@ describe('google-photo-api', () => {
    * @returns {{url: string, init: RequestInit, envelope: any}}
    */
   function lastCall() {
-    const [url, init] = fetchMock.mock.calls.filter(([u, i]) => i?.method === 'POST' && String(u) === `${BFF_BASE_URL}/request`).at(-1);
+    const [url, init] = fetchMock.mock.calls.filter(([u, i]) => i?.method === 'POST' && String(u) === `${BFF_APP_BASE_URL}/request`).at(-1);
     return { url: String(url), init, envelope: JSON.parse(init.body) };
   }
 
@@ -89,7 +89,7 @@ describe('google-photo-api', () => {
     enqueueUpstream({ body: { id: 'album-1' } });
     await photosAPI.getAlbum('tok', 'album-1');
     const { url, init, envelope } = lastCall();
-    expect(url).toBe(`${BFF_BASE_URL}/request`);
+    expect(url).toBe(`${BFF_APP_BASE_URL}/request`);
     expect(init.method).toBe('POST');
     expect(init.credentials).toBe('include');
     expect(envelope.service).toBe('photos');
@@ -102,7 +102,7 @@ describe('google-photo-api', () => {
     const album = await photosAPI.getAlbum('tok', 'album-1');
     const pollCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/request/req-'));
     expect(pollCall).toBeTruthy();
-    expect(String(pollCall[0])).toBe(`${BFF_BASE_URL}/request/req-1`);
+    expect(String(pollCall[0])).toBe(`${BFF_APP_BASE_URL}/request/req-1`);
     expect(album.id).toBe('album-1');
   });
 
@@ -181,7 +181,7 @@ describe('google-photo-api', () => {
     const authStore = useAuthStore();
     // 401 時のトークン再取得は呼び出し側が注入するコールバックで行う
     photosAPI.setTokenRefresher(async () => {
-      const res = await fetch(`${BFF_BASE_URL}/api/token?t=photo-sharing`, { credentials: 'include' });
+      const res = await fetch(`${BFF_APP_BASE_URL}/api/token?t=photo-sharing`, { credentials: 'include' });
       const data = await res.json();
       authStore.setPhotoAccessToken(data.gAccessToken);
       return data.gAccessToken;

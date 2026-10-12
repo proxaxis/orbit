@@ -466,7 +466,8 @@ function submitForm() {
     ...(eventColorId.value ? { colorId: eventColorId.value } : originalEvent.value?.eventColorId ? { colorId: null } : {}),
     description: appendTagsToDescription(formData.description.trim(), tags) || undefined,
     location: formData.location.trim() || undefined,
-    ...(attendees.value.length ? { attendees: attendees.value } : {}),
+    // 元のイベントに参加者がいた場合は空配列でも送信する（PATCH では省略すると参加者が残ったままになる）
+    ...(attendees.value.length || (!props.clone && originalEvent.value?.raw?.attendees?.length) ? { attendees: attendees.value } : {}),
     ...(Object.keys(shared).length || Object.keys(privateProperties).length ? { extendedProperties: { ...(Object.keys(shared).length ? { shared } : {}), ...(Object.keys(privateProperties).length ? { private: privateProperties } : { private: {} }) } } : {}),
     ...(recurrenceData.recurrence ? { recurrence: recurrenceData.recurrence } : {}),
     start: formData.isAllDay ? { date: formData.startDateTime.format('YYYY-MM-DD') } : { dateTime: formData.startDateTime.toISOString(), timeZone: formData.timeZone },

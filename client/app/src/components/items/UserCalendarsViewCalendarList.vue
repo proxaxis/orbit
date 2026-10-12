@@ -11,6 +11,7 @@ import { useCalendarStore } from '@/stores/calendar.js';
 import { useShareStore } from '@/stores/share.js';
 import { useUserStore } from '@/stores/user.js';
 import { useSharingStates } from '@/composables/useSharingStates.js';
+import { isBirthdayCalendarId } from '@/services/birthday-calendar.js';
 import AccordionMenu from '@/components/AccordionMenu.vue';
 import CalendarRibbon from '@/components/CalendarRibbon.vue';
 import DropdownMenu from '@/components/DropdownMenu.vue';
@@ -61,6 +62,8 @@ const dragOverCalendarId = ref(null);
 
 /** @param {string} calendarId ドラッグ開始したカレンダー ID */
 function startDragging(calendarId) {
+  // 誕生日カレンダーは並び替え対象外（表示・非表示のみ可能な特殊カレンダーのため）
+  if (isBirthdayCalendarId(calendarId)) return;
   draggedCalendarId.value = calendarId;
 }
 
@@ -78,7 +81,7 @@ function dropCalendar(targetCalendarId) {
   const sourceCalendarId = draggedCalendarId.value;
   if (!sourceCalendarId || sourceCalendarId === targetCalendarId) return;
 
-  const ids = calendarStore.list.map((calendar) => calendar.id).filter((id) => id !== sourceCalendarId);
+  const ids = calendarStore.list.map((calendar) => calendar.id).filter((id) => id !== sourceCalendarId && !isBirthdayCalendarId(id));
   const targetIndex = ids.indexOf(targetCalendarId);
   if (targetIndex === -1) return;
   ids.splice(targetIndex, 0, sourceCalendarId);
@@ -123,7 +126,7 @@ function hideAllCalendars() {
             v-for="c in regularCalendars"
             :key="c.id"
             :title="c.description"
-            draggable="true"
+            :draggable="!isBirthdayCalendarId(c.id)"
             :class="{ 'is-dragging': draggedCalendarId === c.id, 'is-drag-over': dragOverCalendarId === c.id }"
             @dragstart="startDragging(c.id)"
             @dragover.prevent="setDragOver(c.id)"
@@ -149,7 +152,7 @@ function hideAllCalendars() {
                       </template>
                       <button @click="userStore.setCalendarVisibility(c.id, false)"><IconEyeSlash />非表示</button>
                       <button @click="userStore.setCalendarVisibility(c.id, true)"><IconEye />表示</button>
-                      <button @click="router.push({ name: 'CalendarDetail', query: { cid: c.id } })"><IconCircleInfo />カレンダーの詳細</button>
+                      <button v-if="!isBirthdayCalendarId(c.id)" @click="router.push({ name: 'CalendarDetail', query: { cid: c.id } })"><IconCircleInfo />カレンダーの詳細</button>
                       <button v-if="isWritableCalendar(c)" @click="router.push({ name: 'SharingConfig', query: { cid: c.id } })"><IconUserGroup />共有設定</button>
                       <button v-if="isWritableCalendar(c)" @click="router.push({ name: 'ShareManage', query: { cid: c.id } })"><IconUserPlus />期間を指定して共有</button>
                       <button v-if="isWritableCalendar(c)" @click="userStore.setDefaultCalendar(c.id)"><IconCrown />デフォルトにする</button>
@@ -192,7 +195,7 @@ ul {
 
     &:hover {
       background-color: var(--bg-3);
-    transition: background-color 0.2s ease;
+      transition: background-color 0.2s ease;
 
       * {
         cursor: pointer;

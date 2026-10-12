@@ -27,7 +27,7 @@ const authState = vi.hoisted(() => ({
 
 vi.mock('@/services/google-calendar-api.js', () => ({ patchEvent: mocks.patchEvent }));
 vi.mock('@/services/google-photo-api.js', () => mocks);
-vi.mock('@/stores/auth.js', () => ({ BFF_BASE_URL: '', useAuthStore: () => authState }));
+vi.mock('@/stores/auth.js', () => ({ BFF_APP_BASE_URL: '', useAuthStore: () => authState }));
 
 const { usePhotos } = await import('@/composables/usePhotos.js');
 const { useUserStore } = await import('@/stores/user.js');

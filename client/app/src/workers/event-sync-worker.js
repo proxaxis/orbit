@@ -11,7 +11,9 @@ import * as gCalAPI from '@/services/google-calendar-api.js';
 /** @type {Record<string, Function>} 実行可能な操作とサービス関数の対応 */
 const OPERATIONS = {
   insert: gCalAPI.insertEvent,
-  update: gCalAPI.updateEvent,
+  // 更新は PATCH を使う。PUT は完全置換のため参加者の出欠回答など
+  // 部分更新ペイロードだと start/end 不足で失敗してしまう
+  update: gCalAPI.patchEvent,
   remove: gCalAPI.deleteEvent,
 };
 
