@@ -1,0 +1,13 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import * as doc from '../../docs/privacy-policy.md';
+---
+
+<BaseLayout
+  title="プライバシーポリシー | Orbit Calendar"
+  description="Orbit Calendar が利用者の情報をどう収集・利用・保管・削除するかを定めたポリシーです。"
+>
+  <article class="prose">
+    <doc.Content />
+  </article>
+</BaseLayout>

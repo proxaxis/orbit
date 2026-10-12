@@ -1,0 +1,699 @@
+---
+import { Image } from 'astro:assets';
+import { APP_URL } from '../consts';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import logo from '../assets/logos/icon_round_2048x2048.png';
+
+import IconGoogle from '../components/icons/IconGoogle.vue';
+import IconCalendarDays from '../components/icons/IconCalendarDays.vue';
+import IconWandMagicSparkles from '../components/icons/IconWandMagicSparkles.vue';
+import IconUserGroup from '../components/icons/IconUserGroup.vue';
+import IconCloudArrowDown from '../components/icons/IconCloudArrowDown.vue';
+import IconMagnifyingGlass from '../components/icons/IconMagnifyingGlass.vue';
+import IconFileCirclePlus from '../components/icons/IconFileCirclePlus.vue';
+import IconGear from '../components/icons/IconGear.vue';
+import IconBell from '../components/icons/IconBell.vue';
+import IconImage from '../components/icons/IconImage.vue';
+import IconAngleRight from '../components/icons/IconAngleRight.vue';
+import IconUserLock from '../components/icons/IconUserLock.vue';
+import IconArrowUpRightFromSquare from '../components/icons/IconArrowUpRightFromSquare.vue';
+
+import shotMonth from '../../docs/assets/10-home-month.png';
+import shotVertical from '../../docs/assets/11-home-month-vertical.png';
+import shotWeek from '../../docs/assets/12-home-week-timeline.png';
+import shotQuickAdd from '../../docs/assets/25-quick-add.png';
+import shotShare from '../../docs/assets/30-share-manage.png';
+import shotShareConfig from '../../docs/assets/31-sharing-config.png';
+import shotMobileHome from '../../docs/assets/60-mobile-home.png';
+import shotMobileDetail from '../../docs/assets/61-mobile-event-detail.png';
+import shotDetail from '../../docs/assets/20-event-detail.png';
+import shotCreator from '../../docs/assets/22-event-creator.png';
+import shotSearch from '../../docs/assets/24-event-search.png';
+import shotTemplates from '../../docs/assets/26-event-templates.png';
+import shotConfig from '../../docs/assets/40-user-config.png';
+import shotContextMenu from '../../docs/assets/50-context-menu.png';
+
+const features = [
+  {
+    Icon: IconGoogle,
+    title: 'Google カレンダーと同期',
+    text: 'Google アカウントでログインするだけで使えます。予定の閲覧・編集はすべてサーバー経由で安全に代行します。',
+  },
+  {
+    Icon: IconCalendarDays,
+    title: '3 つの表示モード',
+    text: '月表示・縦スクロール月表示・週タイムライン表示をワンタップで切り替え。好みの視点で予定を俯瞰できます。',
+  },
+  {
+    Icon: IconWandMagicSparkles,
+    title: '自然言語で登録',
+    text: '「明日の15時に歯医者」と入力するだけ。端末上の AI が日時や内容を解析してフォームに流し込みます。',
+  },
+  {
+    Icon: IconUserGroup,
+    title: '期間を指定して共有',
+    text: '共有するのは、指定した期間の予定だけをコピーしたカレンダー。空き時間のみの表示や有効期限の設定もできます。',
+  },
+  {
+    Icon: IconCloudArrowDown,
+    title: 'オフライン対応',
+    text: '一度取得した予定はオフラインでも閲覧できます。オフライン中の編集は、オンラインに戻ると自動で再送されます。',
+  },
+  {
+    Icon: IconBell,
+    title: 'プッシュ通知',
+    text: 'アプリを閉じていても Web Push で通知が届きます。通知のタイミングは予定ごとに複数設定できます。',
+  },
+  {
+    Icon: IconMagnifyingGlass,
+    title: '横断検索とタグ',
+    text: 'タイトル・説明・場所に加え、#タグ でも予定を横断検索できます。過去から未来まで、目的の予定にすぐたどり着けます。',
+  },
+  {
+    Icon: IconFileCirclePlus,
+    title: 'テンプレート',
+    text: 'よく使う予定はテンプレートに保存。いつでもワンタップで同じ内容の予定を作成できます。',
+  },
+  {
+    Icon: IconImage,
+    title: '写真アルバム連携',
+    text: '予定に Google Photos のアルバムを紐づけて、イベントの思い出を一緒に管理できます。',
+  },
+  {
+    Icon: IconGear,
+    title: '多彩なカスタマイズ',
+    text: 'テーマやフォント、週の開始曜日、カスタム休日まで、細部を自分好みに調整できます。',
+  },
+];
+
+const screenshots = [
+  { src: shotDetail, alt: '予定の詳細画面' },
+  { src: shotCreator, alt: '予定の作成フォーム' },
+  { src: shotSearch, alt: '予定の検索画面' },
+  { src: shotTemplates, alt: 'テンプレート一覧' },
+  { src: shotContextMenu, alt: '日付のコンテキストメニュー' },
+  { src: shotConfig, alt: '個人設定画面' },
+];
+---
+
+<BaseLayout title="Orbit カレンダー - Google カレンダーと同期するカレンダーアプリ">
+  {/* ヒーロー */}
+  <section class="hero">
+    <div class="hero-inner">
+      <Image src={logo} alt="Orbit Calendar ロゴ" width={104} height={104} class="hero-logo" />
+      <h1 class="hero-title">
+        あなたの日常を<span class="accent">軌道</span>にのせよう
+      </h1>
+      <p class="hero-sub">
+        Orbit Calendar は Google カレンダーと同期するカレンダーアプリです。<br
+          class="only-pc"
+        />自然言語での予定登録、期間を限定した共有、オフラインでも使える PWA で、予定管理をもっと自由に。
+      </p>
+      <div class="hero-actions">
+        <a href={APP_URL} class="btn btn-primary" target="_blank" rel="noopener">
+          アプリを開く <IconArrowUpRightFromSquare size="0.85rem" />
+        </a>
+        <a href="#features" class="btn btn-ghost">特徴を見る</a>
+        <a href="#screenshots" class="btn btn-ghost">スクリーンショット</a>
+      </div>
+    </div>
+    <div class="hero-shot">
+      <Image src={shotMonth} alt="Orbit Calendar ホーム画面(月表示)" widths={[640, 1120]} sizes="(max-width: 1120px) 100vw, 1120px" loading="eager" />
+    </div>
+  </section>
+
+  {/* 特徴 */}
+  <section id="features" class="section section-alt">
+    <div class="section-inner">
+      <h2 class="section-title">特徴</h2>
+      <p class="section-lead">予定管理に必要なものを、ひとつのアプリに。</p>
+      <div class="feature-grid">
+        {
+          features.map((feature) => (
+            <div class="feature-card">
+              <div class="feature-icon">
+                <feature.Icon size="1.4rem" />
+              </div>
+              <h3>{feature.title}</h3>
+              <p>{feature.text}</p>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  {/* 表示モード */}
+  <section class="section">
+    <div class="section-inner">
+      <h2 class="section-title">見たい形で、見たいだけ</h2>
+      <p class="section-lead">
+        月表示、縦スクロール月表示、週タイムライン表示の 3 つのビューを切り替えられます。<br
+          class="only-pc"
+        />日付セルをドラッグして期間を選んだり、右クリックのメニューからすばやく予定を作成できます。
+      </p>
+      <div class="view-grid">
+        <figure>
+          <Image src={shotMonth} alt="月表示" widths={[480, 720]} sizes="(max-width: 767px) 100vw, 33vw" />
+          <figcaption>月表示</figcaption>
+        </figure>
+        <figure>
+          <Image src={shotVertical} alt="縦スクロール月表示" widths={[480, 720]} sizes="(max-width: 767px) 100vw, 33vw" />
+          <figcaption>縦スクロール月表示</figcaption>
+        </figure>
+        <figure>
+          <Image src={shotWeek} alt="週タイムライン表示" widths={[480, 720]} sizes="(max-width: 767px) 100vw, 33vw" />
+          <figcaption>週タイムライン表示</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  {/* Quick Add */}
+  <section class="section section-alt">
+    <div class="section-inner split">
+      <div class="split-text">
+        <h2 class="section-title">「明日の15時に歯医者」<br />それだけで予定が作れる</h2>
+        <p>
+          Quick Add は、入力した言葉から予定を作る機能です。日時はルールベースで解析し、それ以外の内容は端末上の
+          AI (WebLLM) が読み取って、作成フォームへ流し込みます。
+        </p>
+        <ul class="check-list">
+          <li>内容を確認・修正してから保存できます</li>
+          <li>WebGPU 非対応ブラウザでは簡易解析に自動切り替え</li>
+          <li>PWA インストール時は AI モデルを事前キャッシュ</li>
+        </ul>
+      </div>
+      <div class="split-media">
+        <Image src={shotQuickAdd} alt="自然言語で予定を登録 (Quick Add)" widths={[560, 900]} sizes="(max-width: 1023px) 100vw, 50vw" />
+      </div>
+    </div>
+  </section>
+
+  {/* 共有 */}
+  <section class="section">
+    <div class="section-inner split split-reverse">
+      <div class="split-text">
+        <h2 class="section-title">見せたい期間だけ、<br />見せたい人に</h2>
+        <p>
+          指定した期間の予定だけをコピーした「コピーカレンダー」を作り、相手の Google
+          アカウントへ共有できます。有効期限が切れると、共有カレンダーは自動で削除されます。
+        </p>
+        <ul class="check-list">
+          <li>「予定の詳細を閲覧」と「予定の有無のみ(空き時間)」のどちらかを選べます</li>
+          <li>複数カレンダーをまとめて共有</li>
+          <li>作成後は定期的に自動同期</li>
+        </ul>
+      </div>
+      <div class="split-media">
+        <Image src={shotShare} alt="期間を指定して共有" widths={[560, 900]} sizes="(max-width: 1023px) 100vw, 50vw" />
+      </div>
+    </div>
+  </section>
+
+  {/* モバイル / PWA */}
+  <section class="section section-alt">
+    <div class="section-inner split">
+      <div class="split-text">
+        <h2 class="section-title">スマホでは、アプリのように</h2>
+        <p>
+          スマホでは 1 カラムの表示に最適化しています。ホーム画面に追加すればフルスクリーンで動作し、プッシュ通知やオフライン起動も使える
+          PWA アプリです。
+        </p>
+        <ul class="check-list">
+          <li>ボトムシートで予定一覧・詳細をサッと確認</li>
+          <li>ドロワーからカレンダーリストにアクセス</li>
+          <li>設定は Google Drive に同期。別のデバイスでも同じ使い心地です</li>
+        </ul>
+      </div>
+      <div class="split-media mobile-shots">
+        <Image src={shotMobileHome} alt="モバイルのホーム画面" widths={[280, 560]} sizes="(max-width: 1023px) 45vw, 240px" />
+        <Image src={shotMobileDetail} alt="モバイルの予定詳細画面" widths={[280, 560]} sizes="(max-width: 1023px) 45vw, 240px" />
+      </div>
+    </div>
+  </section>
+
+  {/* スクリーンショット */}
+  <section id="screenshots" class="section">
+    <div class="section-inner">
+      <h2 class="section-title">スクリーンショット</h2>
+      <p class="section-lead">詳細確認から設定まで、すべての画面がここに。</p>
+      <div class="shot-grid">
+        {
+          screenshots.map((shot) => (
+            <figure>
+              <Image
+                src={shot.src}
+                alt={shot.alt}
+                widths={[480, 720]}
+                sizes="(max-width: 767px) 100vw, 33vw"
+              />
+              <figcaption>{shot.alt}</figcaption>
+            </figure>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  {/* プライバシー */}
+  <section class="section section-alt">
+    <div class="section-inner privacy-call">
+      <div class="privacy-icon">
+        <IconUserLock size="2rem" />
+      </div>
+      <h2 class="section-title">プライバシーファースト</h2>
+      <p class="section-lead">
+        広告配信、行動追跡、アクセス解析のための情報収集は一切行いません。<br class="only-pc" />
+        OAuth トークンはサーバー上にのみ保管し、クライアントには開示しません。
+      </p>
+      <div class="hero-actions">
+        <a href="/privacy" class="btn btn-ghost">
+          プライバシーポリシー <IconAngleRight size="0.8rem" />
+        </a>
+        <a href="/terms" class="btn btn-ghost">
+          利用規約 <IconAngleRight size="0.8rem" />
+        </a>
+      </div>
+    </div>
+  </section>
+
+  {/* CTA */}
+  <section class="section cta-section">
+    <div class="section-inner">
+      <h2 class="cta-title">さあ、予定を軌道に乗せよう。</h2>
+      <p class="section-lead">Google アカウントがあれば、すぐに始められます。</p>
+      <div class="hero-actions">
+        <a href={APP_URL} class="btn btn-primary" target="_blank" rel="noopener">
+          アプリを開く <IconArrowUpRightFromSquare size="0.85rem" />
+        </a>
+      </div>
+      <Image src={shotShareConfig} alt="カレンダーの共有設定画面" widths={[640, 1000]} sizes="(max-width: 1000px) 100vw, 1000px" class="cta-shot" />
+    </div>
+  </section>
+</BaseLayout>
+
+<style lang="scss">
+  @use '../styles/vars' as *;
+
+  #features,
+  #screenshots {
+    scroll-margin-top: 4.5rem;
+  }
+
+  .only-pc {
+    @include mdown(sm) {
+      display: none;
+    }
+  }
+
+  // ---- ヒーロー ----
+  .hero {
+    padding: 2.5rem var(--space-md) 0;
+    text-align: center;
+    background:
+      radial-gradient(60rem 30rem at 50% -10rem, #ffe9e9 0%, transparent 70%),
+      var(--site-bg);
+    overflow: hidden;
+
+    @include mup(md) {
+      padding-top: 4rem;
+    }
+
+    @include mup(lg) {
+      padding-top: 5.5rem;
+    }
+  }
+
+  .hero-inner {
+    max-width: 46rem;
+    margin: 0 auto;
+  }
+
+  .hero-logo {
+    width: 84px;
+    height: 84px;
+    border-radius: 20px;
+    box-shadow: 0 8px 24px rgba(255, 52, 52, 0.28);
+
+    @include mup(md) {
+      width: 104px;
+      height: 104px;
+      border-radius: 24px;
+    }
+  }
+
+  .hero-title {
+    margin-top: var(--space-md);
+    font-size: clamp(1.8rem, 6vw, 3rem);
+    font-weight: 900;
+    letter-spacing: 0.02em;
+
+    .accent {
+      color: var(--site-accent);
+    }
+  }
+
+  .hero-sub {
+    margin-top: var(--space-md);
+    color: var(--site-text-sub);
+    font-size: 0.95rem;
+
+    @include mup(sm) {
+      font-size: 1rem;
+    }
+
+    @include mup(md) {
+      font-size: 1.05rem;
+    }
+  }
+
+  .hero-actions {
+    margin-top: var(--space-lg);
+    display: flex;
+    justify-content: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.7rem 1.6rem;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    text-decoration: none;
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease;
+
+    &:hover {
+      transform: translateY(-2px);
+    }
+  }
+
+  .btn-primary {
+    background: var(--site-accent);
+    color: #fff;
+    box-shadow: 0 6px 18px rgba(255, 52, 52, 0.35);
+
+    &:hover {
+      background: var(--site-accent-dark);
+    }
+  }
+
+  .btn-ghost {
+    border: 1px solid var(--site-border);
+    color: var(--site-text);
+    background: #fff;
+
+    &:hover {
+      border-color: var(--site-accent);
+      color: var(--site-accent);
+    }
+  }
+
+  .hero-shot {
+    max-width: var(--site-max-width);
+    margin: 2rem auto -1.25rem;
+
+    @include mup(sm) {
+      margin: 2.5rem auto -2rem;
+    }
+
+    @include mup(md) {
+      margin: 3rem auto -2.5rem;
+    }
+
+    img {
+      display: block;
+      border-radius: var(--site-radius) var(--site-radius) 0 0;
+      border: 1px solid var(--site-border);
+      border-bottom: none;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12);
+    }
+  }
+
+  // ---- セクション共通 ----
+  .section {
+    padding: 3rem var(--space-md);
+
+    @include mup(sm) {
+      padding-top: 3.5rem;
+      padding-bottom: 3.5rem;
+    }
+
+    @include mup(md) {
+      padding-top: 4.5rem;
+      padding-bottom: 4.5rem;
+    }
+  }
+
+  .section-alt {
+    background: var(--site-bg-alt);
+  }
+
+  .section-inner {
+    max-width: var(--site-max-width);
+    margin: 0 auto;
+  }
+
+  .section-title {
+    font-size: clamp(1.4rem, 3.4vw, 2rem);
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .section-lead {
+    margin: var(--space-sm) auto var(--space-lg);
+    max-width: 44rem;
+    text-align: center;
+    color: var(--site-text-sub);
+    font-size: 0.95rem;
+
+    @include mup(md) {
+      margin-bottom: var(--space-xl);
+      font-size: 1rem;
+    }
+  }
+
+  // ---- 特徴グリッド ----
+  .feature-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-md);
+
+    @include mup(sm) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    @include mup(md) {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    @include mup(lg) {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+
+  .feature-card {
+    background: #fff;
+    border: 1px solid var(--site-border);
+    border-radius: var(--site-radius);
+    padding: var(--space-md);
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease;
+
+    &:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.08);
+    }
+
+    h3 {
+      font-size: 1.05rem;
+      margin-top: var(--space-xs);
+    }
+
+    p {
+      margin-top: 0.4rem;
+      font-size: 0.9rem;
+      color: var(--site-text-sub);
+    }
+  }
+
+  .feature-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.8rem;
+    height: 2.8rem;
+    border-radius: 0.8rem;
+    background: #ffeaea;
+    color: var(--site-accent);
+  }
+
+  // ---- ビュー / スクリーンショット グリッド ----
+  .view-grid,
+  .shot-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-md);
+
+    @include mup(sm) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    @include mup(md) {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    figure {
+      margin: 0;
+    }
+
+    img {
+      display: block;
+      border-radius: var(--site-radius);
+      border: 1px solid var(--site-border);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.07);
+    }
+
+    figcaption {
+      margin-top: 0.5rem;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--site-text-sub);
+    }
+  }
+
+  // ---- split レイアウト ----
+  .split {
+    display: grid;
+    gap: var(--space-lg);
+    align-items: center;
+
+    @include mup(md) {
+      grid-template-columns: 1fr 1.15fr;
+      gap: 3rem;
+    }
+
+    .section-title {
+      text-align: center;
+
+      @include mup(md) {
+        text-align: left;
+      }
+    }
+  }
+
+  .split-reverse {
+    @include mup(md) {
+      .split-text {
+        order: 2;
+      }
+
+      .split-media {
+        order: 1;
+      }
+    }
+  }
+
+  .split-text {
+    p {
+      margin-top: var(--space-sm);
+      color: var(--site-text-sub);
+      font-size: 0.95rem;
+    }
+  }
+
+  .split-media {
+    img {
+      display: block;
+      border-radius: var(--site-radius);
+      border: 1px solid var(--site-border);
+      box-shadow: 0 10px 32px rgba(0, 0, 0, 0.1);
+    }
+  }
+
+  .mobile-shots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    justify-content: center;
+    align-items: flex-start;
+
+    @include mup(sm) {
+      gap: var(--space-md);
+    }
+
+    img {
+      width: 46%;
+      max-width: 240px;
+      object-fit: contain;
+    }
+  }
+
+  .check-list {
+    margin-top: var(--space-sm);
+    padding-left: 0;
+    list-style: none;
+
+    li {
+      position: relative;
+      padding-left: 1.5rem;
+      margin: 0.45rem 0;
+      font-size: 0.92rem;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0.45em;
+        width: 0.55rem;
+        height: 0.55rem;
+        border-radius: 50%;
+        background: var(--site-accent);
+      }
+    }
+  }
+
+  // ---- プライバシー ----
+  .privacy-call {
+    text-align: center;
+  }
+
+  .privacy-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 4rem;
+    height: 4rem;
+    margin-bottom: var(--space-sm);
+    border-radius: 1.2rem;
+    background: #ffeaea;
+    color: var(--site-accent);
+  }
+
+  // ---- CTA ----
+  .cta-section {
+    text-align: center;
+  }
+
+  .cta-title {
+    font-size: clamp(1.5rem, 4vw, 2.2rem);
+    font-weight: 900;
+  }
+
+  .cta-shot {
+    display: block;
+    width: 100%;
+    max-width: 62rem;
+    margin: var(--space-lg) auto 0;
+    border-radius: var(--site-radius);
+    border: 1px solid var(--site-border);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.1);
+  }
+</style>

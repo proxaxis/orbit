@@ -1,0 +1,110 @@
+@use 'sass:color';
+@use 'sass:map';
+
+// カラーコード定数
+$base-color-lt-bg: #ffffff;
+$base-color-dk-bg: #000000;
+$base-color-lt-text: #333333;
+$base-color-dk-text: #ffffff;
+$themes: (
+  light: (
+    bg-0: $base-color-lt-bg,
+    bg-1: color.scale($base-color-lt-bg, $lightness: 0%),
+    bg-2: color.scale($base-color-lt-bg, $lightness: -6%),
+    bg-3: color.scale($base-color-lt-bg, $lightness: -12%),
+    bg-4: color.scale($base-color-lt-bg, $lightness: -18%),
+    text: $base-color-lt-text,
+    text-light: color.scale($base-color-lt-text, $lightness: 60%),
+    border: rgba(0, 0, 0, 0.3),
+    shadow: rgba(0, 0, 0, 0.16),
+    overlay: rgba(0, 0, 0, 0.5),
+    primary: #0000ff,
+    primary-light: #0059ff99,
+    danger: #ca0000,
+    accent: #ff3434,
+    success: #42b883,
+    warning: #ffcc00,
+    selected: #287ec59d,
+  ),
+  dark: (
+    bg-0: $base-color-dk-bg,
+    bg-1: color.scale($base-color-dk-bg, $lightness: 10%),
+    bg-2: color.scale($base-color-dk-bg, $lightness: 20%),
+    bg-3: color.scale($base-color-dk-bg, $lightness: 30%),
+    bg-4: color.scale($base-color-dk-bg, $lightness: 40%),
+    text: $base-color-dk-text,
+    text-light: color.scale($base-color-dk-text, $lightness: -60%),
+    border: rgba(255, 255, 255, 0.3),
+    shadow: rgba(255, 255, 255, 0.16),
+    overlay: rgba(0, 0, 0, 0.5),
+    primary: #0000af,
+    primary-light: #0059ff99,
+    danger: #a50000,
+    accent: #ff3434,
+    success: #42b883,
+    selected: #287ec59d,
+  ),
+);
+
+$sizes: (
+  line-height: 1.75rem,
+  text-size-xxs: 0.625rem,
+  text-size-xs: 0.75rem,
+  text-size-sm: 0.875rem,
+  text-size-md: 1rem,
+  text-size-lg: 1.125rem,
+  text-size-xl: 1.25rem,
+  text-size-xxl: 1.5rem,
+  // space-xxs: 0.125rem,
+  // space-xs: 0.3rem,
+  // space-sm: 0.5rem,
+  // space-md: 1rem,
+  // space-lg: 1.5rem,
+  // space-xl: 1.8rem,
+  // space-xxl: 1.925rem,
+  space-xxs: 0.15rem, // (約2.4px) ← 0.125rem
+  space-xs: 0.375rem, // (6px)      ← 0.3rem
+  space-sm: 0.625rem, // (10px)     ← 0.5rem
+  space-md: 1.25rem, // (20px)     ← 1.0rem
+  space-lg: 1.75rem, // (28px)     ← 1.5rem
+  space-xl: 2.125rem, // (34px)     ← 1.8rem
+  space-xxl: 2.5rem, // (40px)     ← 1.925rem
+);
+
+$breakpoints: (
+  sm: 768px,
+  md: 1024px,
+  lg: 1280px,
+);
+
+// CSS変数を展開する
+@mixin spread-themes($theme-name) {
+  $theme-map: map.get($themes, $theme-name);
+  @each $key, $value in $theme-map {
+    --#{$key}: #{$value};
+  }
+}
+
+@mixin spread-sizes() {
+  @each $key, $value in $sizes {
+    --#{$key}: #{$value};
+  }
+}
+
+@mixin mdown($breakpoint) {
+  @media (max-width: map.get($breakpoints, $breakpoint) - 1px) {
+    @content;
+  }
+}
+
+@mixin mup($breakpoint) {
+  @media (min-width: map.get($breakpoints, $breakpoint)) {
+    @content;
+  }
+}
+
+@mixin between($lower, $upper) {
+  @media (min-width: map.get($breakpoints, $lower)) and (max-width: map.get($breakpoints, $upper) - 1px) {
+    @content;
+  }
+}

@@ -46,6 +46,20 @@ services:
     tty: true
     stdin_open: true
 
+  # Website
+  website:
+    build:
+      context: ./website
+      dockerfile: Dockerfile
+    image: orbit-website:production
+    container_name: orbit_website_production
+    ports:
+      - "14321:14321"
+    env_file:
+      - .env.production
+    tty: true
+    stdin_open: true
+
   # Cloudflare Tunnel
   tunnel:
     image: cloudflare/cloudflared:latest

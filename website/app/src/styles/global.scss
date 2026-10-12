@@ -1,0 +1,190 @@
+@use './vars' as *;
+
+// フォント
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@100..900&display=swap'); // 'Noto Sans JP'
+@import url('https://fonts.googleapis.com/css2?family=Kosugi+Maru&display=swap'); // 'Kosugi Maru'
+@import url('https://fonts.googleapis.com/css?family=Ubuntu+Mono'); // 'Ubuntu Mono'
+@import url('https://fonts.googleapis.com/css?family=Sawarabi+Mincho'); // 'Sawarabi Mincho'
+@import url('https://fonts.googleapis.com/css?family=M+PLUS+Rounded+1c'); // 'M PLUS Rounded 1c'
+@import url('https://fonts.googleapis.com/css?family=M+PLUS+1p'); // 'M PLUS 1p'
+@import url('https://fonts.googleapis.com/css?family=Sawarabi+Gothic'); // 'Sawarabi Gothic'
+@import url('https://fonts.googleapis.com/css?family=Kosugi'); // 'Kosugi'
+@import url('https://fonts.googleapis.com/css?family=Noto+Serif+JP'); // 'Noto Serif JP'
+@import url('https://fonts.googleapis.com/css?family=Noto+Sans+JP'); // 'Noto Sans JP'
+
+:root {
+  @include spread-themes(light);
+  @include spread-sizes();
+
+  --site-bg: #fffdfb;
+  --site-bg-alt: #faf6f4;
+  --site-text: #26221f;
+  --site-text-sub: #6f675f;
+  --site-accent: #ff3434;
+  --site-accent-dark: #e01e1e;
+  --site-border: #ece4e0;
+  --site-max-width: 1120px;
+  --site-radius: 12px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-family:
+    'Noto Sans JP',
+    'Hiragino Kaku Gothic ProN',
+    'Yu Gothic',
+    'Meiryo',
+    sans-serif;
+  color: var(--site-text);
+  background: var(--site-bg);
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  scroll-behavior: smooth;
+  text-autospace: normal;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  flex: 1;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+a {
+  color: var(--site-accent);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  line-height: 1.4;
+  margin: 0;
+}
+
+p {
+  margin: 0;
+}
+
+// Markdown レンダリングコンテンツ用のスタイル
+.prose {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: var(--space-xxl) var(--space-md) 4rem;
+  font-size: 0.95rem;
+
+  h1 {
+    font-size: 1.75rem;
+    margin-bottom: var(--space-lg);
+    padding-bottom: var(--space-sm);
+    border-bottom: 2px solid var(--site-accent);
+  }
+
+  h2 {
+    font-size: 1.3rem;
+    margin: 2.5rem 0 var(--space-sm);
+    padding-left: 0.6rem;
+    border-left: 4px solid var(--site-accent);
+    scroll-margin-top: 5rem;
+  }
+
+  h3 {
+    font-size: 1.05rem;
+    margin: 1.75rem 0 var(--space-xs);
+    scroll-margin-top: 5rem;
+  }
+
+  p {
+    margin: var(--space-sm) 0;
+  }
+
+  ul,
+  ol {
+    margin: var(--space-sm) 0;
+    padding-left: 1.5rem;
+  }
+
+  li {
+    margin: 0.3rem 0;
+  }
+
+  a {
+    text-underline-offset: 3px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: var(--space-md) 0;
+    font-size: 0.9rem;
+  }
+
+  th,
+  td {
+    border: 1px solid var(--site-border);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    background: var(--site-bg-alt);
+  }
+
+  code {
+    font-family: 'Ubuntu Mono', monospace;
+    background: var(--site-bg-alt);
+    border: 1px solid var(--site-border);
+    border-radius: 4px;
+    padding: 0.1em 0.35em;
+    font-size: 0.875em;
+  }
+
+  blockquote {
+    margin: var(--space-md) 0;
+    padding: var(--space-xs) var(--space-md);
+    border-left: 4px solid var(--site-border);
+    background: var(--site-bg-alt);
+    border-radius: 0 var(--site-radius) var(--site-radius) 0;
+    color: var(--site-text-sub);
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid var(--site-border);
+    margin: var(--space-xl) 0;
+  }
+
+  @include mdown(sm) {
+    padding: 2rem var(--space-md) 3rem;
+    font-size: 0.9rem;
+
+    h1 {
+      font-size: 1.45rem;
+    }
+
+    h2 {
+      font-size: 1.15rem;
+      margin-top: 2rem;
+    }
+
+    table {
+      display: block;
+      overflow-x: auto;
+    }
+  }
+}
