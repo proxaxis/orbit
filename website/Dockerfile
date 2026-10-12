@@ -8,13 +8,13 @@ RUN npm install
 
 COPY ./app/ .
 
-RUN npm run build
-
 RUN chown -R node:node /app
 
-USER node
+RUN npm run build
 
 EXPOSE 4321
 EXPOSE 14321
+
+USER node
 
 CMD ["npm", "start"]

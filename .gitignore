@@ -1,23 +1,17 @@
-# 環境変数ファイル
 .env
 .env.*
 !.env.sample
 
-# 依存モジュール
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# ビルド生成物
 dist/
 dist-ssr/
 *.local
 
-# エディタ設定
-.vscode/*
-!.vscode/extensions.json
 .idea/
 *.suo
 *.ntvs*
@@ -25,6 +19,5 @@ dist-ssr/
 *.sln
 *.sw?
 
-# OS 生成物
 .DS_Store
 Thumbs.db
