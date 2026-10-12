@@ -23,6 +23,7 @@ import IconBell from '@/components/icons/IconBell.vue';
 import IconArrowUpRightFromSquare from '@/components/icons/IconArrowUpRightFromSquare.vue';
 import InlineEmoji from '@/components/InlineEmoji.vue';
 import AccordionMenu from '@/components/AccordionMenu.vue';
+import IconUserLock from '@/components/icons/IconUserLock.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -102,7 +103,7 @@ function howLongBeforeEvent(startDateTime, endDateTime) {
     // イベントがまだ始まっていない場合
     if (monthsAgo < 0) return `${-monthsAgo}か月後`;
     if (weeksAgo < 0) return `${-weeksAgo}週間後`;
-    if (daysAgo < 0) return `${-daysAgo}日前`;
+    if (daysAgo < 0) return `${-daysAgo}日後`;
     if (hoursAgo < 0) return `${-hoursAgo}時間後`;
     if (minutesAgo < 0) return `${-minutesAgo}分後`;
     if (secondsAgo < 0) return `${-secondsAgo}秒後`;
@@ -270,8 +271,24 @@ watch(
           </button>
         </div>
       </dl>
+
+      <!-- 写真アルバム -->
+      <EventDetailViewPhotoAlbum ref="rfPhotoAlbum" :event="event" :has-other-attendees="hasOtherAttendees" />
+
+      <dl>
+        <div class="detail-row">
+          <dt>
+            <IconUserLock />
+          </dt>
+          <dd v-if="event.raw.visibility === 'default'">カレンダーの既定値</dd>
+          <dd v-else-if="event.raw.visibility === 'public'">公開</dd>
+          <dd v-else-if="event.raw.visibility === 'private'">非公開</dd>
+          <dd v-else>カレンダーの既定値</dd>
+        </div>
+      </dl>
+
       <dl v-if="myAttendee">
-        <div>
+        <div class="detail-row">
           <dt><IconUserCheck /></dt>
           <dd>
             参加承諾:
@@ -281,32 +298,28 @@ watch(
           </dd>
         </div>
       </dl>
-      <details v-if="myAttendee" aria-label="参加回答" class="attendance-section">
-        <summary>参加回答を変更または確定する</summary>
-        <p>現在の回答: {{ myAttendee.responseStatus === 'accepted' ? '承諾' : myAttendee.responseStatus === 'declined' ? '辞退' : '未回答' }}</p>
-        <div class="attendance-actions">
-          <button type="button" class="accept-button" :disabled="userStore.isLoading" @click="respondToInvitation('accepted')">承諾</button>
-          <button type="button" class="decline-button" :disabled="userStore.isLoading" @click="respondToInvitation('declined')">辞退</button>
+
+      <AccordionMenu v-if="myAttendee" label="参加回答を変更または確定する">
+        <div class="attendance-container">
+          <button type="button" data-response-action="declined" :disabled="userStore.isLoading || myAttendee.responseStatus === 'declined'" @click="respondToInvitation('declined')">辞退する</button>
+          <button type="button" data-response-action="accepted" :disabled="userStore.isLoading || myAttendee.responseStatus === 'accepted'" @click="respondToInvitation('accepted')">承諾する</button>
         </div>
-      </details>
-      <details v-if="event.raw.attendees?.length" class="attendees-section">
-        <summary>参加者（{{ event.raw.attendees.length }}人）</summary>
-        <ul>
+      </AccordionMenu>
+
+      <AccordionMenu v-if="event.raw.attendees?.length" :label="`参加者（${event.raw.attendees.length}人）`">
+        <ul class="attendees-container">
           <li v-for="attendee in event.raw.attendees" :key="attendee.email || attendee.id">
             <span>{{ attendee.displayName || attendee.email || '不明な参加者' }}</span>
             <small>
-              <span data-response-status="accepted" v-if="attendee.responseStatus && attendee.responseStatus === 'accepted'">承諾済み</span>
-              <span data-response-status="declined" v-else-if="attendee.responseStatus && attendee.responseStatus === 'declined'">辞退済み</span>
-              <span data-response-status="needsAction" v-else>未回答</span>
+              <span :data-response-status="attendee.responseStatus ?? 'needsAction'">
+                {{ attendee.responseStatus === 'accepted' ? '承諾済み' : attendee.responseStatus === 'declined' ? '辞退済み' : '未回答' }}
+              </span>
             </small>
           </li>
         </ul>
-      </details>
-      <!-- 写真アルバム -->
-      <EventDetailViewPhotoAlbum ref="rfPhotoAlbum" :event="event" :has-other-attendees="hasOtherAttendees" />
+      </AccordionMenu>
 
-      <AccordionMenu title="イベントの詳細情報" :useMenuSlot="false">
-        <template #summary>その他の詳細情報</template>
+      <AccordionMenu label="その他の詳細情報">
         <ul class="other-more-info">
           <li>
             Status: <span class="inline-text">{{ event.raw.status ?? 'Unavailable' }}</span>
@@ -333,7 +346,7 @@ watch(
       </AccordionMenu>
     </article>
     <article v-else>
-      <p>We could not load the event details.</p>
+      <p>イベントの詳細を読み込めませんでした</p>
     </article>
   </section>
 </template>
@@ -341,7 +354,6 @@ watch(
 <style lang="scss" scoped>
 .menu-bar-actions {
   display: flex;
-  // gap: var(--space-sm);
 
   button {
     background-color: var(--bg-1);
@@ -360,32 +372,37 @@ watch(
   }
 }
 
-.heading {
+article {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  border-bottom: 1px solid var(--border);
-  padding-bottom: var(--space-sm);
-  margin-bottom: var(--space-md);
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
   position: relative;
 
   h2 {
+    background-color: var(--bg-2);
+    border-radius: var(--border-radius);
     font-size: var(--text-size-lg);
     font-weight: bold;
-    padding: var(--space-xs) calc(var(--space-sm) * 2 + 1rem) var(--space-sm) var(--space-xs); // 右は余白に加えてボタンの分だけ余白を空ける
+    padding: var(--space-xs) calc(var(--space-sm) * 2 + 1rem) var(--space-xs) var(--space-xs); // 右は余白に加えてボタンの分だけ余白を空ける
   }
 
   .calendar-ribbon-wrapper {
-    margin-left: var(--space-sm);
+    margin-left: 0.63rem;
+    padding-top: var(--space-sm);
   }
 
   button {
     position: absolute;
     right: 0;
     top: 0;
-    background-color: var(--bg-1);
+    background-color: var(--bg-2);
     &:hover {
-      background-color: var(--bg-2);
+      background-color: var(--bg-3);
     }
   }
 }
@@ -433,6 +450,7 @@ dl {
     }
   }
 }
+
 .map-link-card {
   display: flex;
   align-items: center;
@@ -475,17 +493,68 @@ dl {
   }
 }
 
-small,
-.attendance-section p {
-  color: var(--text-light);
+span[data-response-status='accepted'] {
   font-size: var(--text-size-sm);
-}
-.more-info {
-  margin-top: var(--space-sm);
-  padding: var(--space-sm);
-  border: 1px solid var(--border);
+  background-color: var(--success);
   border-radius: var(--border-radius);
-  background: var(--bg-1);
+  padding: var(--space-xxs) var(--space-xs);
+  color: var(--text);
+}
+
+span[data-response-status='declined'] {
+  font-size: var(--text-size-sm);
+  background-color: var(--danger);
+  border-radius: var(--border-radius);
+  padding: var(--space-xxs) var(--space-xs);
+  color: var(--text);
+}
+
+span[data-response-status='needsAction'] {
+  font-size: var(--text-size-sm);
+  background-color: var(--warning);
+  border-radius: var(--border-radius);
+  padding: var(--space-xxs) var(--space-xs);
+  color: var(--text);
+}
+
+.attendance-container {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-sm);
+
+  button {
+    width: 5rem;
+  }
+
+  button[data-response-action='accepted'] {
+    background-color: var(--success);
+    color: var(--text);
+    &:hover:not(:disabled) {
+      opacity: 0.8;
+    }
+  }
+
+  button[data-response-action='declined'] {
+    background-color: var(--danger);
+    color: var(--text);
+    &:hover:not(:disabled) {
+      opacity: 0.8;
+    }
+  }
+}
+
+.attendees-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-sm);
+    border-radius: var(--border-radius);
+  }
 }
 
 .inline-text {
@@ -495,79 +564,5 @@ small,
   padding: var(--space-xxs) var(--space-xs);
   border-radius: var(--border-radius);
   word-break: break-all;
-}
-
-.attendance-section,
-.attendees-section {
-  margin-top: var(--space-sm);
-  padding: var(--space-sm);
-  border: 1px solid var(--border);
-  border-radius: var(--border-radius);
-  background: var(--bg-1);
-}
-
-.attendance-section h3 {
-  font-size: var(--text-size-md);
-}
-
-.attendance-actions {
-  display: flex;
-  gap: var(--space-sm);
-  margin-top: var(--space-sm);
-}
-
-.attendance-actions button {
-  padding: var(--space-xs) var(--space-md);
-  border: 1px solid var(--border);
-  border-radius: var(--border-radius);
-}
-.accept-button {
-  background-color: var(--success);
-  color: var(--text);
-  &:hover:not(:disabled) {
-    opacity: 0.8;
-  }
-}
-.decline-button {
-  background-color: var(--danger);
-  color: var(--text);
-  &:hover:not(:disabled) {
-    opacity: 0.8;
-  }
-}
-
-.attendees-section ul {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-  margin-top: var(--space-sm);
-}
-
-.attendees-section li {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-sm);
-}
-
-span[data-response-status='accepted'] {
-  font-size: var(--text-size-sm);
-  background-color: var(--success);
-  border-radius: var(--border-radius);
-  padding: 0 var(--space-xs);
-  color: var(--text);
-}
-span[data-response-status='declined'] {
-  font-size: var(--text-size-sm);
-  background-color: var(--danger);
-  border-radius: var(--border-radius);
-  padding: 0 var(--space-xs);
-  color: var(--text);
-}
-span[data-response-status='needsAction'] {
-  font-size: var(--text-size-sm);
-  background-color: var(--warning);
-  border-radius: var(--border-radius);
-  padding: 0 var(--space-xs);
-  color: var(--text);
 }
 </style>

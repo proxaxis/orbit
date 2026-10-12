@@ -1,4 +1,5 @@
 import { bytesToBase64, postBffRequest } from '@/services/bff-request.js';
+import { GOOGLE_API_BASE_URL_PHOTOSLIBRARY, GOOGLE_API_BASE_URL_PHOTOSPICKER } from '@/assets/constants.js';
 
 /** @type {(() => Promise<string|null>)|null} 401 応答時に新しいアクセストークンを返すコールバック（呼び出し側が注入） */
 let tokenRefresher = null;
@@ -12,11 +13,6 @@ let tokenRefresher = null;
 export function setTokenRefresher(refresher) {
   tokenRefresher = refresher;
 }
-
-/** @type {string} Google Photos Library API のベース URL（未設定時は本番エンドポイント） */
-export const API_BASE_URL = (import.meta.env.VITE_GOOGLE_API_BASE_URL_PHOTOSLIBRARY || 'https://photoslibrary.googleapis.com/v1').replace(/\/+$/, '');
-/** @type {string} Google Photos Picker API のベース URL（未設定時は本番エンドポイント） */
-export const PICKER_API_BASE_URL = (import.meta.env.VITE_GOOGLE_API_BASE_URL_PHOTOSPICKER || 'https://photospicker.googleapis.com/v1').replace(/\/+$/, '');
 
 /**
  * ============================================================================
@@ -136,7 +132,7 @@ export async function downloadMediaFile(token, baseUrl) {
  * @returns {Promise<GooglePhotosPickerSession>} pickerUri を含むセッション
  */
 export function createPickerSession(token) {
-  return fetchPhotosAPI(token, 'POST', '/sessions', { base: PICKER_API_BASE_URL });
+  return fetchPhotosAPI(token, 'POST', '/sessions', { base: GOOGLE_API_BASE_URL_PHOTOSPICKER });
 }
 
 /**
@@ -146,7 +142,7 @@ export function createPickerSession(token) {
  * @returns {Promise<GooglePhotosPickerSession>}
  */
 export function getPickerSession(token, sessionId) {
-  return fetchPhotosAPI(token, 'GET', '/sessions/$sessionId', { base: PICKER_API_BASE_URL, params: { sessionId } });
+  return fetchPhotosAPI(token, 'GET', '/sessions/$sessionId', { base: GOOGLE_API_BASE_URL_PHOTOSPICKER, params: { sessionId } });
 }
 
 /**
@@ -156,7 +152,7 @@ export function getPickerSession(token, sessionId) {
  * @returns {Promise<null>}
  */
 export function deletePickerSession(token, sessionId) {
-  return fetchPhotosAPI(token, 'DELETE', '/sessions/$sessionId', { base: PICKER_API_BASE_URL, params: { sessionId } });
+  return fetchPhotosAPI(token, 'DELETE', '/sessions/$sessionId', { base: GOOGLE_API_BASE_URL_PHOTOSPICKER, params: { sessionId } });
 }
 
 /**
@@ -170,7 +166,7 @@ export async function listPickedMediaItems(token, sessionId) {
   let pageToken;
   do {
     const response = await fetchPhotosAPI(token, 'GET', '/mediaItems', {
-      base: PICKER_API_BASE_URL,
+      base: GOOGLE_API_BASE_URL_PHOTOSPICKER,
       query: { sessionId, ...(pageToken ? { pageToken } : {}) },
     });
     if (Array.isArray(response?.mediaItems)) items.push(...response.mediaItems);
@@ -194,7 +190,7 @@ export async function listPickedMediaItems(token, sessionId) {
  * @param {'GET'|'POST'|'PUT'|'PATCH'|'DELETE'} method HTTP メソッド
  * @param {string} endpoint エンドポイントのパス（例: /albums/$albumId）
  * @param {object} [options={}] リクエストオプション
- * @param {string} [options.base=API_BASE_URL] ベース URL（Picker API は別ホスト）
+ * @param {string} [options.base=GOOGLE_API_BASE_URL_PHOTOSLIBRARY] ベース URL（Picker API は別ホスト）
  * @param {Record<string, any>} [options.params={}] パスパラメータ（'$'プレフィックスは自動置換）
  * @param {Record<string, any>} [options.query={}] クエリパラメータ
  * @param {any|null} [options.body=null] JSON リクエストボディ
@@ -202,7 +198,7 @@ export async function listPickedMediaItems(token, sessionId) {
  * @param {Record<string, string>} [options.headers={}] 追加ヘッダ
  * @returns {Promise<T>} レスポンスデータ（テキストレスポンスもそのまま返す）
  */
-async function fetchPhotosAPI(token, method, endpoint, { base = API_BASE_URL, params = {}, query = {}, body = null, rawBody = null, headers = {} } = {}) {
+async function fetchPhotosAPI(token, method, endpoint, { base = GOOGLE_API_BASE_URL_PHOTOSLIBRARY, params = {}, query = {}, body = null, rawBody = null, headers = {} } = {}) {
   if (!method || typeof method !== 'string' || !['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
     throw new Error('HTTP method is not set or invalid');
   }

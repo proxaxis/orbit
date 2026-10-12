@@ -15,7 +15,7 @@ import { useEvents } from '@/composables/useEvents.js';
 import { useCalendarStore } from '@/stores/calendar.js';
 import { useUserStore } from '@/stores/user.js';
 import { USER_TEXT_SIZE_VALUES } from '@/stores/user.js';
-import { useCalendarToolbar } from '@/composables/useCalendarToolbar.js';
+import { useCalendarToolbar, formatMonthTitle } from '@/composables/useCalendarToolbar.js';
 import { buildMonthLayout } from '@/composables/useMonthLayout.js';
 import { isDotEventBar, getEventBarStyle, getEventDotColor } from '@/composables/useEventBarStyle.js';
 import { buildCustomHolidayBody, holidayDatesOf } from '@/services/custom-holidays.js';
@@ -77,11 +77,16 @@ const pickBannerText = computed(() => {
 /** @type {{date: Dayjs}|null} マウスダウンしたセル（ドラッグ開始判定用） */
 let mouseDownCell = null;
 
-/** ツールバーのコンパクト表示状態・月タイトルは他のビューと共有ロジック */
-const { isCompactToolbar, monthTitle } = useCalendarToolbar(rfToolbar);
+/** ツールバーのコンパクト表示状態は他のビューと共有ロジック */
+const { isCompactToolbar } = useCalendarToolbar(rfToolbar);
 
 /** @type {Ref<Dayjs>} フォーカス中の月（月初め） */
 const focusedMonth = ref(userStore.nowUsingDate.startOf('month'));
+
+/** @type {Ref<string|null>} ビューポート先頭に見えている月（YYYY-MM） */
+const visibleMonthKey = ref(null);
+/** @type {ComputedRef<string>} ツールバーに表示する、現在表示中の月タイトル */
+const visibleMonthTitle = computed(() => formatMonthTitle(visibleMonthKey.value ? toDayjs(`${visibleMonthKey.value}-01`) : focusedMonth.value));
 
 /**
  * @typedef {Object} GridDay
@@ -228,6 +233,33 @@ function focusMonth(date, { smooth = false, alignTop = false } = {}) {
   userStore.setNowUsingDate(target);
 }
 
+/**
+ * ビューポート先頭（sticky 曜日ヘッダ直下）に見えている月をタイトル用に記録する。
+ * @returns {void}
+ */
+function updateVisibleMonth() {
+  const scroller = rfScroll.value;
+  if (!scroller) return;
+  const threshold = scroller.scrollTop + (scroller.querySelector('.month-header')?.offsetHeight ?? 0) + 1;
+  const cells = scroller.querySelectorAll('.day-cell');
+  let rowStart = -1;
+  for (let i = 0; i < cells.length; i++) {
+    const cell = cells[i];
+    if (cell.offsetTop + cell.offsetHeight > threshold) {
+      rowStart = i - (i % 7);
+      break;
+    }
+  }
+  if (rowStart < 0) return;
+  // 月またぎの行は、その行で新しく始まる月（行内の最も新しい月）を採用する
+  let key = null;
+  for (const cell of Array.from(cells).slice(rowStart, rowStart + 7)) {
+    const month = cell.getAttribute('data-month');
+    if (month && (!key || month > key)) key = month;
+  }
+  if (key) visibleMonthKey.value = key;
+}
+
 /** グリッド再生成後にスクロール位置を調整し、対象月の見かけ上の位置を維持する */
 async function adjustScrollPosition() {
   await nextTick();
@@ -236,7 +268,11 @@ async function adjustScrollPosition() {
   const scroller = rfScroll.value;
   if (!pending || !scroller) return;
   const monthEl = scroller.querySelector(`[data-month="${pending.key}"]`);
-  if (!monthEl) return;
+  // グリッド範囲外への移動（年月ジャンプ等）はフォーカス月表示へフォールバックする
+  if (!monthEl) {
+    visibleMonthKey.value = null;
+    return;
+  }
   const top = pending.delta === null ? monthEl.offsetTop : monthEl.offsetTop - pending.delta;
   if (pending.smooth) {
     // スムーズスクロール中は端検出を止める。スクロール終了（scrollend）またはユーザー操作で解除する
@@ -246,6 +282,7 @@ async function adjustScrollPosition() {
     scroller.scrollTop = top;
     lastScrollTop = top;
   }
+  updateVisibleMonth();
 }
 
 watch(focusedMonth, adjustScrollPosition);
@@ -260,6 +297,8 @@ function handleScroll() {
     scrollRafId = null;
     const scroller = rfScroll.value;
     if (!scroller) return;
+    // 表示中の月タイトルは常に追従させる（スムーズスクロール中も更新する）
+    updateVisibleMonth();
     // グリッド再生成のスクロール補正待ち、またはプログラムによるスクロール中は判定しない
     if (pendingScroll || isProgrammaticScrolling) {
       lastScrollTop = scroller.scrollTop;
@@ -302,10 +341,13 @@ function updateScrollWindow(direction) {
   }
 }
 
-/** プログラムによるスムーズスクロールの終了・中断時に端検出を再開する */
+/**
+ * プログラムによるスムーズスクロールの終了・中断時に端検出を再開する。
+ * lastScrollTop はここで更新しない。scrollend は遅延中の rAF コールバックより先に
+ * 発火し得るため、ここで現在値に揃えると直前のユーザスクロールの端検出がスキップされる。
+ */
 function resumeScrollDetection() {
   isProgrammaticScrolling = false;
-  lastScrollTop = rfScroll.value?.scrollTop ?? lastScrollTop;
 }
 
 /**
@@ -637,6 +679,8 @@ function goToday() {
 function getCellClass(day) {
   const classes = ['day-cell'];
   if (day.isPadding) classes.push('is-padding');
+  // 月の区切りが分かりやすいよう、奇数月のセルに交互の背景色クラスを付ける
+  if (!day.isPadding && day.date.month() % 2 === 1) classes.push('is-alt-month');
   if (day.isToday) classes.push('is-today');
   if (day.isSelected) classes.push('is-selected');
   if (!day.isPadding && isInDragRange(day.date)) classes.push('is-in-drag-range');
@@ -670,6 +714,7 @@ onMounted(async () => {
     rfScroll.value.scrollTop = monthEl.offsetTop;
     lastScrollTop = rfScroll.value.scrollTop;
   }
+  updateVisibleMonth();
 });
 
 onUnmounted(() => {
@@ -695,7 +740,7 @@ onUnmounted(() => {
           <IconCaretRight size="1.25rem" />
         </button>
       </div>
-      <YearMonthJump :label="monthTitle" />
+      <YearMonthJump :label="visibleMonthTitle" />
       <div class="toolbar-right">
         <template v-if="!isCompactToolbar">
           <button type="button" title="今日に戻る" aria-label="今日に戻る" @click.prevent="goToday">
@@ -953,6 +998,11 @@ $event-bar-radius: 4px;
       pointer-events: none;
     }
 
+    // 月ごとの区切りを示す交互の薄い背景色（選択・ドラッグ中の色より先に宣言して上書きさせる）
+    &.is-alt-month {
+      background: color-mix(in srgb, var(--bg-3) 50%, var(--bg-0));
+    }
+
     &.is-today .day-num {
       background: #2b941180;
       color: white;
@@ -984,13 +1034,13 @@ $event-bar-radius: 4px;
     }
 
     .events-stack {
-      margin-top: 24px;
+      margin-top: 21px;
       display: flex;
       flex-direction: column;
       gap: 2px;
 
       .event-slot {
-        height: 18px;
+        height: var(--space-md, 18px);
         min-width: 0;
       }
 
@@ -1016,6 +1066,9 @@ $event-bar-radius: 4px;
         > span {
           height: 100%;
           line-height: 16px;
+          display: flex;
+          align-items: center;
+          padding-left: 4px;
         }
 
         &.is-label-start {

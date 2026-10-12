@@ -973,13 +973,13 @@ $event-bar-radius: 4px;
     }
 
     .events-stack {
-      margin-top: 24px;
+      margin-top: 21px;
       display: flex;
       flex-direction: column;
       gap: 2px;
 
       .event-slot {
-        height: 18px;
+        height: var(--space-md, 18px);
         min-width: 0;
       }
 
@@ -1005,7 +1005,9 @@ $event-bar-radius: 4px;
         > span {
           height: 100%;
           line-height: 16px;
-          padding-left: 6px;
+          padding-left: 4px;
+          display: flex;
+          align-items: center;
         }
 
         &.is-label-start {

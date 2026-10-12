@@ -1,4 +1,5 @@
 import { postBffRequest, postBffRequestBatch } from '@/services/bff-request.js';
+import { GOOGLE_API_BASE_URL_CALENDAR } from '@/assets/constants.js';
 
 /** @type {(() => Promise<string|null>)|null} 401 応答時に新しいアクセストークンを返すコールバック（呼び出し側が注入） */
 let tokenRefresher = null;
@@ -12,9 +13,6 @@ let tokenRefresher = null;
 export function setTokenRefresher(refresher) {
   tokenRefresher = refresher;
 }
-
-/** @type {string} Google Calendar API のベース URL（未設定時は本番エンドポイント） */
-export const API_BASE_URL = (import.meta.env.VITE_GOOGLE_API_BASE_URL_CALENDAR || 'https://www.googleapis.com/calendar/v3').replace(/\/+$/, '');
 
 /**
  * 予定の一覧取得
@@ -484,7 +482,7 @@ function buildCalendarRequest(token, method, endpoint, { params = {}, query = {}
     resolvedEndpoint = resolvedEndpoint.replace(`\$${key}`, encodeURIComponent(String(value)));
   });
 
-  const epUrl = new URL(`${API_BASE_URL}${resolvedEndpoint}`);
+  const epUrl = new URL(`${GOOGLE_API_BASE_URL_CALENDAR}${resolvedEndpoint}`);
 
   // クエリパラメータの追加
   Object.entries(query).forEach(([key, value]) => {

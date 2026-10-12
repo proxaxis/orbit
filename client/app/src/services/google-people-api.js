@@ -1,4 +1,5 @@
 import { postBffRequest } from '@/services/bff-request.js';
+import { GOOGLE_API_BASE_URL_PEOPLE } from '@/assets/constants.js';
 
 /** @type {(() => Promise<string|null>)|null} 401 応答時に新しいアクセストークンを返すコールバック（呼び出し側が注入） */
 let tokenRefresher = null;
@@ -12,9 +13,6 @@ let tokenRefresher = null;
 export function setTokenRefresher(refresher) {
   tokenRefresher = refresher;
 }
-
-/** @type {string} Google People API のベース URL（未設定時は本番エンドポイント） */
-export const API_BASE_URL = (import.meta.env.VITE_GOOGLE_API_BASE_URL_PEOPLE || 'https://people.googleapis.com/v1').replace(/\/+$/, '');
 
 /**
  * ============================================================================
@@ -145,9 +143,7 @@ async function fetchPeopleAPI(token, endpoint, { params = {}, query = {} } = {})
     resolvedEndpoint = resolvedEndpoint.replace(`$${key}`, replacement);
   });
 
-  /** @type {string} People API のベース URL */
-  const base = (API_BASE_URL || 'https://people.googleapis.com/v1').replace(/\/+$/, '');
-  const epUrl = new URL(`${base}${resolvedEndpoint.startsWith('/') ? '' : '/'}${resolvedEndpoint}`);
+  const epUrl = new URL(`${GOOGLE_API_BASE_URL_PEOPLE}${resolvedEndpoint.startsWith('/') ? '' : '/'}${resolvedEndpoint}`);
 
   // クエリパラメータの追加
   Object.entries(query).forEach(([key, value]) => {

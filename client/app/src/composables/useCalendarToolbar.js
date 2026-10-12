@@ -42,6 +42,22 @@ function measureTitleWidth(title, text, fontFamily, fontSize) {
 }
 
 /**
+ * 月タイトルの文字列を生成する（現在年との相対表記つき）
+ * @param {Dayjs} date 対象月内の日付
+ * @returns {string}
+ */
+export function formatMonthTitle(date) {
+  const now = dayjs();
+  const year = date.year();
+  let relative = '';
+  if (year === now.year() - 1) relative = '去年';
+  else if (year === now.year() + 1) relative = '来年';
+  else if (year < now.year() - 1) relative = `(${now.year()}-) ${now.year() - year}年前`;
+  else if (year > now.year() + 1) relative = `(${now.year()}+) ${year - now.year()}年後`;
+  return [relative, date.format('YYYY年 M月')].filter(Boolean).join(' ');
+}
+
+/**
  * @param {Ref<HTMLElement|null>} rfToolbar ツールバーの header 要素への参照
  */
 export function useCalendarToolbar(rfToolbar) {
@@ -64,16 +80,7 @@ export function useCalendarToolbar(rfToolbar) {
   });
 
   /** @type {ComputedRef<string>} 月表示ツールバーのタイトル（相対年テキスト付き） */
-  const monthTitle = computed(() => {
-    const now = dayjs();
-    const year = userStore.nowUsingDate.year();
-    let relative = '';
-    if (year === now.year() - 1) relative = '去年';
-    else if (year === now.year() + 1) relative = '来年';
-    else if (year < now.year() - 1) relative = `(${now.year()}-) ${now.year() - year}年前`;
-    else if (year > now.year() + 1) relative = `(${now.year()}+) ${year - now.year()}年後`;
-    return [relative, userStore.nowUsingDate.format('YYYY年 M月')].filter(Boolean).join(' ');
-  });
+  const monthTitle = computed(() => formatMonthTitle(userStore.nowUsingDate));
 
   /**
    * ツールバーの内容が表示幅に収まるかを実測し、収まらない場合はコンパクト表示に切り替える。

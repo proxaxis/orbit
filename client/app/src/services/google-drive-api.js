@@ -5,6 +5,7 @@
  * アプリケーション専用データ領域へ JSON ファイルとして保存する。
  */
 import { postBffRequest, bytesToBase64 } from '@/services/bff-request.js';
+import { GOOGLE_API_BASE_URL_DRIVE } from '@/assets/constants.js';
 
 /** @type {(() => Promise<string|null>)|null} 401 応答時に新しいアクセストークンを返すコールバック（呼び出し側が注入） */
 let tokenRefresher = null;
@@ -18,9 +19,6 @@ let tokenRefresher = null;
 export function setTokenRefresher(refresher) {
   tokenRefresher = refresher;
 }
-
-/** @type {string} Google Drive API のベース URL */
-export const API_BASE_URL = (import.meta.env.VITE_GOOGLE_API_BASE_URL_DRIVE || 'https://www.googleapis.com').replace(/\/+$/, '');
 
 /** @type {string} アプリ設定を保存するファイル名（appDataFolder 直下） */
 export const SYNC_FILE_NAME = 'orbit-sync.json';
@@ -148,7 +146,7 @@ async function fetchDriveAPI(token, endpoint, { method = 'GET', query = {}, body
   if (!endpoint) throw new Error('Endpoint is not set');
   if (!token) throw new Error('Access token is not available');
 
-  const epUrl = new URL(`${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`);
+  const epUrl = new URL(`${GOOGLE_API_BASE_URL_DRIVE}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`);
 
   // クエリパラメータの追加
   Object.entries(query).forEach(([key, value]) => {

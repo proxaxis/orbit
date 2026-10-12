@@ -34,7 +34,6 @@ npm run format     # oxfmt によるフォーマット(src/ が対象)
 | `VITE_BFF_APP_BASE_URL` | BFF サーバのベース URL(未設定なら同一オリジン) |
 | `VITE_CLIENT_APP_BASE_URL` | クライアントアプリのベース URL |
 | `VITE_VAPID_PUBLIC_KEY` | Web Push の VAPID 公開鍵 |
-| `VITE_GOOGLE_API_BASE_URL_{CALENDAR,PEOPLE,PHOTOSLIBRARY,PHOTOSPICKER,DRIVE}` | 各 Google API のベース URL 上書き(未設定時は本番) |
 
 `.env` は gitignore 済み。`.env.example` は存在しない。
 

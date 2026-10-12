@@ -140,7 +140,6 @@ defineExpose({ reload });
 
 <style lang="scss" scoped>
 .photos-section {
-  margin: var(--space-sm) 0;
   padding: var(--space-sm);
   border: 1px solid var(--border);
   border-radius: var(--border-radius);
