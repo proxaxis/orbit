@@ -11,7 +11,7 @@
  */
 
 /** @type {string} BFF サーバのベース URL（未設定時は空文字 = 同一オリジンの相対パス） */
-export const BFF_BASE_URL = (import.meta.env.VITE_BFF_BASE_URL ?? '').replace(/\/$/, '');
+export const BFF_APP_BASE_URL = (import.meta.env.VITE_BFF_APP_BASE_URL).replace(/\/$/, '');
 
 /** @type {number} 結果ポーリングの間隔 (ms) */
 const POLL_INTERVAL_MS = 250;
@@ -50,7 +50,7 @@ const POLL_TIMEOUT_MS = 60_000;
  * @returns {Promise<BffRequestResult|Response>} ポーリング結果（通信エラー時は Response）
  */
 async function pollRequestResult(requestId) {
-  const pollUrl = `${BFF_BASE_URL}/request/${encodeURIComponent(requestId)}`;
+  const pollUrl = `${BFF_APP_BASE_URL}/request/${encodeURIComponent(requestId)}`;
   const deadline = Date.now() + POLL_TIMEOUT_MS;
 
   while (Date.now() < deadline) {
@@ -74,7 +74,7 @@ async function pollRequestResult(requestId) {
  * @returns {Promise<Response>} Google API のレスポンスを再構築した Response
  */
 export async function postBffRequest(request) {
-  const res = await fetch(`${BFF_BASE_URL}/request`, {
+  const res = await fetch(`${BFF_APP_BASE_URL}/request`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -99,7 +99,7 @@ export async function postBffRequest(request) {
  */
 export async function postBffRequestBatch(requests) {
   if (!requests.length) return [];
-  const res = await fetch(`${BFF_BASE_URL}/request`, {
+  const res = await fetch(`${BFF_APP_BASE_URL}/request`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },

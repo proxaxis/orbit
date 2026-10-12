@@ -14,7 +14,7 @@
  * BFF が未対応の場合は静かにスキップし、既存のタイマー/Periodic Sync 経路が動き続ける。
  */
 import dayjs from '@/services/dayjs.js';
-import { BFF_BASE_URL } from '@/stores/auth.js';
+import { BFF_APP_BASE_URL } from '@/stores/auth.js';
 import { serviceWorkerRegistration } from '@/composables/useCache.js';
 
 /** @type {string|null} 取得済みの VAPID 公開鍵（null は未試行） */
@@ -43,7 +43,7 @@ async function fetchVapidPublicKey() {
     return cachedVapidKey;
   }
   try {
-    const res = await fetch(`${BFF_BASE_URL}/api/push/vapid-key`, { credentials: 'include' });
+    const res = await fetch(`${BFF_APP_BASE_URL}/api/push/vapid-key`, { credentials: 'include' });
     if (!res.ok) return null;
     const data = await res.json();
     if (typeof data?.publicKey === 'string' && data.publicKey) cachedVapidKey = data.publicKey;
@@ -117,7 +117,7 @@ export async function syncPushSchedule(entries) {
   if (fingerprint === lastSyncedFingerprint) return;
 
   try {
-    const res = await fetch(`${BFF_BASE_URL}/api/push/subscriptions`, {
+    const res = await fetch(`${BFF_APP_BASE_URL}/api/push/subscriptions`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

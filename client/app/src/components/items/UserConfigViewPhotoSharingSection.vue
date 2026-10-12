@@ -4,7 +4,7 @@
  * 写真共有機能の有効化（OAuth 認証）・無効化と認証状態の表示を担う。
  */
 import { onMounted } from 'vue';
-import { useAuthStore, BFF_BASE_URL } from '@/stores/auth.js';
+import { useAuthStore, BFF_APP_BASE_URL } from '@/stores/auth.js';
 import { useUserStore } from '@/stores/user.js';
 import { useAuth } from '@/composables/useAuth.js';
 import IconImage from '@/components/icons/IconImage.vue';
@@ -26,7 +26,7 @@ onMounted(async () => {
 
 /** 写真共有の有効化（Google OAuth 認証へリダイレクト） */
 function startPhotoSharingAuth() {
-  window.location.href = `${BFF_BASE_URL}/auth/photo-sharing`;
+  window.location.href = `${BFF_APP_BASE_URL}/auth/photo-sharing`;
 }
 
 /** 写真共有を無効化し、保存済みの写真トークンを破棄する */

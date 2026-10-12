@@ -6,7 +6,7 @@
  * 有効にすると個人設定やセッションカレンダーがデバイス間で同期される。
  */
 import { onMounted } from 'vue';
-import { useAuthStore, BFF_BASE_URL } from '@/stores/auth.js';
+import { useAuthStore, BFF_APP_BASE_URL } from '@/stores/auth.js';
 import { useUserStore } from '@/stores/user.js';
 import { useAuth } from '@/composables/useAuth.js';
 import { useDriveSync } from '@/composables/useDriveSync.js';
@@ -30,7 +30,7 @@ onMounted(async () => {
 
 /** クラウド同期の有効化（Google OAuth 認証へリダイレクト） */
 function startDriveAuth() {
-  window.location.href = `${BFF_BASE_URL}/auth/drive`;
+  window.location.href = `${BFF_APP_BASE_URL}/auth/drive`;
 }
 
 /** クラウド同期を無効化し、保存済みの Drive トークンを破棄する */

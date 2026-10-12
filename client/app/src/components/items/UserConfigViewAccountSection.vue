@@ -3,7 +3,7 @@
  * UserConfigView のアカウント欄。
  * Google アカウントのログイン状態表示・ログアウト・アカウント切り替えを担う。
  */
-import { useAuthStore, BFF_BASE_URL } from '@/stores/auth.js';
+import { useAuthStore, BFF_APP_BASE_URL } from '@/stores/auth.js';
 import { useUserStore } from '@/stores/user.js';
 import { useAuth } from '@/composables/useAuth.js';
 import GoogleLogin from '@/components/GoogleLogin.vue';
@@ -44,7 +44,7 @@ async function switchAccount() {
     userStore.setLoading(false);
   }
   // BFF が prompt=select_account に対応していれば Google のアカウント選択画面が表示される
-  window.location.href = `${BFF_BASE_URL}/auth/login?prompt=select_account`;
+  window.location.href = `${BFF_APP_BASE_URL}/login?prompt=select_account`;
 }
 </script>
 

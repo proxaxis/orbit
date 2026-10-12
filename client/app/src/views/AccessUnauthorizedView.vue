@@ -10,7 +10,7 @@
  */
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { BFF_BASE_URL } from '@/stores/auth.js';
+import { BFF_APP_BASE_URL } from '@/stores/auth.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -31,7 +31,7 @@ const message = computed(() => {
 
 /** メイン認可の再試行（BFF のログインエンドポイントへリダイレクト） */
 function retryLogin() {
-  window.location.href = `${BFF_BASE_URL}/auth/login`;
+  window.location.href = `${BFF_APP_BASE_URL}/login`;
 }
 </script>
 

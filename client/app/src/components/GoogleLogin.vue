@@ -1,12 +1,12 @@
 <script setup>
-import { useAuthStore, BFF_BASE_URL } from '@/stores/auth.js';
+import { useAuthStore, BFF_APP_BASE_URL } from '@/stores/auth.js';
 import IconGoogle from '@/components/icons/IconGoogle.vue';
 
 const authStore = useAuthStore();
 
 /** Google ログインへリダイレクトする */
 function handleLogin() {
-  window.location.href = `${BFF_BASE_URL}/login`;
+  window.location.href = `${BFF_APP_BASE_URL}/login`;
 }
 </script>
 

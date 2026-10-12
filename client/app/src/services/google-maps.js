@@ -4,7 +4,7 @@
  * 座標（@lat,lng / !3d<lat>!4d<lng>）をオフラインで取り出す。
  * URL から取れない名前や住所は BFF `/api/location` のスクレイピングで補完する。
  */
-import { BFF_BASE_URL } from '@/services/bff-request.js';
+import { BFF_APP_BASE_URL } from '@/services/bff-request.js';
 
 /**
  * URL スラッグを表示用の名前へ復元する
@@ -91,7 +91,7 @@ export function parseGoogleMapsLink(text) {
  */
 export async function fetchPlaceInfo(url) {
   try {
-    const res = await fetch(`${BFF_BASE_URL}/api/location?url=${encodeURIComponent(url)}`, { credentials: 'include' });
+    const res = await fetch(`${BFF_APP_BASE_URL}/api/location?url=${encodeURIComponent(url)}`, { credentials: 'include' });
     if (!res.ok) return null;
     const data = await res.json();
     const name = typeof data?.name === 'string' ? data.name.trim() : '';

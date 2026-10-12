@@ -5,7 +5,7 @@
  * 取得したトークンは IndexedDB にも保存し、Service Worker の
  * バックグラウンド同期（オフラインキュー再送・共有同期）から参照できるようにする。
  */
-import { BFF_BASE_URL, useAuthStore } from '@/stores/auth.js';
+import { BFF_APP_BASE_URL, useAuthStore } from '@/stores/auth.js';
 import { useUserStore } from '@/stores/user.js';
 import { CACHE_KEYS, SYNC_TAGS, deleteCache, registerBackgroundSync, writeCache } from '@/composables/useCache.js';
 import { setTokenRefresher as setCalendarTokenRefresher } from '@/services/google-calendar-api.js';
@@ -28,7 +28,7 @@ let driveTokenRequest = null;
  * @returns {Promise<string|null>} 取得したアクセストークン
  */
 async function requestToken(query = '') {
-  const res = await fetch(`${BFF_BASE_URL}/api/token${query ? `?${query}` : ''}`, { credentials: 'include' });
+  const res = await fetch(`${BFF_APP_BASE_URL}/api/token${query ? `?${query}` : ''}`, { credentials: 'include' });
   if (res.ok && res.headers.get('Content-Type')?.startsWith('application/json')) {
     /** @type {{ gAccessToken: string }} */
     const data = await res.json();
@@ -53,7 +53,6 @@ export function useAuth() {
    * @returns {Promise<string|null>} 取得したアクセストークン
    */
   async function fetchToken() {
-    console.log('Fetching token from BFF server...', BFF_BASE_URL);
     try {
       const token = await requestToken();
       if (!token) {
@@ -186,7 +185,7 @@ export function useAuth() {
    */
   async function logout() {
     try {
-      const res = await fetch(`${BFF_BASE_URL}/logout`, { method: 'POST', credentials: 'include' });
+      const res = await fetch(`${BFF_APP_BASE_URL}/logout`, { method: 'POST', credentials: 'include' });
       if (!res.ok) throw new Error(`Logout failed: ${res.status}`);
       return true;
     } catch (err) {

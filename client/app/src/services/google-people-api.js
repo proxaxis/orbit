@@ -160,8 +160,6 @@ async function fetchPeopleAPI(token, endpoint, { params = {}, query = {} } = {})
     }
   });
 
-  // console.log(`Calling Google People API via BFF: GET ${epUrl.toString()}`);
-
   /** @type {import('@/services/bff-request.js').BffApiRequest} BFF へ転送を依頼するリクエスト内容 */
   const request = {
     service: 'people',

@@ -5,7 +5,7 @@
  * 有効にすると招待先入力やセッションカレンダー追加で連絡先の候補が使える。
  */
 import { onMounted } from 'vue';
-import { useAuthStore, BFF_BASE_URL } from '@/stores/auth.js';
+import { useAuthStore, BFF_APP_BASE_URL } from '@/stores/auth.js';
 import { useUserStore } from '@/stores/user.js';
 import { useAuth } from '@/composables/useAuth.js';
 import IconUserGroup from '@/components/icons/IconUserGroup.vue';
@@ -27,7 +27,7 @@ onMounted(async () => {
 
 /** 連絡先連携の有効化（Google OAuth 認証へリダイレクト） */
 function startPeopleAuth() {
-  window.location.href = `${BFF_BASE_URL}/auth/people`;
+  window.location.href = `${BFF_APP_BASE_URL}/auth/people`;
 }
 
 /** 連絡先連携を無効化し、保存済みの People トークンを破棄する */
