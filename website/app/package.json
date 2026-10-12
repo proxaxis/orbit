@@ -10,10 +10,12 @@
     "build": "astro build",
     "preview": "astro preview -- --host --port 14321",
     "astro": "astro",
+    "start": "node ./dist/server/entry.mjs",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check"
   },
   "dependencies": {
+    "@astrojs/node": "^11.1.7",
     "@astrojs/vue": "^7.0.3",
     "astro": "^7.3.8",
     "sass": "^1.105.1",
