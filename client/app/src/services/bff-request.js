@@ -11,7 +11,7 @@
  */
 
 /** @type {string} BFF サーバのベース URL（未設定時は空文字 = 同一オリジンの相対パス） */
-export const BFF_APP_BASE_URL = (import.meta.env.VITE_BFF_APP_BASE_URL).replace(/\/$/, '');
+export const BFF_APP_BASE_URL = (import.meta.env.VITE_BFF_APP_BASE_URL ?? '').replace(/\/$/, '');
 
 /** @type {number} 結果ポーリングの間隔 (ms) */
 const POLL_INTERVAL_MS = 250;
