@@ -71,8 +71,41 @@ export function updateEvent(token, gCalendarId, gEventId, body, query = {}) {
  * @param {Record<string, any>} [query={}] クエリパラメータ (例: { conferenceDataVersion: 1 })
  * @returns {Promise<GoogleCalendarEvent>} 更新されたイベントデータ
  */
-export function patchEvent(token, gCalendarId, gEventId, body, query = {}) {
-  return fetchCalendarAPI(token, 'PATCH', `/calendars/$gCalendarId/events/$gEventId`, { params: { gCalendarId, gEventId }, body, query });
+export async function patchEvent(token, gCalendarId, gEventId, body, query = {}) {
+  const request = (/** @type {Partial<GoogleCalendarEvent>} */ requestBody) => fetchCalendarAPI(token, 'PATCH', `/calendars/$gCalendarId/events/$gEventId`, { params: { gCalendarId, gEventId }, body: requestBody, query });
+  try {
+    return await request(body);
+  } catch (error) {
+    // extendedProperties の null によるキー削除は、サーバ側にそのセクション自体が存在しないと
+    // 400 Required で失敗する。ローカルの予定情報が古い場合に更新全体を失敗させないよう、
+    // null 指定を取り除いて1回だけ再試行する
+    const strippedBody = removeNullExtendedProperties(body);
+    if (/** @type {any} */ (error)?.status === 400 && strippedBody) return request(strippedBody);
+    throw error;
+  }
+}
+
+/**
+ * extendedProperties 内の null 値(キー削除指定)を取り除いたボディを返す
+ * @param {Partial<GoogleCalendarEvent>} body PATCH ボディ
+ * @returns {Partial<GoogleCalendarEvent> | null} null 値が含まれない場合は null
+ */
+function removeNullExtendedProperties(body) {
+  const extended = body?.extendedProperties;
+  if (!extended) return null;
+  let changed = false;
+  /** @type {Record<string, Record<string, any>>} */
+  const cleaned = {};
+  for (const [section, values] of Object.entries(extended)) {
+    const entries = Object.entries(values ?? {}).filter(([, value]) => value !== null);
+    if (entries.length !== Object.keys(values ?? {}).length) changed = true;
+    if (entries.length) cleaned[section] = Object.fromEntries(entries);
+  }
+  if (!changed) return null;
+  const copy = { ...body };
+  if (Object.keys(cleaned).length) copy.extendedProperties = cleaned;
+  else delete copy.extendedProperties;
+  return copy;
 }
 
 /**
@@ -580,11 +613,11 @@ export async function listAclBatch(token, calendarIds, query = {}) {
  * カレンダー数ではなく必要ページ数だけのジョブ往復で済む。
  * @param {string|null} token アクセストークン
  * @param {{calendarId: string, query?: Record<string, any>}[]} requests カレンダーごとのリクエスト
- * @returns {Promise<({ok: true, items: GoogleCalendarEvent[]}|{ok: false})[]>} requests と同じ順序の結果一覧
+ * @returns {Promise<({ok: true, items: GoogleCalendarEvent[]}|{ok: false, status?: number})[]>} requests と同じ順序の結果一覧（失敗時は status を含む）
  */
 export async function listEventsBatch(token, requests) {
-  /** @type {{items: GoogleCalendarEvent[], ok: boolean, nextQuery: Record<string, any>|null}[]} カレンダーごとの取得状態 */
-  const states = requests.map((req) => ({ items: [], ok: true, nextQuery: req.query ?? {} }));
+  /** @type {{items: GoogleCalendarEvent[], ok: boolean, status?: number, nextQuery: Record<string, any>|null}[]} カレンダーごとの取得状態 */
+  const states = requests.map((req) => ({ items: [], ok: true, status: undefined, nextQuery: req.query ?? {} }));
   while (true) {
     // 取得未完（次ページあり）のカレンダーだけを次のバッチに載せる
     const pending = states.map((state, index) => (state.ok && state.nextQuery ? { index, query: state.nextQuery } : null)).filter(Boolean);
@@ -597,6 +630,7 @@ export async function listEventsBatch(token, requests) {
       const state = states[pending[pos].index];
       if (!result.ok) {
         state.ok = false;
+        state.status = result.status;
         return;
       }
       if (Array.isArray(result.data?.items)) state.items.push(...result.data.items);
@@ -604,5 +638,5 @@ export async function listEventsBatch(token, requests) {
       state.nextQuery = pageToken ? { ...pending[pos].query, pageToken } : null;
     });
   }
-  return states.map((state) => (state.ok ? { ok: true, items: state.items } : { ok: false }));
+  return states.map((state) => (state.ok ? { ok: true, items: state.items } : { ok: false, status: state.status }));
 }

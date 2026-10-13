@@ -12,7 +12,7 @@ import TimezoneSelecter from '@/components/TimezoneSelecter.vue';
 import CalendarRibbon from '@/components/CalendarRibbon.vue';
 import EmojiSelecter from '@/components/EmojiSelecter.vue';
 import IconAnglesDown from '@/components/icons/IconAnglesDown.vue';
-import { buildRecurrence, parseRecurrence } from '@/services/rrule.js';
+import { buildRecurrence, parseRecurrence, HOLIDAY_ADJUSTMENT_PROPERTY } from '@/services/rrule.js';
 import { focusNextOnEnter } from '@/services/form-focus.js';
 import { ensureNotificationPermission, rescheduleNotifications } from '@/composables/useNotifications.js';
 import { takeQuickAddDraft, repeatToRecurrence } from '@/composables/useQuickAdd.js';
@@ -452,24 +452,47 @@ function submitForm() {
       timeZone: formData.timeZone,
     }),
   );
-  const shared = { ...((formData.icon ?? '') === '' ? {} : { icon: formData.icon }), ...recurrenceData.shared };
+  // 主催者以外(招待されたイベント等)が shared 拡張プロパティを変更すると
+  // 403 forbiddenForNonOrganizer で更新全体が失敗するため送信しない。
+  // アイコン・タグ・繰り返しの共有情報は shared に保持するため主催者のみ変更が反映される
+  const isOrganizer = props.clone || props.template || (originalEvent.value?.raw?.organizer?.self ?? true);
+  const shared = isOrganizer ? { ...((formData.icon ?? '') === '' ? {} : { icon: formData.icon }), ...recurrenceData.shared } : {};
   // タグは shared 拡張プロパティへ保持し、検索に効くよう description 末尾にも #tag として付与する
   const tags = normalizeTags(eventTagsInput.value);
-  if (tags.length) shared[TAGS_SHARED_PROPERTY] = JSON.stringify(tags);
+  if (isOrganizer && tags.length) shared[TAGS_SHARED_PROPERTY] = JSON.stringify(tags);
   const privateProperties = { ...(originalEvent.value?.raw?.extendedProperties?.private ?? {}) };
   if (formData.privacyNote.trim()) privateProperties.privacyNote = formData.privacyNote.trim();
   else delete privateProperties.privacyNote;
+  // PATCH では extendedProperties がキー単位でマージされ、値の null だけが削除として扱われる。
+  // フォームから消えた既存キーは null で明示的に削除する（空オブジェクトを送っても残る）
+  const sharedOut = { ...shared };
+  const privateOut = { ...privateProperties };
+  if (!props.clone && !props.template) {
+    // shared の削除はフォームが管理するキーに限定する。写真アルバム紐づけなど
+    // 他機能が shared に保持するキーまで null で消してしまわないようにするため
+    if (isOrganizer) {
+      for (const key of ['icon', TAGS_SHARED_PROPERTY, HOLIDAY_ADJUSTMENT_PROPERTY]) {
+        if (key in (originalEvent.value?.raw?.extendedProperties?.shared ?? {}) && !(key in sharedOut)) sharedOut[key] = null;
+      }
+    }
+    for (const key of Object.keys(originalEvent.value?.raw?.extendedProperties?.private ?? {})) if (!(key in privateOut)) privateOut[key] = null;
+  }
+  const extendedProperties = {};
+  if (Object.keys(sharedOut).length) extendedProperties.shared = sharedOut;
+  if (Object.keys(privateOut).length) extendedProperties.private = privateOut;
   const body = {
     summary: formData.summary.trim(),
     visibility: formData.visibility,
-    // イベント個別の色。未選択で編集中のイベントに色が設定済みなら明示的にクリアする（PUT は完全置換のため省略でも解除される）
+    // イベント個別の色。未選択で編集中のイベントに色が設定済みなら明示的にクリアする（PATCH では null で解除される）
     ...(eventColorId.value ? { colorId: eventColorId.value } : originalEvent.value?.eventColorId ? { colorId: null } : {}),
-    description: appendTagsToDescription(formData.description.trim(), tags) || undefined,
-    location: formData.location.trim() || undefined,
+    // PATCH では省略フィールドが保持されるため、クリアしたい項目は空文字で送る
+    description: appendTagsToDescription(formData.description.trim(), tags) || '',
+    location: formData.location.trim() || '',
     // 元のイベントに参加者がいた場合は空配列でも送信する（PATCH では省略すると参加者が残ったままになる）
     ...(attendees.value.length || (!props.clone && originalEvent.value?.raw?.attendees?.length) ? { attendees: attendees.value } : {}),
-    ...(Object.keys(shared).length || Object.keys(privateProperties).length ? { extendedProperties: { ...(Object.keys(shared).length ? { shared } : {}), ...(Object.keys(privateProperties).length ? { private: privateProperties } : { private: {} }) } } : {}),
-    ...(recurrenceData.recurrence ? { recurrence: recurrenceData.recurrence } : {}),
+    ...(Object.keys(extendedProperties).length ? { extendedProperties } : {}),
+    // 繰り返しを解除した場合は空配列で送る（PATCH では省略すると元の繰り返しが残る）
+    ...(recurrenceData.recurrence ? { recurrence: recurrenceData.recurrence } : !props.clone && !props.template && originalEvent.value?.raw?.recurrence ? { recurrence: [] } : {}),
     start: formData.isAllDay ? { date: formData.startDateTime.format('YYYY-MM-DD') } : { dateTime: formData.startDateTime.toISOString(), timeZone: formData.timeZone },
     // 終日イベントの end.date は排他のため、フォームで扱う「終了日（含む）」の翌日を送る
     end: formData.isAllDay ? { date: formData.endDateTime.add(1, 'day').format('YYYY-MM-DD') } : { dateTime: formData.endDateTime.toISOString(), timeZone: formData.timeZone },

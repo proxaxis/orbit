@@ -542,6 +542,18 @@ export function useEvents() {
     // start/end が含まれない部分更新（参加回答など）では既存値を維持する
     const bodyTags = parseEventTags(body);
     const now = dayjs().toISOString();
+    // PATCH ボディをローカルの raw にも反映する。extendedProperties はサーバと同様に
+    // セクション・キー単位でマージし、値が null のキーは削除する。
+    // （単純な上書きだと、非主催者イベントで送らない shared など未送信セクションが消える）
+    /** @type {Record<string, Record<string, any>>} */
+    const mergedExtendedProperties = { ...(existing.raw?.extendedProperties ?? {}) };
+    for (const [section, values] of Object.entries(body.extendedProperties ?? {})) {
+      mergedExtendedProperties[section] = { ...(mergedExtendedProperties[section] ?? {}) };
+      for (const [key, value] of Object.entries(values ?? {})) {
+        if (value === null) delete mergedExtendedProperties[section][key];
+        else mergedExtendedProperties[section][key] = value;
+      }
+    }
     await upsertStoredEvent({
       ...existing,
       ...body,
@@ -551,12 +563,15 @@ export function useEvents() {
       // description 末尾の #tag 文字列は表示用モデルから取り除く
       description: body.description !== undefined ? stripTagsFromDescription(body.description, bodyTags) : existing.description,
       tags: body.extendedProperties?.shared !== undefined ? bodyTags : existing.tags,
+      // アイコンは shared 拡張プロパティに保持する。PATCH で送られた場合のみ反映する
+      // （null はクリア。非主催者の更新では shared 自体が送られないため既存値を維持する）
+      icon: body.extendedProperties?.shared && 'icon' in body.extendedProperties.shared ? (body.extendedProperties.shared.icon ?? undefined) : existing.icon,
       startDateTime: body.start ? toDayjs(body.start.dateTime ?? body.start.date) : existing.startDateTime,
       endDateTime: body.end ? toDayjs(body.end.dateTime ?? body.end.date) : existing.endDateTime,
       isAllDay: body.start ? !!body.start.date : existing.isAllDay,
       eventColorId: body.colorId === undefined ? existing.eventColorId : (body.colorId ?? undefined),
       // raw も更新内容で上書きする。古い raw.updated のままだと鮮度比較で API 版に負けて変更が巻き戻る
-      raw: { ...(existing.raw ?? {}), ...body, id: gEventId, updated: now },
+      raw: { ...(existing.raw ?? {}), ...body, extendedProperties: mergedExtendedProperties, id: gEventId, updated: now },
       updated: now,
     });
     eventStore.invalidateEventCache();

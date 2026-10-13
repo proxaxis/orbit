@@ -84,7 +84,7 @@ export function useCalendarToolbar(rfToolbar) {
 
   /**
    * ツールバーの内容が表示幅に収まるかを実測し、収まらない場合はコンパクト表示に切り替える。
-   * 展開時は3等分グリッドのため、合計幅に加えてタイトルが中央列に収まることも条件にする。
+   * 展開時は2等分グリッドのため、合計幅に加えてタイトルが中央列に収まることも条件にする。
    * ビューごとにタイトル文・フォントが異なるため、両ビューのタイトルをそれぞれのフォント
    * 設定（月: --text-size-xl / --ui-font-family、週: --text-size-lg / --calendar-font-family、
    * いずれも 768px 未満では1段階小さい）で計測し、広い方を判定に使う。
@@ -93,7 +93,7 @@ export function useCalendarToolbar(rfToolbar) {
     const toolbar = rfToolbar.value;
     if (!toolbar || toolbar.clientWidth === 0) return;
     const left = toolbar.querySelector('.toolbar-left');
-    const title = toolbar.querySelector('h1');
+    const title = toolbar.querySelector('.year-month-jump');
     const right = toolbar.querySelector('.toolbar-right');
     if (!left || !(title instanceof HTMLElement) || !right) return;
     if (!isCompactToolbar.value) expandedRightToolbarWidth = right.scrollWidth;
@@ -103,8 +103,8 @@ export function useCalendarToolbar(rfToolbar) {
     /** @type {number} ツールバー左右の合計 padding */
     const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
     const needed = left.scrollWidth + titleWidth + expandedRightToolbarWidth + padding + 8;
-    /** @type {number} ツールバーを 3 等分した幅 */
-    const thirdWidth = (toolbar.clientWidth - padding) / 3;
+    /** @type {number} ツールバーを 2 等分した幅 */
+    const thirdWidth = (toolbar.clientWidth - padding) / 2;
     isCompactToolbar.value = needed > toolbar.clientWidth || titleWidth > thirdWidth + 1;
   }
 
@@ -114,9 +114,19 @@ export function useCalendarToolbar(rfToolbar) {
     updateToolbarLayout();
   });
 
+  let toolbarRafId = null;
+
   onMounted(() => {
     if (typeof ResizeObserver !== 'undefined' && rfToolbar.value) {
-      toolbarObserver = new ResizeObserver(() => updateToolbarLayout());
+      // 計測で DOM を書き換えるため、観測コールバックから直接レイアウトを変えると
+      // 「ResizeObserver loop」の警告になる。rAF で次フレームに逃がして回避する
+      toolbarObserver = new ResizeObserver(() => {
+        if (toolbarRafId !== null) return;
+        toolbarRafId = requestAnimationFrame(() => {
+          toolbarRafId = null;
+          updateToolbarLayout();
+        });
+      });
       toolbarObserver.observe(rfToolbar.value);
     }
     updateToolbarLayout();
@@ -124,6 +134,7 @@ export function useCalendarToolbar(rfToolbar) {
 
   onUnmounted(() => {
     toolbarObserver?.disconnect();
+    if (toolbarRafId !== null) cancelAnimationFrame(toolbarRafId);
   });
 
   return { isCompactToolbar, weekStart, weekTitle, monthTitle };

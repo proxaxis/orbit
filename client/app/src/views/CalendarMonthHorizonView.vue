@@ -171,8 +171,11 @@ const monthGridStyle = computed(() => {
   for (let index = 0; index < calDaysArray.value.length; index += 7) {
     const week = calDaysArray.value.slice(index, index + 7);
     const eventRowCount = isVariable ? Math.max(...week.map((day) => getMonthDayEvents(day.date).length), 0) : userStore.maxEventBarsPerCell;
-    const contentHeight = 24 + eventRowCount * 18 + Math.max(0, eventRowCount - 1) * 2 + 4;
-    rows.push(`max(var(--calendar-cell-min-height), ${contentHeight}px)`);
+    // セル内の実レイアウト: 上下 padding 2px+2px + events-stack の margin-top 21px
+    // + バー高 var(--space-md) ×N + バー間 gap 2px ×(N-1)。固定値がずれるとバーがはみ出す
+    const contentHeight = `calc(25px + ${eventRowCount} * var(--space-md) + ${Math.max(0, eventRowCount - 1)} * 2px)`;
+    // 最大値を 1fr にしてグリッドの余った高さを各行へ均等配分する(下部に空白を残さない)
+    rows.push(`minmax(max(var(--calendar-cell-min-height), ${contentHeight}), 1fr)`);
   }
   return { gridTemplateRows: rows.join(' ') };
 });
@@ -599,7 +602,7 @@ const getDayNumberColor = (day) => {
       <span>{{ pickBannerText }}</span>
       <button type="button" @click="userStore.cancelFormDatePick()">キャンセル</button>
     </div>
-    <header ref="rfToolbar" class="month-toolbar">
+    <header ref="rfToolbar" class="month-toolbar" :class="{ 'is-compact': isCompactToolbar }">
       <div class="toolbar-left">
         <button v-if="userStore.isMobile || userStore.isTablet" type="button" title="カレンダーを開閉" aria-label="カレンダーを開閉" @click="props.selectPane('nav')">
           <IconBars size="1.25rem" />
@@ -610,8 +613,8 @@ const getDayNumberColor = (day) => {
         <button type="button" title="次月へ進む" aria-label="次月へ進む" v-if="userStore.isDesktop" @click="goNextMonth">
           <IconCaretRight size="1.25rem" />
         </button>
+        <YearMonthJump :label="monthTitle" />
       </div>
-      <YearMonthJump :label="monthTitle" />
       <div class="toolbar-right">
         <template v-if="!props.pickMode">
           <template v-if="!isCompactToolbar">
@@ -772,14 +775,17 @@ $event-bar-radius: 4px;
 
   .month-content {
     display: flex;
-    flex: 1 0 auto;
-    min-height: calc(100% - 54px);
-    max-height: calc(100% - 54px - var(--space-sm) - var(--space-sm) - var(--space-md));
+    // 高さは flex の残余配分に任せる。min/max-height で固定するとカードが
+    // 下端からはみ出して margin が消え、左右(space-sm)と揃わなくなる
+    flex: 1 1 auto;
+    min-height: 0;
     flex-direction: column;
     overflow-y: auto;
     border-radius: var(--border-radius);
     background-color: var(--bg-1);
     margin: var(--space-sm);
+    // グリッド下端とカード縁の間に bg-1 の余白を残す
+    padding-bottom: var(--space-sm);
     font-family: var(--calendar-font-family);
   }
 
@@ -789,9 +795,6 @@ $event-bar-radius: 4px;
     }
 
     .month-content {
-      flex: 1 1 auto;
-      min-height: 0;
-      max-height: calc(100% - 54px - var(--space-sm) - var(--space-sm));
       margin-bottom: 0;
     }
   }
@@ -834,7 +837,7 @@ $event-bar-radius: 4px;
 
   .month-toolbar {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
     padding: var(--space-sm) var(--space-sm) 0 var(--space-sm);
     background: var(--bg-1);
 
@@ -846,28 +849,18 @@ $event-bar-radius: 4px;
       }
     }
 
-    div {
+    .toolbar-left, .toolbar-right {
       display: flex;
       align-items: center;
       gap: var(--space-xs);
-      @include var.mdown(sm) {
-        gap: 0;
-      }
-      &:nth-child(3) {
-        justify-content: flex-end;
-      }
     }
 
-    h1 {
-      font-size: var(--text-size-xl);
-      @include var.mdown(sm) {
-        font-size: var(--text-size-lg);
-      }
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      white-space: nowrap;
-      overflow: hidden;
+    .toolbar-right {
+      justify-content: flex-end;
+    }
+
+    &.is-compact {
+      grid-template-columns: auto 1fr;
     }
   }
 

@@ -68,7 +68,10 @@ export function runEventOperation(op, ...args) {
     const jobId = ++jobSeq;
     pendingJobs.set(jobId, { resolve, reject });
     try {
-      ensureWorker().postMessage({ jobId, op, args });
+      // 引数にはフォームの ref/reactive(Proxy)が混ざることがある。Proxy は structuredClone
+      // できず WebKit では postMessage が DataCloneError になるため、JSON 正規化で
+      // プレーンな値だけを Worker へ送る（IndexedDB 書き込み側も同じ方法で正規化済み）
+      ensureWorker().postMessage({ jobId, op, args: JSON.parse(JSON.stringify(args)) });
     } catch (error) {
       pendingJobs.delete(jobId);
       reject(error instanceof Error ? error : new Error(String(error)));

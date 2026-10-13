@@ -77,7 +77,9 @@ async function checkEventUpdates() {
       authStore.token,
       calendarStore.list.map((/** @type {any} */ calendar) => ({ calendarId: calendar.id, query: eventsQueryForCalendar(calendar.id, { updatedMin: since, showDeleted: true }) })),
     );
-    return results.some((result) => result.ok && result.items.length > 0);
+    // 410 Gone は「差分起点が古すぎて判定不能」を意味する。変更ありとして扱い
+    // キャッシュを破棄させる（通常取得で全件を取り直して自己修復する）
+    return results.some((result) => (result.ok ? result.items.length > 0 : result.status === 410));
   } catch (error) {
     console.warn('Remote event change check failed.', error);
     return false;

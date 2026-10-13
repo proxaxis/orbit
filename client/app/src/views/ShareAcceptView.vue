@@ -47,6 +47,19 @@ const registerError = ref('');
 /** @type {ComputedRef<boolean>} セッションまたは通常一覧に既に登録済みか */
 const alreadyRegistered = computed(() => calendarStore.list.some((item) => item.id === calendarId.value));
 
+/**
+ * iOS のブラウザ(Safari やアプリ内ブラウザ)で開かれているか。
+ * ホーム画面に追加された Web App は standalone モードになるため除外する。
+ * iOS ではブラウザ→インストール済み Web App へのリンクキャプチャはできないが、
+ * Safari でスコープ内の URL を開くと OS が「アプリで開く」バナーを出すため案内する。
+ */
+const isIOSBrowser = (() => {
+  const ua = navigator.userAgent;
+  const isIOS = /iPhone|iPad|iPod/.test(ua) || (ua.includes('Macintosh') && navigator.maxTouchPoints > 1);
+  const standalone = navigator.standalone === true || (typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches);
+  return isIOS && !standalone;
+})();
+
 // 対象カレンダーの情報を取得する（受信者は共有者の ACL で閲覧権限を持つ）
 watch(
   [calendarId, () => authStore.isAuthenticated, () => userStore.isOffline],
@@ -117,6 +130,11 @@ function decline() {
       {{ registerMode === 'list' ? '共有されたカレンダーをカレンダーリストへ登録します' : '共有されたカレンダーを自分のリストへ登録します' }}
     </MenuBar>
 
+    <section v-if="isIOSBrowser" class="ios-hint">
+      <p>iPhone/iPad で Orbit アプリをホーム画面に追加している場合は、このページ上部に表示される「アプリで開く」バナーからアプリで開けます。LINE などのアプリ内ブラウザでは表示されないため、その場合はメニューから「Safari で開く」を選んでください。</p>
+      <p>このままブラウザでログインして登録することもできます。</p>
+    </section>
+
     <AskLoginMessage v-if="!authStore.isAuthenticated">共有カレンダーを登録するには Google アカウントでログインする必要があります</AskLoginMessage>
 
     <section v-else>
@@ -156,6 +174,20 @@ section {
   flex-direction: column;
   gap: var(--space-sm);
   padding: var(--space-sm);
+}
+
+.ios-hint {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  background-color: var(--bg-1);
+  border-bottom: 1px solid var(--border);
+
+  p {
+    font-size: var(--text-size-xs);
+    color: var(--text-light);
+  }
 }
 
 .message {

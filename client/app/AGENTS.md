@@ -106,6 +106,10 @@ tests/             # vitest テスト(@/services や @/composables 中心)
 - `docs/` …ユーザーマニュアル(`manual.md`)とスクリーンショット(`assets/`)。
 - `tools/screenshot.mjs` …本番環境の画面撮影スクリプト(Puppeteer)。ログイン済み Cookie を `/tmp/orbit-cookie.txt`(リポジトリ外)に置いて `node tools/screenshot.mjs [名前フィルタ]` で実行。BFF は `bff-orbit.proxaxis.me` の別サブドメインのため Cookie は親ドメインで設定する。
 - `tools/sync-check.mjs` / `tools/sync-check-ext.mjs` …2ブラウザコンテキスト間の同期検証スクリプト(Puppeteer)。`ORBIT_COOKIE_A`/`ORBIT_COOKIE_B` に各セッションの `session_id` の値を渡して実行する(dev サーバ + BFF が起動していること)。Cookie は環境変数でのみ渡しファイルに保存しない。
+- `tools/webkit-check.mjs` …Playwright WebKit でのレンダリング検証(スクリーンショット + 縦スクロール月タイトル追従)。WebKit のシステム依存ライブラリが不足する環境では `/tmp/wk-libs`(deb をローカル展開)の `LD_LIBRARY_PATH`・EGL/DRI 環境変数が必要。HTTPS リソースは TLS バックエンド欠如で読み込めず環境起因のコンソールエラーが出る(アプリ自体は HTTP で動作)。
+- `tools/share-check.mjs` …2セッション共有フロー検証(Playwright WebKit)。`ORBIT_COOKIE_A`/`ORBIT_COOKIE_B` に各セッションの `session_id` を渡して実行。範囲指定共有の作成→リンク→受信者登録(セッションカレンダー)と通常 ACL 共有(mode=list → calendarList)を検証し、最後に共有物をクリーンアップする。Google は user スコープ ACL で受信者側へ自動登録することがあるため、その場合は「すでに一覧にあります」表示の確認に置き換わる。
+- **Worker への `postMessage` には Vue のリアクティブオブジェクト(Proxy)を渡せない**。structuredClone 不可で WebKit では `DataCloneError` になる(Chrome では動いてしまうので見逃しやすい)。`runEventOperation` と `writeCache` は JSON 正規化済み。Worker・IndexedDB・SW メッセージへ値を渡す新しい経路を作る場合も同様に正規化すること。
+- **Google Calendar の権限**: `extendedProperties.shared`(アイコン・タグ・祝日調整・写真アルバム紐づけ)はイベントの主催者(`organizer.self`)のみ変更可能。非主催者が値を変えると PATCH 全体が `403 forbiddenForNonOrganizer` になる(同じ値の再送は許容)。`private` は閲覧者ごとの領域なので非主催者でも書き込める。また `extendedProperties` の `null` キー削除は、サーバ側にそのセクション自体がないと `400 Required` になる。
 - `dist/` はビルド成果物なので手編集しない。`cloudflared` バイナリと `tunnel.txt` は開発用トンネル用。
 - `checkJs` による型検査が効くため、JSDoc 型を正確に保つこと(グローバル型は `env.d.ts`、サービス別型は各 `.d.ts`)。
 - Git リポジトリではない(`.git` なし)環境のため、変更履歴はファイルで確認できない。

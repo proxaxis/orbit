@@ -188,8 +188,10 @@ const gridStyle = computed(() => {
   for (let index = 0; index < days.value.length; index += 7) {
     const week = days.value.slice(index, index + 7);
     const eventRowCount = isVariable ? Math.max(...week.map((day) => (day.isPadding ? 0 : getDayEvents(day.date).length)), 0) : userStore.maxEventBarsPerCell;
-    const contentHeight = 24 + eventRowCount * 18 + Math.max(0, eventRowCount - 1) * 2 + 4;
-    rows.push(`max(var(--calendar-cell-min-height), ${contentHeight}px)`);
+    // セル内の実レイアウト: 上下 padding 2px+2px + events-stack の margin-top 21px
+    // + バー高 var(--space-md) ×N + バー間 gap 2px ×(N-1)。固定値がずれるとバーがはみ出す
+    const contentHeight = `calc(25px + ${eventRowCount} * var(--space-md) + ${Math.max(0, eventRowCount - 1)} * 2px)`;
+    rows.push(`max(var(--calendar-cell-min-height), ${contentHeight})`);
   }
   return { gridTemplateRows: rows.join(' ') };
 });

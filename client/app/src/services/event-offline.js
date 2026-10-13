@@ -117,6 +117,8 @@ export async function writeEventOperations(operations) {
 export async function processEventOperations(operations, token) {
   /** @type {EventOperation[]} */
   const remaining = [];
+  /** @type {Map<string, string>} ローカル ID → サーバ発行 ID（create 再生時に確定） */
+  const createdIds = new Map();
   let synced = false;
   if (!token) return { remaining: [...operations], synced };
 
@@ -125,6 +127,7 @@ export async function processEventOperations(operations, token) {
       if (operation.type === 'create') {
         const result = await gCalAPI.insertEvent(token, operation.calendarId, operation.body ?? {}, { sendUpdates: 'all' });
         if (result?.id && operation.localId) {
+          createdIds.set(operation.localId, result.id);
           /** @type {any} ローカル保存済みのイベント */
           const local = (await getStoredEvents()).find((/** @type {any} */ event) => event.id === operation.localId);
           if (local) {
@@ -139,14 +142,26 @@ export async function processEventOperations(operations, token) {
             });
           }
         }
-      } else if (operation.type === 'update') {
-        // 更新は PATCH を使う（PUT の完全置換では部分更新が失敗するため）
-        await gCalAPI.patchEvent(token, operation.calendarId, operation.eventId ?? '', operation.body ?? {}, { sendUpdates: 'all' });
-      } else if (operation.type === 'remove') {
-        await gCalAPI.deleteEvent(token, operation.calendarId, operation.eventId ?? '', { sendUpdates: 'all' });
+      } else {
+        // 先行する create で確定したサーバ ID へ振り替える。ローカル ID のまま送ると 404 になる
+        const eventId = createdIds.get(operation.eventId) ?? operation.eventId ?? '';
+        if (operation.type === 'update') {
+          // 更新は PATCH を使う（PUT の完全置換では部分更新が失敗するため）
+          await gCalAPI.patchEvent(token, operation.calendarId, eventId, operation.body ?? {}, { sendUpdates: 'all' });
+        } else if (operation.type === 'remove') {
+          await gCalAPI.deleteEvent(token, operation.calendarId, eventId, { sendUpdates: 'all' });
+        }
       }
       synced = true;
     } catch (error) {
+      // 対象イベントがサーバに存在しない（別端末で削除済みなど）場合は
+      // 再試行しても成功しないためキューから取り除く
+      const status = /** @type {any} */ (error)?.status;
+      if (status === 404 || status === 410) {
+        console.warn('Offline event operation dropped because the target no longer exists.', operation);
+        synced = true;
+        continue;
+      }
       console.warn('Offline event operation is still pending.', error);
       remaining.push(operation);
     }

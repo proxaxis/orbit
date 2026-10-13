@@ -142,6 +142,27 @@ describe('ShareAcceptView（共有カレンダーの受け入れ）', () => {
     expect(mocks.replace).not.toHaveBeenCalled();
   });
 
+  it('iOS のブラウザで開いた場合はアプリで開く案内を表示する', async () => {
+    const originalUA = navigator.userAgent;
+    Object.defineProperty(window.navigator, 'userAgent', { value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1', configurable: true });
+    try {
+      const wrapper = mount(ShareAcceptView);
+      await nextTick();
+      await nextTick();
+      expect(wrapper.text()).toContain('アプリで開く');
+      expect(wrapper.find('.ios-hint').exists()).toBe(true);
+    } finally {
+      Object.defineProperty(window.navigator, 'userAgent', { value: originalUA, configurable: true });
+    }
+  });
+
+  it('iOS 以外のブラウザではアプリ起動の案内を表示しない', async () => {
+    const wrapper = mount(ShareAcceptView);
+    await nextTick();
+    await nextTick();
+    expect(wrapper.find('.ios-hint').exists()).toBe(false);
+  });
+
   it('カレンダー情報の取得に失敗した場合は案内メッセージを表示する', async () => {
     const notFound = Object.assign(new Error('Not Found'), { status: 404 });
     mocks.fetchCalendarResource.mockRejectedValue(notFound);
