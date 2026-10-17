@@ -849,7 +849,8 @@ $event-bar-radius: 4px;
       }
     }
 
-    .toolbar-left, .toolbar-right {
+    .toolbar-left,
+    .toolbar-right {
       display: flex;
       align-items: center;
       gap: var(--space-xs);

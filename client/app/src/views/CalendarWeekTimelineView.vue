@@ -863,8 +863,11 @@ $gutter-width: 3.25rem;
       }
     }
 
-    h1 {
+    // h1 は YearMonthJump コンポーネント内部の要素で scoped セレクタだけでは届かないため :deep() が必要
+    :deep(h1) {
       font-size: var(--text-size-lg);
+      // 中列いっぱいに広げて justify-content で文字位置を制御する
+      flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -879,7 +882,7 @@ $gutter-width: 3.25rem;
     &.is-compact {
       grid-template-columns: auto 1fr auto;
 
-      h1 {
+      :deep(h1) {
         justify-content: flex-end;
         padding-right: var(--space-xs);
       }

@@ -68,15 +68,15 @@ function submitJump() {
 
 <template>
   <div class="year-month-jump">
-  <h1 v-if="!isEditing" title="クリックして年月を指定" @click="startEditing">
-    {{ props.label }}
-  </h1>
-  <form v-else class="year-month-jump-form" @submit.prevent="submitJump">
-    <input ref="rfJumpInput" :value="jumpInput" inputmode="numeric" autocomplete="off" placeholder="YYYYMM" aria-label="年月を入力（YYYYMM）" @input="handleInput" @keydown.esc.prevent="stopEditing" @blur="stopEditing" />
-    <button type="submit" title="その年月へ移動" aria-label="その年月へ移動" @mousedown.prevent>
-      <IconMagnifyingGlass size="1.25rem" />
-    </button>
-  </form>
+    <h1 v-if="!isEditing" title="クリックして年月を指定" @click="startEditing">
+      {{ props.label }}
+    </h1>
+    <form v-else class="year-month-jump-form" @submit.prevent="submitJump">
+      <input ref="rfJumpInput" :value="jumpInput" inputmode="numeric" autocomplete="off" placeholder="YYYYMM" aria-label="年月を入力（YYYYMM）" @input="handleInput" @keydown.esc.prevent="stopEditing" @blur="stopEditing" />
+      <button type="submit" title="その年月へ移動" aria-label="その年月へ移動" @mousedown.prevent>
+        <IconMagnifyingGlass size="1.25rem" />
+      </button>
+    </form>
   </div>
 </template>
 
