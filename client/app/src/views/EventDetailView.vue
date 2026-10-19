@@ -3,6 +3,8 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import dayjs from '@/services/dayjs.js';
 import { useEventActions } from '@/composables/useEventActions.js';
+import { useTasks } from '@/composables/useTasks.js';
+import { isTaskDeferred, isTaskEvent, normalizeTaskStatus, taskStatusLabel, taskStatusOf, TASK_STATUSES } from '@/services/task-events.js';
 import { parseGoogleMapsLink, fetchPlaceInfo } from '@/services/google-maps.js';
 import EventDetailViewPhotoAlbum from '@/components/items/EventDetailViewPhotoAlbum.vue';
 import MenuBar from '@/components/MenuBar.vue';
@@ -24,12 +26,14 @@ import IconArrowUpRightFromSquare from '@/components/icons/IconArrowUpRightFromS
 import InlineEmoji from '@/components/InlineEmoji.vue';
 import AccordionMenu from '@/components/AccordionMenu.vue';
 import IconUserLock from '@/components/icons/IconUserLock.vue';
+import IconClipboard from '@/components/icons/IconClipboard.vue';
 
 const router = useRouter();
 const route = useRoute();
 const userStore = useUserStore();
 const calendarStore = useCalendarStore();
 const eventActions = useEventActions();
+const tasks = useTasks();
 
 /** @type {Ref<HandyCalendarEvent|null>} */
 const event = ref(null);
@@ -42,6 +46,53 @@ const hasOtherAttendees = computed(() => eventActions.hasOtherAttendees(event.va
 
 /** @type {ComputedRef<boolean>} イベントの属するカレンダーに書き込み権限があるか（ない場合は編集・削除を表示しない） */
 const canWriteCalendar = computed(() => calendarStore.listWritableCalendars.some((calendar) => calendar.id === event.value?.calendarId));
+
+/** @type {ComputedRef<boolean>} タスクイベントかどうか */
+const isTask = computed(() => isTaskEvent(event.value));
+/** @type {ComputedRef<boolean>} タスクプロパティの変更権限があるか（主催者・書き込み可カレンダー・編集許可された招待者） */
+const canEditTask = computed(() => tasks.canEditTask(event.value));
+/** @type {ComputedRef<string>} 現在のタスクステータス */
+const taskStatus = computed(() => taskStatusOf(event.value));
+/** @type {ComputedRef<boolean>} カスタムステータスかどうか */
+const isCustomTaskStatus = computed(() => !TASK_STATUSES.includes(taskStatus.value));
+/** @type {ComputedRef<boolean>} 翌日へ持ち越す設定かどうか */
+const isDeferred = computed(() => isTaskDeferred(event.value));
+
+/** @type {Ref<boolean>} カスタムステータス入力欄を表示しているか */
+const editingCustomStatus = ref(false);
+/** @type {Ref<string>} カスタムステータスの入力値 */
+const customStatusInput = ref('');
+
+/** タスクステータスを更新して詳細を再読み込みする */
+async function applyTaskStatus(status) {
+  if (!status) return;
+  if (await tasks.setTaskStatus(event.value, status)) await loadEvent();
+}
+
+/** @param {Event} evt ステータス選択の変更 */
+async function onSelectTaskStatus(evt) {
+  const value = /** @type {HTMLSelectElement} */ (evt.target).value;
+  if (value === '__custom__') {
+    customStatusInput.value = isCustomTaskStatus.value ? taskStatus.value : '';
+    editingCustomStatus.value = true;
+    return;
+  }
+  editingCustomStatus.value = false;
+  await applyTaskStatus(value);
+}
+
+/** カスタムステータスの入力を確定する */
+async function applyCustomStatus() {
+  const status = normalizeTaskStatus(customStatusInput.value, '');
+  if (!status) return;
+  editingCustomStatus.value = false;
+  await applyTaskStatus(status);
+}
+
+/** 翌日持ち越し設定を切り替える */
+async function onToggleTaskDeferred() {
+  if (await tasks.setTaskDeferred(event.value, !isDeferred.value)) await loadEvent();
+}
 
 const myAttendee = computed(() => event.value?.raw?.attendees?.find((attendee) => attendee.self) ?? null);
 
@@ -233,6 +284,25 @@ watch(
           <button title="日時をコピー" @click="userStore.writeClipboard(`${dateText.startText} ~ ${dateText.endText}`)">
             <IconClone size="1rem" />
           </button>
+        </div>
+        <div class="detail-row" v-if="isTask">
+          <dt>
+            <IconClipboard />
+          </dt>
+          <dd class="task-status-row">
+            <template v-if="canEditTask">
+              <select :value="isCustomTaskStatus || editingCustomStatus ? '__custom__' : taskStatus" aria-label="タスクのステータス" @change="onSelectTaskStatus">
+                <option v-for="status in TASK_STATUSES" :key="status" :value="status">{{ taskStatusLabel(status) }}</option>
+                <option value="__custom__">カスタム…</option>
+              </select>
+              <input v-if="editingCustomStatus || isCustomTaskStatus" v-model="customStatusInput" type="text" placeholder="ステータス名" aria-label="カスタムステータス名" @change="applyCustomStatus" @keydown.enter="applyCustomStatus" />
+              <label class="task-deferred-toggle"><input type="checkbox" :checked="isDeferred" @change="onToggleTaskDeferred" />翌日へ持ち越す</label>
+            </template>
+            <template v-else>
+              <span>{{ taskStatusLabel(taskStatus) }}</span>
+              <span v-if="isDeferred">・翌日へ持ち越す</span>
+            </template>
+          </dd>
         </div>
         <div class="detail-row" v-if="reminderMinutesList.length">
           <dt>
@@ -448,6 +518,30 @@ dl {
         background-color: var(--bg-2);
       }
     }
+  }
+}
+
+.task-status-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+
+  select {
+    min-width: 7rem;
+  }
+
+  input[type='text'] {
+    flex: 1;
+    min-width: 6rem;
+  }
+
+  .task-deferred-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-size: var(--text-size-sm);
+    cursor: pointer;
   }
 }
 

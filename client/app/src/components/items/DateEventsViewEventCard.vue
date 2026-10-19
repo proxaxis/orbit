@@ -7,8 +7,10 @@
 import { computed, ref } from 'vue';
 import dayjs, { toDayjs } from '@/services/dayjs.js';
 import { useEventActions } from '@/composables/useEventActions.js';
+import { useTasks } from '@/composables/useTasks.js';
 import { useCalendarStore } from '@/stores/calendar.js';
 import { useUserStore } from '@/stores/user.js';
+import { isTaskCompleted, isTaskEvent, taskStatusLabel, taskStatusOf, TASK_STATUS_COMPLETED, TASK_STATUS_NOT_STARTED } from '@/services/task-events.js';
 import DropdownMenu from '@/components/DropdownMenu.vue';
 import CalendarRibbon from '@/components/CalendarRibbon.vue';
 import InlineEmoji from '@/components/InlineEmoji.vue';
@@ -29,8 +31,26 @@ const props = defineProps({
 const emit = defineEmits(['open', 'select']);
 
 const eventActions = useEventActions();
+const tasks = useTasks();
 const calendarStore = useCalendarStore();
 const userStore = useUserStore();
+
+/** @type {ComputedRef<boolean>} タスクイベントかどうか */
+const isTask = computed(() => isTaskEvent(props.event));
+/** @type {ComputedRef<boolean>} タスクが完了済みかどうか */
+const isCompleted = computed(() => isTaskCompleted(props.event));
+/** @type {ComputedRef<boolean>} タスクプロパティの変更権限があるか（主催者・書き込み可カレンダー・編集許可された招待者） */
+const canEditTask = computed(() => tasks.canEditTask(props.event));
+/** @type {ComputedRef<string>} 未着手・完了以外のステータス表示ラベル（なければ空文字） */
+const taskStatusText = computed(() => {
+  const status = taskStatusOf(props.event);
+  return status === TASK_STATUS_NOT_STARTED || status === TASK_STATUS_COMPLETED ? '' : taskStatusLabel(status);
+});
+
+/** タスクの完了チェックを切り替える（not-started ⇔ completed） */
+async function onToggleTaskCompleted() {
+  await tasks.toggleTaskCompleted(props.event);
+}
 
 /** @type {ComputedRef<boolean>} イベントの属するカレンダーに書き込み権限があるか（ない場合は編集・削除を表示しない） */
 const canWriteCalendar = computed(() => calendarStore.listWritableCalendars.some((calendar) => calendar.id === props.event.calendarId));
@@ -163,6 +183,9 @@ function onSelectContextMenu(action) {
 
 <template>
   <li @click.stop="handleCardClick" @contextmenu="handleCardContextMenu" @touchstart="startCardLongPress" @touchmove="handleCardTouchMove" @touchend="finishCardTouch" @touchcancel="cancelCardLongPress">
+    <div v-if="isTask" class="task-check" @click.stop @contextmenu.stop @touchstart.stop @touchend.stop>
+      <input type="checkbox" :checked="isCompleted" :disabled="!canEditTask" :aria-label="`タスク「${event.summary}」の完了切り替え`" @change="onToggleTaskCompleted" />
+    </div>
     <div class="time-col">
       <template v-for="(part, i) in timeParts" :key="i">
         <span v-if="part.type === 'bar'" class="time-bar"></span>
@@ -175,9 +198,10 @@ function onSelectContextMenu(action) {
       <CalendarRibbon :cid="event.calendarId" :useLabel="false" />
     </div>
     <div class="info">
-      <div class="title">
+      <div class="title" :class="{ 'is-completed': isCompleted }">
         <InlineEmoji :emoji="event.icon" />
         <span class="text">{{ event.summary }}</span>
+        <span v-if="taskStatusText" class="task-status-chip">{{ taskStatusText }}</span>
       </div>
       <div v-if="event.description" class="meta">
         <span class="text">{{ event.description }}</span>
@@ -217,6 +241,32 @@ li {
   &:hover {
     background-color: var(--bg-3);
   }
+}
+
+.task-check {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+
+  input[type='checkbox'] {
+    width: 1.1rem;
+    height: 1.1rem;
+    cursor: pointer;
+  }
+}
+
+.task-status-chip {
+  flex: 0 0 auto;
+  font-size: var(--text-size-xs);
+  padding: 0 var(--space-xs);
+  border-radius: var(--border-radius);
+  background: var(--bg-3);
+  color: var(--text-light);
+}
+
+.info .title.is-completed .text {
+  text-decoration: line-through;
+  color: var(--text-light);
 }
 
 .time-col {

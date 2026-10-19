@@ -46,7 +46,7 @@ function onKeydown(keyboardEvent) {
       :show-extra="!isSearching && !suggestions.length && query.includes('@') && !query.startsWith('@')"
       :item-key="(person) => person.resourceName"
       placeholder="名前またはメールアドレス"
-      :aria-label=" 'ユーザーを招待する'"
+      :aria-label="'ユーザーを招待する'"
       enter-focus
       @select="emit('add-attendee', $event)"
       @blur="emit('query-blur')"
@@ -57,9 +57,7 @@ function onKeydown(keyboardEvent) {
       </template>
       <template #extra>
         <li>
-          <button type="button" @mousedown.prevent="emit('add-unknown-email')">
-            このメールアドレスを招待
-          </button>
+          <button type="button" @mousedown.prevent="emit('add-unknown-email')">このメールアドレスを招待</button>
         </li>
       </template>
     </SuggestPulldown>

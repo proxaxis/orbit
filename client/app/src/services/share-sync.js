@@ -6,6 +6,7 @@
 import dayjs from '@/services/dayjs.js';
 import * as gCalAPI from '@/services/google-calendar-api.js';
 import { CACHE_KEYS, readCache, writeCache } from '@/composables/useCache.js';
+import { isTaskEvent } from '@/services/task-events.js';
 
 /** コピーイベントのコピー元を記録する拡張プロパティ名 */
 const SOURCE_PROP = 'orbitShareSource';
@@ -116,6 +117,8 @@ export async function listShareSourceEvents(spec, token) {
     const events = await listAllCalendarEvents(token, calendarId, { timeMin, timeMax, singleEvents: true, orderBy: 'startTime' });
     for (const evt of events) {
       if (!evt?.id || evt.status === 'cancelled') continue;
+      // タスクイベントは共有相手へ見せない（招待者は元のイベントの参加者として見える）
+      if (isTaskEvent(evt)) continue;
       const key = `${calendarId}:${evt.id}`;
       wanted.set(key, { evt, body: toShareCopyBody(evt, key, spec.role) });
     }

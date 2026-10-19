@@ -83,8 +83,9 @@ async function deliverDueNotifications() {
     notifiedSet.add(entry.key);
     notifiedDirty = true;
     const minutesLeft = Math.max(0, dayjs(entry.start).diff(now, 'minute'));
-    const title = `${entry.icon ?? ''} ${entry.summary ?? '予定'}`.trim();
-    const body = `${dayjs(entry.start).format('M月D日 (ddd) HH:mm')} 開始（${entry.minutes > 0 ? `${entry.minutes}分前` : '開始時刻'} / あと${minutesLeft}分）`;
+    // タスクのダイジェスト通知など、エントリ側に文言を持つ通知はそれを優先する
+    const title = entry.title ?? `${entry.icon ?? ''} ${entry.summary ?? '予定'}`.trim();
+    const body = entry.body ?? `${dayjs(entry.start).format('M月D日 (ddd) HH:mm')} 開始（${entry.minutes > 0 ? `${entry.minutes}分前` : '開始時刻'} / あと${minutesLeft}分）`;
     await self.registration.showNotification(title, {
       body,
       tag: `orbit-event-${entry.key}`,

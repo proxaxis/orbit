@@ -102,9 +102,10 @@ export async function syncPushSchedule(entries) {
     key: entry.key,
     fireAt: entry.fireAt,
     notification: {
-      title: `${entry.icon ?? ''} ${entry.summary ?? '予定'}`.trim(),
+      // タスクのダイジェスト通知など、エントリ側に文言を持つ通知はそれを優先する
+      title: entry.title ?? `${entry.icon ?? ''} ${entry.summary ?? '予定'}`.trim(),
       options: {
-        body: `${dayjs(entry.start).format('M月D日 (ddd) HH:mm')} 開始（${entry.minutes > 0 ? `${entry.minutes}分前` : '開始時刻'}）`,
+        body: entry.body ?? `${dayjs(entry.start).format('M月D日 (ddd) HH:mm')} 開始（${entry.minutes > 0 ? `${entry.minutes}分前` : '開始時刻'}）`,
         tag: `orbit-event-${entry.key}`,
         icon: '/android-chrome-192x192.png',
         badge: '/android-chrome-192x192.png',

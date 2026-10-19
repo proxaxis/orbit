@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import dayjs from '@/services/dayjs';
 import { CACHE_KEYS, readCache, writeCache } from '@/composables/useCache.js';
+import { DEFAULT_TASK_NOTIFICATION_TIMES, normalizeTaskNotificationTimes } from '@/services/task-events.js';
 
 export const USER_FONT_FAMILIES = Object.freeze({
   SYSTEM: 'system-ui, sans-serif',
@@ -382,6 +383,15 @@ export const useUserStore = defineStore('user', () => {
   /** @type {Ref<boolean>} @description Google Drive appDataFolder への設定・セッションカレンダー同期を有効にするか（要追加 OAuth） */
   const useDriveSync = ref(false);
 
+  /** @type {Ref<string[]>} @description 終日タスクをまとめて通知する時刻（'HH:mm'、複数指定可・空なら通知しない） */
+  const taskNotificationTimes = ref([...DEFAULT_TASK_NOTIFICATION_TIMES]);
+
+  /** @param {string[]} times 終日タスクの通知時刻一覧（'HH:mm'） */
+  function setTaskNotificationTimes(times) {
+    taskNotificationTimes.value = normalizeTaskNotificationTimes(times);
+    saveSettings();
+  }
+
   /** @type {Ref<keyof typeof USER_FONT_FAMILIES>} @description 通常 UI のフォント */
   const uiFontFamily = ref('NOTO_SANS_JP');
 
@@ -464,6 +474,7 @@ export const useUserStore = defineStore('user', () => {
       usePhotoSharing: usePhotoSharing.value,
       usePeopleApi: usePeopleApi.value,
       useDriveSync: useDriveSync.value,
+      taskNotificationTimes: taskNotificationTimes.value,
       uiFontFamily: uiFontFamily.value,
       calendarFontFamily: calendarFontFamily.value,
       uiTextSize: uiTextSize.value,
@@ -519,6 +530,7 @@ export const useUserStore = defineStore('user', () => {
     if (typeof saved.usePhotoSharing === 'boolean') usePhotoSharing.value = saved.usePhotoSharing;
     if (typeof saved.usePeopleApi === 'boolean') usePeopleApi.value = saved.usePeopleApi;
     if (typeof saved.useDriveSync === 'boolean') useDriveSync.value = saved.useDriveSync;
+    if (Array.isArray(saved.taskNotificationTimes)) taskNotificationTimes.value = normalizeTaskNotificationTimes(saved.taskNotificationTimes);
     if (typeof saved.uiFontFamily === 'string' && Object.hasOwn(USER_FONT_FAMILIES, saved.uiFontFamily)) {
       uiFontFamily.value = saved.uiFontFamily;
     }
@@ -981,6 +993,8 @@ export const useUserStore = defineStore('user', () => {
     setUsePhotoSharing,
     setUsePeopleApi,
     setUseDriveSync,
+    taskNotificationTimes,
+    setTaskNotificationTimes,
     openUserDialog,
     confirm,
     resolveConfirm,

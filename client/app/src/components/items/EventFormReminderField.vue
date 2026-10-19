@@ -44,7 +44,8 @@ const emit = defineEmits(['add-reminder', 'remove-reminder']);
   flex-direction: column;
   gap: var(--space-xs);
 
-  input, select {
+  input,
+  select {
     background-color: var(--bg-3);
   }
 

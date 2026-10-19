@@ -180,7 +180,8 @@ function onKeydown(evt) {
       font-size: var(--text-size-sm);
     }
 
-    li button, :deep(li button) {
+    li button,
+    :deep(li button) {
       font-size: var(--text-size-sm);
       padding: var(--space-xs) var(--space-sm);
       background: transparent;

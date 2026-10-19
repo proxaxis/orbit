@@ -7,6 +7,7 @@ import dayjs from '@/services/dayjs.js';
 import { rrulestr } from 'rrule';
 import { CACHE_KEYS, SYNC_TAGS, readCache, registerBackgroundSync, registerPeriodicBackgroundSync, writeCache } from '@/composables/useCache.js';
 import { ensurePushSubscription, syncPushSchedule } from '@/composables/usePushNotifications.js';
+import { buildAllDayTaskDigestEntries, DEFAULT_TASK_NOTIFICATION_TIMES, isTaskCompleted, isTaskEvent, normalizeTaskNotificationTimes } from '@/services/task-events.js';
 
 /** スケジュールに保存する通知エントリの上限 */
 const MAX_SCHEDULE_ENTRIES = 200;
@@ -154,6 +155,30 @@ export function occurrenceStarts(evt, windowStart, windowEnd) {
 }
 
 /**
+ * システム通知を表示する。Service Worker 経由を優先し、失敗時は window Notification にフォールバックする
+ * @param {string} title 通知タイトル
+ * @param {NotificationOptions} options 通知オプション
+ * @returns {Promise<void>}
+ */
+async function showSystemNotification(title, options) {
+  try {
+    /** @type {ServiceWorkerRegistration|null} 登録済みの Service Worker */
+    const registration = (await navigator.serviceWorker?.getRegistration?.()) ?? (await navigator.serviceWorker?.ready);
+    if (registration?.showNotification) {
+      await registration.showNotification(title, options);
+      return;
+    }
+  } catch (error) {
+    console.warn('Service Worker notification failed. Falling back to window Notification.', error);
+  }
+  try {
+    new Notification(title, options);
+  } catch (error) {
+    console.warn('Notification could not be shown.', error);
+  }
+}
+
+/**
  * 通知を送信する
  * @param {any} evt イベント
  * @param {Dayjs} start その回の開始日時
@@ -181,22 +206,30 @@ async function deliverNotification(evt, start, minutes, key) {
       url: `${import.meta.env.BASE_URL}evt/detail?eid=${encodeURIComponent(evt?.id ?? '')}&cid=${encodeURIComponent(evt?.calendarId ?? '')}`,
     },
   };
+  await showSystemNotification(title, options);
+}
 
-  try {
-    /** @type {ServiceWorkerRegistration|null} 登録済みの Service Worker */
-    const registration = (await navigator.serviceWorker?.getRegistration?.()) ?? (await navigator.serviceWorker?.ready);
-    if (registration?.showNotification) {
-      await registration.showNotification(title, options);
-      return;
-    }
-  } catch (error) {
-    console.warn('Service Worker notification failed. Falling back to window Notification.', error);
-  }
-  try {
-    new Notification(title, options);
-  } catch (error) {
-    console.warn('Notification could not be shown.', error);
-  }
+/**
+ * 終日タスクのまとめ通知（ダイジェスト）を送信する
+ * @param {{key: string, eid: string, cid: string, title: string, body: string}} entry ダイジェスト通知エントリ
+ * @returns {Promise<void>}
+ */
+async function deliverTaskDigestNotification(entry) {
+  notifiedKeys.add(entry.key);
+  await writeCache(CACHE_KEYS.NOTIFIED_EVENTS, [...notifiedKeys]);
+  const options = {
+    body: entry.body,
+    tag: `orbit-event-${entry.key}`,
+    icon: '/android-chrome-192x192.png',
+    badge: '/android-chrome-192x192.png',
+    // 通知タップ時に先頭タスクの詳細ページを開くための情報
+    data: {
+      eid: entry.eid || null,
+      cid: entry.cid || null,
+      url: `${import.meta.env.BASE_URL}evt/detail?eid=${encodeURIComponent(entry.eid ?? '')}&cid=${encodeURIComponent(entry.cid ?? '')}`,
+    },
+  };
+  await showSystemNotification(entry.title, options);
 }
 
 /**
@@ -218,13 +251,30 @@ export async function rescheduleNotifications() {
   /** @type {Array<{key: string, fireAt: number, start: number, eid: string, cid: string, summary: string, icon: string|null, minutes: number}>} Service Worker のバックグラウンド配信が参照するスケジュール */
   const scheduleEntries = [];
 
-  const [storedEvents, storedCalendars, storedNotified] = await Promise.all([readCache(CACHE_KEYS.EVENTS, []), readCache(CACHE_KEYS.CALENDARS, []), readCache(CACHE_KEYS.NOTIFIED_EVENTS, [])]);
+  const [storedEvents, storedCalendars, storedNotified, storedSettings] = await Promise.all([readCache(CACHE_KEYS.EVENTS, []), readCache(CACHE_KEYS.CALENDARS, []), readCache(CACHE_KEYS.NOTIFIED_EVENTS, []), readCache(CACHE_KEYS.USER_SETTINGS, {})]);
   // Service Worker 側で配信済みの通知を取り込んで二重通知を防ぐ
   notifiedKeys = new Set([...notifiedKeys, ...(Array.isArray(storedNotified) ? storedNotified : [])]);
   const calendarMap = new Map((Array.isArray(storedCalendars) ? storedCalendars : []).map((/** @type {any} */ cal) => [cal.id, cal]));
+  // 終日タスクのまとめ通知時刻（ユーザー設定。未設定なら既定値、空配列なら通知しない）
+  const taskNotifyTimes = normalizeTaskNotificationTimes(Array.isArray(storedSettings?.taskNotificationTimes) ? storedSettings.taskNotificationTimes : DEFAULT_TASK_NOTIFICATION_TIMES);
 
   for (const evt of Array.isArray(storedEvents) ? storedEvents : []) {
     if (!evt?.id || !evt?.calendarId) continue;
+    if (isTaskEvent(evt)) {
+      // 完了済みタスクと終日タスク（後段のダイジェスト通知へ回す）はここでは扱わない
+      if (isTaskCompleted(evt) || evt.isAllDay || evt.raw?.start?.date) continue;
+      // 時間指定タスクは開始時刻に通知する（イベントのリマインダー設定は使わない）
+      for (const start of occurrenceStarts(evt, windowStart, windowEnd)) {
+        const key = `${evt.calendarId}|${evt.id}|${start.unix()}|task`;
+        if (notifiedKeys.has(key)) continue;
+        if (start.isAfter(now)) {
+          const delay = start.diff(now);
+          if (nextDelay === null || delay < nextDelay) nextDelay = delay;
+          scheduleEntries.push({ key, fireAt: start.valueOf(), start: start.valueOf(), eid: evt.id, cid: evt.calendarId, summary: evt.summary ?? evt.raw?.summary ?? '', icon: evt.icon ?? null, minutes: 0 });
+        }
+      }
+      continue;
+    }
     const minutesList = reminderMinutesOf(evt, calendarMap.get(evt.calendarId));
     if (!minutesList.length) continue;
 
@@ -251,6 +301,20 @@ export async function rescheduleNotifications() {
           await deliverNotification(evt, start, minutes, key);
         }
       }
+    }
+  }
+
+  // 終日タスクは設定時刻に日次ダイジェストとしてまとめて通知する
+  for (const entry of buildAllDayTaskDigestEntries(storedEvents, windowStart, windowEnd, taskNotifyTimes, occurrenceStarts)) {
+    if (notifiedKeys.has(entry.key)) continue;
+    const fireAt = dayjs(entry.fireAt);
+    if (fireAt.isAfter(now)) {
+      const delay = fireAt.diff(now);
+      if (nextDelay === null || delay < nextDelay) nextDelay = delay;
+      scheduleEntries.push(entry);
+    } else if (dayjs(entry.start).isAfter(now)) {
+      // アプリを閉じている間に通知時刻を過ぎたが、その日はまだ終わっていない
+      await deliverTaskDigestNotification(entry);
     }
   }
 

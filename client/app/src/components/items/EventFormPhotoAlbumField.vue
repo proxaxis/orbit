@@ -55,7 +55,7 @@ function goAlbumLink() {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-    cursor: pointer;
+  cursor: pointer;
 }
 
 .photo-album-hint {

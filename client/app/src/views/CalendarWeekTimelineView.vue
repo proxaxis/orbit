@@ -9,6 +9,7 @@ import { useCalendarStore } from '@/stores/calendar.js';
 import { useUserStore } from '@/stores/user.js';
 import { useCalendarToolbar } from '@/composables/useCalendarToolbar.js';
 import { buildCustomHolidayBody, holidayDatesOf } from '@/services/custom-holidays.js';
+import { isTaskEvent, unfinishedTaskCountForDay } from '@/services/task-events.js';
 import { isJapaneseHoliday } from '@/services/japanese-holidays.js';
 import YearMonthJump from '@/components/YearMonthJump.vue';
 import IconCaretLeft from '@/components/icons/IconCaretLeft.vue';
@@ -98,11 +99,16 @@ function isMultiDayEvent(evt) {
   return evt.isAllDay || !evt.startDateTime.isSame(evt.endDateTime, 'day');
 }
 
-/** @param {Dayjs} day @returns {HandyCalendarEvent[]} 指定日に重なる終日・複数日イベント */
+/** @param {Dayjs} day @returns {number} その日の未完了タスク数（「タスク +N」チップ用） */
+function getDayTaskCount(day) {
+  return unfinishedTaskCountForDay(events.value, day);
+}
+
+/** @param {Dayjs} day @returns {HandyCalendarEvent[]} 指定日に重なる終日・複数日イベント（タスクはチップに集約するため除外） */
 function allDayEventsFor(day) {
   const dayStart = day.startOf('day');
   const dayEnd = dayStart.add(1, 'day');
-  return events.value.filter((evt) => isMultiDayEvent(evt) && evt.startDateTime.isBefore(dayEnd) && evt.endDateTime.isAfter(dayStart));
+  return events.value.filter((evt) => !isTaskEvent(evt) && isMultiDayEvent(evt) && evt.startDateTime.isBefore(dayEnd) && evt.endDateTime.isAfter(dayStart));
 }
 
 /**
@@ -114,7 +120,7 @@ function timedEventsFor(day) {
   const dayStart = day.startOf('day');
   const dayEnd = dayStart.add(1, 'day');
   const blocks = events.value
-    .filter((evt) => !isMultiDayEvent(evt) && evt.startDateTime.isBefore(dayEnd) && evt.endDateTime.isAfter(dayStart))
+    .filter((evt) => !isTaskEvent(evt) && !isMultiDayEvent(evt) && evt.startDateTime.isBefore(dayEnd) && evt.endDateTime.isAfter(dayStart))
     .map((evt) => ({
       event: evt,
       startMin: Math.max(0, evt.startDateTime.diff(dayStart, 'minute')),
@@ -518,6 +524,17 @@ function onSelectContextMenu(action) {
       }
       break;
     }
+    // 選択中の範囲で新しいタスクを作成（時間帯ドラッグなら時間指定、日付なら終日）
+    case 'CreateTask': {
+      userStore.setNowSelectedEvent(null);
+      const range = contextMenuRange.value;
+      if (!range) break;
+      router.push({
+        name: 'TaskCreator',
+        query: range.isTimed ? { start: range.start.format('YYYY-MM-DDTHH:mm'), end: range.end.format('YYYY-MM-DDTHH:mm') } : { start: range.start.format('YYYY-MM-DD'), end: range.end.format('YYYY-MM-DD'), allday: '1' },
+      });
+      break;
+    }
     case 'CreateFromTemplate':
       userStore.setNowSelectedEvent(null);
       router.push({ name: 'EventTemplatePicker' });
@@ -726,6 +743,7 @@ onUnmounted(() => {
           <div class="week-allday">
             <div class="allday-label">終日</div>
             <div v-for="day in weekDays" :key="day.format('YYYY-MM-DD')" class="allday-cell" :class="{ 'is-in-drag-range': isInContextRange(day) }" @click="handleDayCellClick(day)" @contextmenu="handleDateContextMenu($event, day)">
+              <span v-if="getDayTaskCount(day) > 0" class="task-count-chip" :aria-label="`タスク ${getDayTaskCount(day)}件`">タスク +{{ getDayTaskCount(day) }}</span>
               <button v-for="evt in allDayEventsFor(day)" :key="`${evt.calendarId}:${evt.id}`" type="button" class="allday-chip" :class="{ 'is-dot': isDotEventBar(evt) }" :style="getEventBarStyle(evt)" @click="(e) => handleEventClick(e, evt, day)">
                 <i v-if="isDotEventBar(evt)" class="event-dot" :style="{ backgroundColor: getEventDotColor(evt) }"></i><InlineEmoji :emoji="evt.icon" /> {{ evt.summary }}
               </button>
@@ -784,6 +802,7 @@ onUnmounted(() => {
 
     <DropdownMenu ref="rfDropdownForContextMenu" @close="contextMenuRange = null">
       <button type="button" @click="onSelectContextMenu('CreateEvent')">予定を作成</button>
+      <button type="button" @click="onSelectContextMenu('CreateTask')">タスクを追加</button>
       <button type="button" @click="onSelectContextMenu('CreateFromTemplate')">テンプレートから作成</button>
       <button v-if="isContextRangeHoliday" type="button" @click="onSelectContextMenu('UnsetCustomHoliday')">休日から解除</button>
       <button v-else type="button" @click="onSelectContextMenu('SetCustomHoliday')">休日にする</button>
@@ -1037,6 +1056,18 @@ $gutter-width: 3.25rem;
 
       &:last-child {
         border-right: 0;
+      }
+
+      .task-count-chip {
+        padding: 0 var(--space-xxs);
+        border-radius: 4px;
+        background: color-mix(in srgb, var(--primary) 15%, var(--bg-2));
+        color: var(--text);
+        font-size: var(--text-size-xxs);
+        font-weight: bold;
+        line-height: 1.4;
+        white-space: nowrap;
+        pointer-events: none;
       }
     }
 

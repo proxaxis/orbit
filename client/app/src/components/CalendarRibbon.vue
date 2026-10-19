@@ -41,11 +41,11 @@ const displayName = computed(() => calendarStore.getCalendarName(props.cid ?? pr
 <template>
   <button v-if="props.selectable" type="button" class="calendar-ribbon selectable" :class="{ selected: props.selected }" @click="emit('select', props.cid)">
     <span class="color" :style="{ backgroundColor: calendar?.backgroundColor ?? 'var(--text)' }"></span>
-    <span class="name" v-if="props.useLabel">{{ (displayName !== '') ? displayName : '有効なカレンダーがありません' }}</span>
+    <span class="name" v-if="props.useLabel">{{ displayName !== '' ? displayName : '有効なカレンダーがありません' }}</span>
   </button>
   <div v-else class="calendar-ribbon">
     <span class="color" :style="{ backgroundColor: calendar?.backgroundColor ?? 'var(--text)' }"></span>
-    <span class="name" v-if="props.useLabel">{{ (displayName !== '') ? displayName : '有効なカレンダーがありません'  }}</span>
+    <span class="name" v-if="props.useLabel">{{ displayName !== '' ? displayName : '有効なカレンダーがありません' }}</span>
   </div>
   <div class="menu-area" v-if="props.useMenuSlot">
     <slot name="menu"></slot>

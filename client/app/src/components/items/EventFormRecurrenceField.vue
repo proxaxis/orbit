@@ -71,7 +71,8 @@ defineProps({
   flex-direction: column;
   gap: var(--space-xs);
 
-  select, input {
+  select,
+  input {
     background-color: var(--bg-3);
   }
 }

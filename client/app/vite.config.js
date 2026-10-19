@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => ({
     setupFiles: ['tests/setup.js'],
   },
   server: {
-    allowedHosts: ['orbit.proxaxis.me', '.trycloudflare.com'],
+    allowedHosts: ['orbit.proxaxis.me'],
     ...(mode === 'development' ? { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } } : {}),
     host: true,
     port: (mode === 'production') ? 15173 : 5173,

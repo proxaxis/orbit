@@ -28,6 +28,15 @@ const router = createRouter({
           },
         },
         {
+          path: '/task/new',
+          name: 'TaskCreator',
+          components: {
+            default: () => import('@/views/CalendarMainView.vue'),
+            nav: () => import('@/views/UserCalendarsView.vue'),
+            sub: () => import('@/views/TaskCreatorView.vue'),
+          },
+        },
+        {
           path: '/evt/detail',
           name: 'EventDetail',
           components: {

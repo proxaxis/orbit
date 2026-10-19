@@ -6,8 +6,10 @@ import { useUserStore } from '@/stores/user.js';
 import { useCalendarEvents } from '@/composables/useCalendarEvents.js';
 import { useEventActions } from '@/composables/useEventActions.js';
 import { moveSelectedDate } from '@/composables/useDateNavigation.js';
+import { isTaskCompleted } from '@/services/task-events.js';
 import IconXMark from '@/components/icons/IconXMark.vue';
 import MenuBar from '@/components/MenuBar.vue';
+import AccordionMenu from '@/components/AccordionMenu.vue';
 import DateEventsViewEventCard from '@/components/items/DateEventsViewEventCard.vue';
 
 const router = useRouter();
@@ -25,6 +27,12 @@ const visibleRange = computed(() => {
 
 /** @type {ComputedRef<HandyCalendarEvent[]>} 選択中の日付の全てのカレンダーのイベントリスト（カスタム休日を除く）。取得は composable 側のバックグラウンド処理 */
 const { events } = useCalendarEvents(visibleRange);
+
+/** @type {ComputedRef<HandyCalendarEvent[]>} 一覧に出す予定・未完了タスク（完了済みタスクは末尾のアコーディオンへ） */
+const visibleEvents = computed(() => events.value.filter((evt) => !isTaskCompleted(evt)));
+
+/** @type {ComputedRef<HandyCalendarEvent[]>} 完了済みタスク（リスト末尾のアコーディオンメニューに表示する） */
+const completedTasks = computed(() => events.value.filter((evt) => isTaskCompleted(evt)));
 
 /** @type {Ref<{x:number,y:number}|null>} 日付移動スワイプの開始位置 */
 const swipeStart = ref(null);
@@ -106,8 +114,15 @@ async function onSelectContextMenu(action, evt) {
     </MenuBar>
 
     <ul>
-      <DateEventsViewEventCard v-for="evt in events" :key="`${evt.calendarId}:${evt.id}`" :event="evt" @open="openEventDetail" @select="onSelectContextMenu" />
+      <DateEventsViewEventCard v-for="evt in visibleEvents" :key="`${evt.calendarId}:${evt.id}`" :event="evt" @open="openEventDetail" @select="onSelectContextMenu" />
       <li v-if="events.length === 0" class="no-event">予定はありません</li>
+      <li v-if="completedTasks.length > 0" class="completed-tasks">
+        <AccordionMenu :label="`完了済みタスク（${completedTasks.length}件）`">
+          <ul class="completed-task-list">
+            <DateEventsViewEventCard v-for="evt in completedTasks" :key="`${evt.calendarId}:${evt.id}`" :event="evt" @open="openEventDetail" @select="onSelectContextMenu" />
+          </ul>
+        </AccordionMenu>
+      </li>
     </ul>
   </div>
 </template>

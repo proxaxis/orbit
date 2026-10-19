@@ -27,6 +27,7 @@ import EventFormColorField from '@/components/items/EventFormColorField.vue';
 import EventFormTemplateSaveDialog from '@/components/items/EventFormTemplateSaveDialog.vue';
 import { useEventTemplates, createEventTemplate } from '@/composables/useEventTemplates.js';
 import { normalizeTags, appendTagsToDescription, TAGS_SHARED_PROPERTY } from '@/services/event-tags.js';
+import { buildTaskSharedProperties, isTaskEvent, isTaskDeferred, taskStatusLabel, taskStatusOf, TASK_SHARED_PROPERTY_KEYS, TASK_STATUS_NOT_STARTED, TASK_STATUSES } from '@/services/task-events.js';
 import IconFloppyDisk from '@/components/icons/IconFloppyDisk.vue';
 import IconRotateLeft from '@/components/icons/IconRotateLeft.vue';
 import IconFileCirclePlus from '@/components/icons/IconFileCirclePlus.vue';
@@ -143,7 +144,24 @@ const formData = reactive({
   timeZone: '',
   /** @type {'default'|'public'|'private'|'confidential'} Google イベントの公開設定 */
   visibility: 'default',
+  /** @type {boolean} タスクとして管理するか（shared 拡張プロパティで表現・非公開イベントになる） */
+  isTask: false,
+  /** @type {string} タスクのステータス（not-started/in-progress/pending/completed/カスタム） */
+  taskStatus: TASK_STATUS_NOT_STARTED,
+  /** @type {boolean} 未完了のとき翌日へ持ち越すか */
+  taskDeferred: true,
 });
+
+/** @type {ComputedRef<boolean>} 主催者としてイベントの共有情報を変更できるか（複製・テンプレート・新規は常に可） */
+const isOrganizerEvent = computed(() => Boolean(props.clone || props.template || (originalEvent.value?.raw?.organizer?.self ?? true)));
+
+// タスクは共有カレンダーの閲覧者へ見せないため、タスク化したら公開設定を非公開へ固定する
+watch(
+  () => formData.isTask,
+  (isTask) => {
+    if (isTask) formData.visibility = 'private';
+  },
+);
 
 const initialCalendarId = computed(() => {
   const writableCalendars = calendarStore.listWritableCalendars;
@@ -484,11 +502,13 @@ function submitForm() {
   // 主催者以外(招待されたイベント等)が shared 拡張プロパティを変更すると
   // 403 forbiddenForNonOrganizer で更新全体が失敗するため送信しない。
   // アイコン・タグ・繰り返しの共有情報は shared に保持するため主催者のみ変更が反映される
-  const isOrganizer = props.clone || props.template || (originalEvent.value?.raw?.organizer?.self ?? true);
+  const isOrganizer = isOrganizerEvent.value;
   const shared = isOrganizer ? { ...((formData.icon ?? '') === '' ? {} : { icon: formData.icon }), ...recurrenceData.shared } : {};
   // タグは shared 拡張プロパティへ保持し、検索に効くよう description 末尾にも #tag として付与する
   const tags = normalizeTags(eventTagsInput.value);
   if (isOrganizer && tags.length) shared[TAGS_SHARED_PROPERTY] = JSON.stringify(tags);
+  // タスクのメタデータは shared 拡張プロパティへ保持する（招待者も変更できるようイベント側で guestsCanModify を立てる）
+  if (isOrganizer && formData.isTask) Object.assign(shared, buildTaskSharedProperties({ status: formData.taskStatus, isDeferred: formData.taskDeferred }));
   const privateProperties = { ...(originalEvent.value?.raw?.extendedProperties?.private ?? {}) };
   if (formData.privacyNote.trim()) privateProperties.privacyNote = formData.privacyNote.trim();
   else delete privateProperties.privacyNote;
@@ -500,7 +520,7 @@ function submitForm() {
     // shared の削除はフォームが管理するキーに限定する。写真アルバム紐づけなど
     // 他機能が shared に保持するキーまで null で消してしまわないようにするため
     if (isOrganizer) {
-      for (const key of ['icon', TAGS_SHARED_PROPERTY, HOLIDAY_ADJUSTMENT_PROPERTY]) {
+      for (const key of ['icon', TAGS_SHARED_PROPERTY, HOLIDAY_ADJUSTMENT_PROPERTY, ...TASK_SHARED_PROPERTY_KEYS]) {
         if (key in (originalEvent.value?.raw?.extendedProperties?.shared ?? {}) && !(key in sharedOut)) sharedOut[key] = null;
       }
     }
@@ -511,7 +531,11 @@ function submitForm() {
   if (Object.keys(privateOut).length) extendedProperties.private = privateOut;
   const body = {
     summary: formData.summary.trim(),
-    visibility: formData.visibility,
+    // タスクは共有相手へ見せないため非公開固定（招待者は参加者として見える）
+    visibility: formData.isTask ? 'private' : formData.visibility,
+    // 招待者にもタスクプロパティの変更を許可する。タスク解除時はイベント側の許可も元へ戻す
+    // （非主催者は guestsCanModify を変更できないため送信しない）
+    ...(isOrganizer ? (formData.isTask ? { guestsCanModify: attendees.value.length > 0 } : !props.clone && isTaskEvent(originalEvent.value) ? { guestsCanModify: false } : {}) : {}),
     // イベント個別の色。未選択で編集中のイベントに色が設定済みなら明示的にクリアする（PATCH では null で解除される）
     ...(eventColorId.value ? { colorId: eventColorId.value } : originalEvent.value?.eventColorId ? { colorId: null } : {}),
     // PATCH では省略フィールドが保持されるため、クリアしたい項目は空文字で送る
@@ -724,6 +748,9 @@ onMounted(async () => {
         endDateTime: draftEnd ?? (rangeEnd?.isValid?.() ? rangeEnd : userStore.nowSelectedDate ? toDayjs(userStore.nowSelectedDate).add(1, 'hour') : toDayjs().add(1, 'hour')),
         timeZone: userStore.timeZone,
         visibility: 'default',
+        isTask: false,
+        taskStatus: TASK_STATUS_NOT_STARTED,
+        taskDeferred: true,
       });
       Object.assign(recurrence, { frequency: '', interval: 1, weekdays: [], monthDay: '', month: '', count: '', until: '', exclusions: '', holidayAdjustment: '' });
       eventColorId.value = '';
@@ -763,6 +790,9 @@ onMounted(async () => {
         timeZone: originalEvent.value?.timeZone ?? userStore.timeZone,
         // 'confidential' 等の UI 未対応の値もそのまま保持し、保存時に再送信する
         visibility: originalEvent.value?.raw?.visibility ?? 'default',
+        isTask: isTaskEvent(originalEvent.value),
+        taskStatus: taskStatusOf(originalEvent.value),
+        taskDeferred: isTaskDeferred(originalEvent.value),
       });
       const parsedRecurrence = parseRecurrence(originalEvent.value?.raw?.recurrence, originalEvent.value?.raw?.extendedProperties?.shared);
       Object.assign(recurrence, { ...parsedRecurrence, exclusions: parsedRecurrence.exclusions.join(', ') });
@@ -824,6 +854,18 @@ watch(() => formData.summary, updateTitleSuggestions);
     <!-- 終日 -->
     <section>
       <label> <input v-model="formData.isAllDay" type="checkbox" /> 終日 </label>
+      <label> <input v-model="formData.isTask" type="checkbox" :disabled="!isOrganizerEvent" /> タスクとして管理 </label>
+      <template v-if="formData.isTask">
+        <label class="task-sub-option"> <input v-model="formData.taskDeferred" type="checkbox" :disabled="!isOrganizerEvent" /> 未完了のとき翌日へ持ち越す </label>
+        <label class="task-sub-option">
+          <span>タスクのステータス</span>
+          <select v-model="formData.taskStatus" :disabled="!isOrganizerEvent">
+            <option v-for="status in TASK_STATUSES" :key="status" :value="status">{{ taskStatusLabel(status) }}</option>
+            <option v-if="!TASK_STATUSES.includes(formData.taskStatus)" :value="formData.taskStatus">{{ formData.taskStatus }}</option>
+          </select>
+        </label>
+        <p class="task-hint">タスクは非公開の予定として保存され、共有カレンダーには表示されません.</p>
+      </template>
     </section>
     <!-- 開始日時 -->
     <section>
@@ -917,7 +959,7 @@ watch(() => formData.summary, updateTitleSuggestions);
       <section class="accordion-content">
         <label
           ><span><IconUserLock />公開設定</span>
-          <select v-model="formData.visibility">
+          <select v-model="formData.visibility" :disabled="formData.isTask">
             <option value="default">デフォルトの公開設定</option>
             <option value="public">公開</option>
             <option value="private">非公開</option>
@@ -1058,7 +1100,8 @@ form > section:nth-of-type(2) {
 // 終日の入力欄
 form > section:nth-of-type(3) {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: var(--space-xs);
   padding-top: var(--space-xs);
 
   > label {
@@ -1071,6 +1114,26 @@ form > section:nth-of-type(3) {
     width: 100%;
     padding: var(--space-xs) var(--space-sm);
     background-color: var(--bg-2);
+  }
+
+  .task-sub-option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: var(--text-size-sm);
+    padding: 0 var(--space-sm);
+    cursor: pointer;
+
+    select {
+      flex: 1;
+      min-width: 0;
+    }
+  }
+
+  .task-hint {
+    font-size: var(--text-size-xs);
+    color: var(--text-light);
+    padding: 0 var(--space-sm);
   }
 }
 
@@ -1167,9 +1230,9 @@ form > section:nth-of-type(7) {
 
     > span {
       font-size: var(--text-size-xs);
-            display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
     }
 
     > textarea {
@@ -1179,7 +1242,6 @@ form > section:nth-of-type(7) {
   }
 }
 
-
 // 色
 form > section:nth-of-type(8) {
   > label {
@@ -1188,9 +1250,9 @@ form > section:nth-of-type(8) {
 
     > span {
       font-size: var(--text-size-xs);
-                  display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
     }
 
     > textarea {
@@ -1213,13 +1275,15 @@ section.accordion-content {
 
     span {
       font-size: var(--text-size-xs);
-                  display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
     }
   }
 
-  input, select, button {
+  input,
+  select,
+  button {
     background-color: var(--bg-3);
   }
 
@@ -1228,8 +1292,9 @@ section.accordion-content {
 
   // タイムゾーン
   &:nth-child(2) {
-    :deep(select), :deep(button) {
-        background-color: var(--bg-3);
+    :deep(select),
+    :deep(button) {
+      background-color: var(--bg-3);
     }
   }
 

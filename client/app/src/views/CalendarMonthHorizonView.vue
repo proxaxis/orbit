@@ -11,6 +11,7 @@ import { useCalendarToolbar } from '@/composables/useCalendarToolbar.js';
 import { buildMonthLayout } from '@/composables/useMonthLayout.js';
 import { isDotEventBar, getEventBarStyle, getEventDotColor } from '@/composables/useEventBarStyle.js';
 import { buildCustomHolidayBody, holidayDatesOf } from '@/services/custom-holidays.js';
+import { isTaskEvent, unfinishedTaskCountForDay } from '@/services/task-events.js';
 import { isJapaneseHoliday } from '@/services/japanese-holidays.js';
 import DropdownMenu from '@/components/DropdownMenu.vue';
 import IconCaretLeft from '@/components/icons/IconCaretLeft.vue';
@@ -150,7 +151,7 @@ const getMonthDayEvents = (date) => {
 function getHiddenEventCount(date) {
   const dayStart = date.startOf('day');
   const dayEnd = date.endOf('day');
-  const allEvents = events.value.filter((evt) => evt.startDateTime.isBefore(dayEnd) && evt.endDateTime.isAfter(dayStart));
+  const allEvents = nonTaskEvents.value.filter((evt) => evt.startDateTime.isBefore(dayEnd) && evt.endDateTime.isAfter(dayStart));
   const displayedEventIds = new Set(
     getMonthDayEvents(date)
       .filter(Boolean)
@@ -159,8 +160,16 @@ function getHiddenEventCount(date) {
   return Math.max(0, allEvents.filter((evt) => !displayedEventIds.has(evt.id)).length);
 }
 
+/** @type {ComputedRef<HandyCalendarEvent[]>} イベントバーに出す予定（タスクはセル上部の「タスク +N」チップに集約するため除外） */
+const nonTaskEvents = computed(() => events.value.filter((evt) => !isTaskEvent(evt)));
+
 /** @type {ComputedRef<Map<string, (import('@/composables/useMonthLayout.js').MonthEventSlot|null)[]>>} @description イベントの配置情報を保持するマップ */
-const layoutMap = computed(() => buildMonthLayout(calDaysArray.value, events.value, userStore.maxEventBarsPerCell));
+const layoutMap = computed(() => buildMonthLayout(calDaysArray.value, nonTaskEvents.value, userStore.maxEventBarsPerCell));
+
+/** @param {Dayjs} date @returns {number} その日の未完了タスク数（「タスク +N」チップ用） */
+function getDayTaskCount(date) {
+  return unfinishedTaskCountForDay(events.value, date);
+}
 
 /** @returns {Record<string, string>} 可変セル高時の週ごとの行高 */
 const monthGridStyle = computed(() => {
@@ -528,6 +537,21 @@ const onSelectContextMenu = (action) => {
       });
       break;
     }
+    // 選択中の日付範囲で新しいタスクを作成（終日、終了日は含む側で渡す）
+    case 'CreateTask': {
+      userStore.setNowSelectedEvent(null);
+      const start = contextMenuRange.value?.start ?? toDayjs(userStore.nowSelectedDate ?? undefined);
+      const end = contextMenuRange.value?.end ?? start;
+      router.push({
+        name: 'TaskCreator',
+        query: {
+          start: start.format('YYYY-MM-DD'),
+          end: end.format('YYYY-MM-DD'),
+          allday: '1',
+        },
+      });
+      break;
+    }
     // テンプレート一覧を開き、選択したテンプレートで予定を作成
     case 'CreateFromTemplate':
       userStore.setNowSelectedEvent(null);
@@ -685,6 +709,7 @@ const getDayNumberColor = (day) => {
             <div class="day-num" :style="{ color: getDayNumberColor(day) }">
               {{ day.date.date() }}
             </div>
+            <span v-if="getDayTaskCount(day.date) > 0" class="task-count-chip" :aria-label="`タスク ${getDayTaskCount(day.date)}件`">タスク +{{ getDayTaskCount(day.date) }}</span>
 
             <div class="events-stack">
               <div v-for="(slot, i) in getMonthDayEvents(day.date)" :key="i" class="event-slot">
@@ -722,6 +747,7 @@ const getDayNumberColor = (day) => {
 
     <DropdownMenu ref="rfDropdownForContextMenu" @close="contextMenuRange = null">
       <button type="button" @click="onSelectContextMenu('CreateEvent')">予定を作成</button>
+      <button type="button" @click="onSelectContextMenu('CreateTask')">タスクを追加</button>
       <button type="button" @click="onSelectContextMenu('CreateFromTemplate')">テンプレートから作成</button>
       <button v-if="isContextRangeHoliday" type="button" @click="onSelectContextMenu('UnsetCustomHoliday')">休日から解除</button>
       <button v-else type="button" @click="onSelectContextMenu('SetCustomHoliday')">休日にする</button>
@@ -1052,6 +1078,22 @@ $event-bar-radius: 4px;
           z-index: 5;
         }
       }
+    }
+
+    .task-count-chip {
+      position: absolute;
+      top: 2px;
+      right: 4px;
+      padding: 0 var(--space-xs);
+      border-radius: var(--border-radius);
+      background: color-mix(in srgb, var(--primary) 15%, var(--bg-2));
+      color: var(--text);
+      font-size: var(--text-size-xs);
+      font-weight: bold;
+      line-height: 1.4;
+      z-index: 1;
+      pointer-events: none;
+      white-space: nowrap;
     }
 
     .hidden-event-count {

@@ -8,6 +8,7 @@ import { useUserStore } from '@/stores/user.js';
 import { useAuth, initApiClients } from '@/composables/useAuth.js';
 import { useCalendars } from '@/composables/useCalendars.js';
 import { initEventSync } from '@/composables/useEvents.js';
+import { initTasks } from '@/composables/useTasks.js';
 import { initEventNotifications, rescheduleNotifications } from '@/composables/useNotifications.js';
 import { initRemoteChangeSync, checkRemoteChanges } from '@/composables/useRemoteSync.js';
 import { initShareSync } from '@/composables/useShare.js';
@@ -131,6 +132,7 @@ export function useAppBootstrap() {
     initEventNotifications();
     initShareSync();
     initEventSync();
+    initTasks();
     initRemoteChangeSync();
     // PWA インストール済みなら自然言語登録用の LLM をバックグラウンドで事前キャッシュする
     scheduleQuickAddWarmup();
