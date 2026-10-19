@@ -33,19 +33,19 @@ const props = defineProps({
 
 const emit = defineEmits(['select']);
 
-const calendar = computed(() => calendarStore.list.find((cal) => cal.id === (props.cid ?? props.gCalendarId)) ?? { summary: '', backgroundColor: '' });
+const calendar = computed(() => calendarStore.list.find((cal) => cal.id === (props.cid ?? props.gCalendarId)));
 /** @type {ComputedRef<string>} 別名（summaryOverride）設定時は別名を優先した表示名 */
 const displayName = computed(() => calendarStore.getCalendarName(props.cid ?? props.gCalendarId));
 </script>
 
 <template>
   <button v-if="props.selectable" type="button" class="calendar-ribbon selectable" :class="{ selected: props.selected }" @click="emit('select', props.cid)">
-    <span class="color" :style="{ backgroundColor: calendar.backgroundColor }"></span>
-    <span class="name" v-if="props.useLabel">{{ displayName }}</span>
+    <span class="color" :style="{ backgroundColor: calendar?.backgroundColor ?? 'var(--text)' }"></span>
+    <span class="name" v-if="props.useLabel">{{ (displayName !== '') ? displayName : '有効なカレンダーがありません' }}</span>
   </button>
   <div v-else class="calendar-ribbon">
-    <span class="color" :style="{ backgroundColor: calendar.backgroundColor }"></span>
-    <span class="name" v-if="props.useLabel">{{ displayName }}</span>
+    <span class="color" :style="{ backgroundColor: calendar?.backgroundColor ?? 'var(--text)' }"></span>
+    <span class="name" v-if="props.useLabel">{{ (displayName !== '') ? displayName : '有効なカレンダーがありません'  }}</span>
   </div>
   <div class="menu-area" v-if="props.useMenuSlot">
     <slot name="menu"></slot>

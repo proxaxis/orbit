@@ -7,7 +7,7 @@ import vueDevTools from 'vite-plugin-vue-devtools';
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
-  plugins: [vue(), vueDevTools()],
+  plugins: [...(mode === 'development' ? [vueDevTools()] : []), vue()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -20,5 +20,7 @@ export default defineConfig(({ mode }) => ({
   server: {
     allowedHosts: ['orbit.proxaxis.me', '.trycloudflare.com'],
     ...(mode === 'development' ? { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } } : {}),
+    host: true,
+    port: (mode === 'production') ? 15173 : 5173,
   },
 }));

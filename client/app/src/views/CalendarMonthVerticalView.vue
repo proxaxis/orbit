@@ -48,8 +48,6 @@ const props = defineProps({
 
 /** @type {Ref<HTMLElement|null>} 縦スクロール領域 */
 const rfScroll = ref(null);
-/** @type {Ref<HTMLElement|null>} ツールバー */
-const rfToolbar = ref(null);
 /** @type {Ref<{ open: (event: MouseEvent) => void, close: () => void }|null>} コンテキストメニュー表示用のドロップダウンへの直接の参照 */
 const rfDropdownForContextMenu = ref(null);
 /** @type {Ref<number|null>} 日付セル長押しタイマー */
@@ -78,7 +76,7 @@ const pickBannerText = computed(() => {
 let mouseDownCell = null;
 
 /** ツールバーのコンパクト表示状態は他のビューと共有ロジック */
-const { isCompactToolbar } = useCalendarToolbar(rfToolbar);
+const { isCompactToolbar } = useCalendarToolbar();
 
 /** @type {Ref<Dayjs>} フォーカス中の月（月初め） */
 const focusedMonth = ref(userStore.nowUsingDate.startOf('month'));
@@ -730,7 +728,7 @@ onUnmounted(() => {
       <span>{{ pickBannerText }}</span>
       <button type="button" @click="userStore.cancelFormDatePick()">キャンセル</button>
     </div>
-    <header ref="rfToolbar" class="month-toolbar" :class="{ 'is-compact': isCompactToolbar }">
+    <header class="month-toolbar" :class="{ 'is-compact': isCompactToolbar }">
       <div class="toolbar-left">
         <button v-if="userStore.isMobile || userStore.isTablet" type="button" title="カレンダーを開閉" aria-label="カレンダーを開閉" @click="props.selectPane('nav')">
           <IconBars size="1.25rem" />
@@ -741,8 +739,8 @@ onUnmounted(() => {
         <button type="button" title="次月へ進む" aria-label="次月へ進む" v-if="userStore.isDesktop" @click="goNextMonth">
           <IconCaretRight size="1.25rem" />
         </button>
+        <YearMonthJump :label="visibleMonthTitle" />
       </div>
-      <YearMonthJump :label="visibleMonthTitle" />
       <div class="toolbar-right">
         <template v-if="!isCompactToolbar">
           <button type="button" title="今日に戻る" aria-label="今日に戻る" @click.prevent="goToday">
@@ -897,10 +895,9 @@ $event-bar-radius: 4px;
 
   .month-toolbar {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
     padding: var(--space-sm) var(--space-sm) 0 var(--space-sm);
     background: var(--bg-1);
-    flex-shrink: 0;
 
     button {
       background-color: var(--bg-1);
@@ -910,41 +907,19 @@ $event-bar-radius: 4px;
       }
     }
 
-    div {
+    .toolbar-left,
+    .toolbar-right {
       display: flex;
       align-items: center;
       gap: var(--space-xs);
-      @include var.mdown(sm) {
-        gap: 0;
-      }
-      &:nth-child(3) {
-        justify-content: flex-end;
-      }
     }
 
-    // h1 は YearMonthJump コンポーネント内部の要素で scoped セレクタだけでは届かないため :deep() が必要
-    :deep(h1) {
-      font-size: var(--text-size-xl);
-      @include var.mdown(sm) {
-        font-size: var(--text-size-lg);
-      }
-      // 中列いっぱいに広げて justify-content で文字位置を制御する
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      white-space: nowrap;
-      overflow: hidden;
+    .toolbar-right {
+      justify-content: flex-end;
     }
 
-    // 収まらない場合は左右2ブロック構成にし、タイトルは右側のメニューボタンに寄せる
     &.is-compact {
-      grid-template-columns: auto 1fr auto;
-
-      :deep(h1) {
-        justify-content: flex-end;
-        padding-right: var(--space-xs);
-      }
+      grid-template-columns: auto 1fr;
     }
   }
 

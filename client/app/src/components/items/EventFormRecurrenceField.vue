@@ -13,19 +13,16 @@ defineProps({
 </script>
 
 <template>
-  <section>
-    <fieldset class="recurrence-fieldset">
-      <legend>繰り返し</legend>
-      <label>
-        <span>頻度</span>
-        <select v-model="recurrence.frequency">
-          <option value="">繰り返さない</option>
-          <option value="DAILY">毎日</option>
-          <option value="WEEKLY">毎週</option>
-          <option value="MONTHLY">毎月</option>
-          <option value="YEARLY">毎年</option>
-        </select>
-      </label>
+  <div class="recurrence-field">
+    <select v-model="recurrence.frequency">
+      <option value="">繰り返さない</option>
+      <option value="DAILY">毎日</option>
+      <option value="WEEKLY">毎週</option>
+      <option value="MONTHLY">毎月</option>
+      <option value="YEARLY">毎年</option>
+    </select>
+    <fieldset class="recurrence-fieldset" v-if="recurrence.frequency">
+      <legend>繰り返しルール</legend>
       <template v-if="recurrence.frequency">
         <label
           ><span>間隔</span>
@@ -65,14 +62,19 @@ defineProps({
         </label>
       </template>
     </fieldset>
-  </section>
+  </div>
 </template>
 
 <style lang="scss" scoped>
-section {
+.recurrence-field {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-xs);
-}
 
+  select, input {
+    background-color: var(--bg-3);
+  }
+}
 .recurrence-fieldset {
   display: flex;
   flex-direction: column;
@@ -83,7 +85,7 @@ section {
   border-radius: var(--border-radius);
 
   legend {
-    font-size: var(--text-size-xxs);
+    font-size: var(--text-size-xs);
     padding: 0 var(--space-xs);
   }
 
@@ -92,7 +94,7 @@ section {
     flex-direction: column;
 
     > span {
-      font-size: var(--text-size-xxs);
+      font-size: var(--text-size-xs);
     }
   }
 
@@ -102,7 +104,7 @@ section {
     gap: var(--space-xs);
 
     > label > span {
-      font-size: var(--text-size-xxs);
+      font-size: var(--text-size-xs);
     }
   }
 

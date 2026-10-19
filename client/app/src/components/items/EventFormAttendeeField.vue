@@ -37,15 +37,6 @@ function onKeydown(keyboardEvent) {
 
 <template>
   <section>
-    <label for="attendee-query"><span>招待するユーザー</span></label>
-    <div>
-      <span v-for="attendee in attendees" :key="attendee.email">
-        {{ attendee.displayName || attendee.email }}
-        <button type="button" :aria-label="`${attendee.email}を削除`" @click="emit('remove-attendee', attendee.email)">
-          <IconXMark />
-        </button>
-      </span>
-    </div>
     <SuggestPulldown
       v-model="query"
       input-id="attendee-query"
@@ -55,6 +46,7 @@ function onKeydown(keyboardEvent) {
       :show-extra="!isSearching && !suggestions.length && query.includes('@') && !query.startsWith('@')"
       :item-key="(person) => person.resourceName"
       placeholder="名前またはメールアドレス"
+      :aria-label=" 'ユーザーを招待する'"
       enter-focus
       @select="emit('add-attendee', $event)"
       @blur="emit('query-blur')"
@@ -66,51 +58,52 @@ function onKeydown(keyboardEvent) {
       <template #extra>
         <li>
           <button type="button" @mousedown.prevent="emit('add-unknown-email')">
-            <span>メールアドレスを招待</span>
-            <small>{{ query }}</small>
+            このメールアドレスを招待
           </button>
         </li>
       </template>
     </SuggestPulldown>
     <p v-if="query.startsWith('@')">ラベルで検索中</p>
     <p v-else-if="query.includes('@')">Enter で未知のメールアドレスを追加</p>
+    <fieldset aria-label="招待済み参加者" v-if="attendees.length > 0">
+      <legend>招待リスト</legend>
+      <button v-for="attendee in attendees" :key="attendee.email" type="button" :aria-label="`${attendee.email}を削除`" @click="emit('remove-attendee', attendee.email)">
+        <span>{{ attendee.displayName || attendee.email }}</span>
+        <IconXMark />
+      </button>
+    </fieldset>
   </section>
 </template>
 
 <style lang="scss" scoped>
 section {
-  > div {
+  > label {
+    font-size: var(--text-size-xs);
+  }
+
+  :deep(input) {
+    background-color: var(--bg-3);
+  }
+
+  fieldset {
+    padding: 0 var(--space-sm) var(--space-sm) var(--space-sm);
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius);
+    min-width: 0;
     display: flex;
-    flex-wrap: wrap;
     gap: var(--space-xs);
+    flex-direction: column;
 
-    > span {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-xs);
-      max-width: 100%;
-      padding: var(--space-xs) var(--space-sm);
-      border: 1px solid var(--border);
-      border-radius: var(--border-radius);
-      background: var(--bg-2);
-      overflow-wrap: anywhere;
+    legend {
+      font-size: var(--text-size-xs);
+      padding: 0 var(--space-xs);
+    }
 
-      > button {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: var(--space-xxs);
-        border: 0;
-        background: transparent;
+    button {
+      justify-content: space-between;
 
-        &:hover {
-          color: var(--danger);
-        }
-
-        svg {
-          width: 0.8rem;
-          height: 0.8rem;
-        }
+      &:hover {
+        background-color: var(--bg-3);
       }
     }
   }

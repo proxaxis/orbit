@@ -78,10 +78,8 @@ const suppressSwipeOnRelease = ref(false);
 /** @type {{date: Dayjs}|null} マウスダウンしたセル（ドラッグ開始判定用） */
 let mouseDownCell = null;
 
-/** @type {Ref<HTMLElement|null>} ツールバー */
-const rfToolbar = ref(null);
 /** ツールバーのコンパクト表示状態・週/月タイトルは週表示ビューと共有ロジック */
-const { isCompactToolbar, monthTitle } = useCalendarToolbar(rfToolbar);
+const { isCompactToolbar, monthTitle } = useCalendarToolbar();
 
 /** @type {ComputedRef<{date: Dayjs, key: string, isToday: boolean, isOtherMonth: boolean, isSelected: boolean}[]>} @description カレンダーメインの日付配列 */
 const calDaysArray = computed(() => {
@@ -602,7 +600,7 @@ const getDayNumberColor = (day) => {
       <span>{{ pickBannerText }}</span>
       <button type="button" @click="userStore.cancelFormDatePick()">キャンセル</button>
     </div>
-    <header ref="rfToolbar" class="month-toolbar" :class="{ 'is-compact': isCompactToolbar }">
+    <header class="month-toolbar" :class="{ 'is-compact': isCompactToolbar }">
       <div class="toolbar-left">
         <button v-if="userStore.isMobile || userStore.isTablet" type="button" title="カレンダーを開閉" aria-label="カレンダーを開閉" @click="props.selectPane('nav')">
           <IconBars size="1.25rem" />

@@ -30,6 +30,17 @@ import { normalizeTags, appendTagsToDescription, TAGS_SHARED_PROPERTY } from '@/
 import IconFloppyDisk from '@/components/icons/IconFloppyDisk.vue';
 import IconRotateLeft from '@/components/icons/IconRotateLeft.vue';
 import IconFileCirclePlus from '@/components/icons/IconFileCirclePlus.vue';
+import IconArrowsRotate from '@/components/icons/IconArrowsRotate.vue';
+import IconLocationDot from '@/components/icons/IconLocationDot.vue';
+import IconAlignLeft from '@/components/icons/IconAlignLeft.vue';
+import IconTag from '@/components/icons/IconTag.vue';
+import IconFileShield from '@/components/icons/IconFileShield.vue';
+import IconUserPlus from '@/components/icons/IconUserPlus.vue';
+import IconBell from '@/components/icons/IconBell.vue';
+import IconUserLock from '@/components/icons/IconUserLock.vue';
+import IconClock from '@/components/icons/IconClock.vue';
+import IconImage from '@/components/icons/IconImage.vue';
+import IconPalette from '@/components/icons/IconPalette.vue';
 
 const props = defineProps({
   submitLabel: { type: String, default: '保存' },
@@ -100,6 +111,24 @@ const recurrence = reactive({
   exclusions: '',
   holidayAdjustment: '',
 });
+
+/** 詳細入力欄を表示するかどうか */
+const showDetailInputs = reactive({
+  location: false,
+  description: false,
+  tag: false,
+  note: false,
+});
+/** false に空欄に戻す */
+watch(
+  () => showDetailInputs,
+  (to) => {
+    if (!to.location && !formData.location) formData.location = '';
+    if (!to.description && !formData.description) formData.description = '';
+    if (!to.tag && !eventTagsInput.value) eventTagsInput.value = '';
+    if (!to.note && !formData.privacyNote) formData.privacyNote = '';
+  },
+);
 
 const formData = reactive({
   summary: '',
@@ -767,13 +796,12 @@ watch(() => formData.summary, updateTitleSuggestions);
   <form @submit.prevent="submitForm">
     <!-- アイコンとタイトル -->
     <section>
-      <label>
-        <span>アイコン</span>
-        <EmojiSelecter v-model="formData.icon" />
-      </label>
-      <label>
-        <span>タイトル</span>
-        <SuggestPulldown v-model="formData.summary" :suggestions="titleSuggestions" placeholder="このイベントのタイトルを入力" aria-label="タイトル" required autofocus enter-focus @select="selectRecentTitle" @focus="updateTitleSuggestions" @enter="focusNextOnEnter" />
+      <label for="title">
+        <span>アイコンとタイトル</span>
+        <div>
+          <EmojiSelecter v-model="formData.icon" />
+          <SuggestPulldown id="title" v-model="formData.summary" :suggestions="titleSuggestions" placeholder="イベントのタイトル" aria-label="タイトル" required autofocus enter-focus @select="selectRecentTitle" @focus="updateTitleSuggestions" @enter="focusNextOnEnter" />
+        </div>
       </label>
     </section>
     <!-- 保存先カレンダー -->
@@ -782,7 +810,7 @@ watch(() => formData.summary, updateTitleSuggestions);
         <span>現在の保存先</span>
         <div>
           <CalendarRibbon :cid="formData.calendarId" />
-          <button type="button" @click="isOpenCalendarSelecter = !isOpenCalendarSelecter">変更</button>
+          <button type="button" @click="isOpenCalendarSelecter = !isOpenCalendarSelecter"><IconArrowsRotate size="0.7rem" />変更</button>
         </div>
       </label>
       <fieldset v-if="isOpenCalendarSelecter">
@@ -804,6 +832,7 @@ watch(() => formData.summary, updateTitleSuggestions);
         <div>
           <button type="button" aria-label="開始日をカレンダーから選択" @click="openDatePickerFor('startDate')">
             <IconCalendar />
+            <span>日付選択</span>
           </button>
           <input :value="formatDateField(dateFields.startDate)" inputmode="numeric" maxlength="10" placeholder="YYYY MM DD" aria-label="開始年月日" required data-enter-focus @keydown.enter="focusNextOnEnter" @input="updateDateTimeField('startDate', $event)" />
         </div>
@@ -820,6 +849,7 @@ watch(() => formData.summary, updateTitleSuggestions);
         <div>
           <button type="button" aria-label="終了日をカレンダーから選択" @click="openDatePickerFor('endDate')">
             <IconCalendar />
+            <span>日付選択</span>
           </button>
           <input :value="formatDateField(dateFields.endDate)" inputmode="numeric" maxlength="10" placeholder="YYYY MM DD" aria-label="終了年月日" required data-enter-focus @keydown.enter="focusNextOnEnter" @input="updateDateTimeField('endDate', $event)" />
         </div>
@@ -838,58 +868,85 @@ watch(() => formData.summary, updateTitleSuggestions);
     </section>
     <!-- 場所と説明とノート -->
     <section>
-      <label>
-        <span>場所</span>
-        <input v-model="formData.location" placeholder="場所またはオンラインミーティングの URL" data-enter-focus @keydown.enter="focusNextOnEnter" />
+      <button type="button" v-if="!showDetailInputs.location" @click="showDetailInputs.location = !showDetailInputs.location"><IconLocationDot />場所を追加</button>
+      <label v-if="showDetailInputs.location">
+        <span><IconLocationDot />場所</span>
+        <input v-model="formData.location" placeholder="Google Maps の URL または場所の名前" data-enter-focus @keydown.enter="focusNextOnEnter" />
       </label>
-      <label>
-        <span>説明</span>
-        <textarea v-model="formData.description" rows="5" placeholder="イベントの説明" data-enter-focus @keydown.enter="focusNextOnEnter"></textarea>
+      <button v-if="!showDetailInputs.description" type="button" @click="showDetailInputs.description = !showDetailInputs.description"><IconAlignLeft />説明を追加</button>
+      <label v-if="showDetailInputs.description">
+        <span><IconAlignLeft />説明</span>
+        <textarea v-model="formData.description" rows="5" placeholder="イベントの説明" data-enter-focus @keydown.shift.enter="focusNextOnEnter"></textarea>
       </label>
-      <label>
-        <span>タグ</span>
+      <button v-if="!showDetailInputs.tag" type="button" @click="showDetailInputs.tag = !showDetailInputs.tag"><IconTag />タグを追加</button>
+      <label v-if="showDetailInputs.tag">
+        <span><IconTag />タグ</span>
         <SuggestPulldown v-model="eventTagsInput" :suggestions="tagSuggestions" placeholder="空白またはカンマ区切り (例: 仕事, 買い物)" aria-label="タグ" enter-focus @select="selectTagSuggestion" @enter="focusNextOnEnter" />
       </label>
+      <button v-if="!showDetailInputs.note" type="button" @click="showDetailInputs.note = !showDetailInputs.note"><IconFileShield />ノートを追加</button>
+      <label v-if="showDetailInputs.note">
+        <span><IconFileShield />個人用ノート</span>
+        <textarea v-model="formData.privacyNote" rows="3" placeholder="自分だけに表示されます" data-enter-focus @keydown.shift.enter="focusNextOnEnter"></textarea>
+      </label>
+      <!-- イベントの色 -->
+    </section>
+    <!-- 色 -->
+    <section>
       <label>
-        <span>個人用ノート</span>
-        <textarea v-model="formData.privacyNote" rows="3" placeholder="自分だけに表示されます" data-enter-focus @keydown.enter="focusNextOnEnter"></textarea>
+        <span><IconPalette />イベントの色</span>
+        <EventFormColorField v-model="eventColorId" :calendar-color="calendarStore.getCalendarColor(formData.calendarId)?.backgroundColor ?? '#2196f3'" />
       </label>
     </section>
     <!-- 詳細設定 -->
     <AccordionMenu label="詳細設定">
-      <div class="accordion-content">
-        <!-- 招待するユーザー -->
-        <EventFormAttendeeField v-model="attendeeQuery" :attendees="attendees" :suggestions="peopleStore.suggestions" :is-searching="isSearchingPeople" @add-attendee="addAttendee" @add-unknown-email="addUnknownEmail" @remove-attendee="removeAttendee" @query-blur="clearPeopleSuggestionsLater" />
-        <!-- タイムゾーン -->
-        <section>
-          <label v-if="!formData.isAllDay"
-            ><span>タイムゾーン</span>
-            <TimezoneSelecter v-model="formData.timeZone" />
-          </label>
-        </section>
-        <!-- 公開設定 -->
-        <section>
-          <label
-            ><span>公開設定</span>
-            <select v-model="formData.visibility">
-              <option value="default">デフォルトの公開設定</option>
-              <option value="public">公開</option>
-              <option value="private">非公開</option>
-            </select>
-          </label>
-        </section>
-        <!-- 繰り返し設定 -->
-        <EventFormRecurrenceField :recurrence="recurrence" />
+      <!-- 招待するユーザー -->
+      <section class="accordion-content">
+        <label>
+          <span><IconUserPlus />招待するユーザー</span>
+          <EventFormAttendeeField v-model="attendeeQuery" :attendees="attendees" :suggestions="peopleStore.suggestions" :is-searching="isSearchingPeople" @add-attendee="addAttendee" @add-unknown-email="addUnknownEmail" @remove-attendee="removeAttendee" @query-blur="clearPeopleSuggestionsLater" />
+        </label>
+      </section>
+      <!-- タイムゾーン -->
+      <section class="accordion-content">
+        <label
+          ><span><IconClock />タイムゾーン</span>
+          <TimezoneSelecter v-model="formData.timeZone" />
+        </label>
+      </section>
+      <!-- 公開設定 -->
+      <section class="accordion-content">
+        <label
+          ><span><IconUserLock />公開設定</span>
+          <select v-model="formData.visibility">
+            <option value="default">デフォルトの公開設定</option>
+            <option value="public">公開</option>
+            <option value="private">非公開</option>
+          </select>
+        </label>
+      </section>
+      <!-- 繰り返し設定 -->
+      <section class="accordion-content">
+        <label
+          ><span><IconArrowsRotate />繰り返し</span>
+          <EventFormRecurrenceField :recurrence="recurrence" />
+        </label>
+      </section>
 
-        <!-- 通知設定 -->
-        <EventFormReminderField :reminders="reminders" @add-reminder="addReminderRow" @remove-reminder="removeReminderRow" />
+      <!-- 通知設定 -->
+      <section class="accordion-content">
+        <label
+          ><span><IconBell />通知</span>
+          <EventFormReminderField :reminders="reminders" @add-reminder="addReminderRow" @remove-reminder="removeReminderRow" />
+        </label>
+      </section>
 
-        <!-- 写真アルバム -->
-        <EventFormPhotoAlbumField v-if="photoAlbumAvailable" v-model="createPhotoAlbum" :existing-album="existingPhotoAlbum" :attendees-count="attendees.length" />
-
-        <!-- イベントの色 -->
-        <EventFormColorField v-model="eventColorId" :calendar-color="calendarStore.getCalendarColor(formData.calendarId)?.backgroundColor ?? '#2196f3'" />
-      </div>
+      <!-- 写真アルバム -->
+      <section class="accordion-content">
+        <label
+          ><span><IconImage />写真アルバム</span>
+          <EventFormPhotoAlbumField v-if="photoAlbumAvailable" v-model="createPhotoAlbum" :existing-album="existingPhotoAlbum" :attendees-count="attendees.length" />
+        </label>
+      </section>
     </AccordionMenu>
 
     <section class="form-actions">
@@ -915,20 +972,24 @@ form {
 form > section:nth-of-type(1) {
   width: 100%;
   display: flex;
-  gap: var(--space-xs);
-  flex-wrap: wrap;
+  flex-direction: column;
 
   > label {
     display: flex;
     flex-direction: column;
 
-    // イベントタイトルの入力欄
-    &:nth-child(2) {
-      flex-grow: 1;
+    > span {
+      font-size: var(--text-size-xs);
     }
 
-    > span {
-      font-size: var(--text-size-xxs);
+    > div {
+      display: flex;
+      gap: var(--space-xs);
+      flex-wrap: wrap;
+
+      > div:last-child {
+        flex-grow: 1;
+      }
     }
   }
 }
@@ -958,7 +1019,7 @@ form > section:nth-of-type(2) {
     cursor: pointer;
 
     > span {
-      font-size: var(--text-size-xxs);
+      font-size: var(--text-size-xs);
     }
 
     // カレンダーリボンと変更ボタン
@@ -967,6 +1028,19 @@ form > section:nth-of-type(2) {
       flex-grow: 1;
       display: flex;
       gap: var(--space-xs);
+      border: 1px solid var(--border);
+      border-radius: var(--border-radius);
+      padding-left: var(--space-sm);
+      background-color: var(--bg-2);
+      transition: background-color 0.2s ease-in-out;
+
+      &:hover {
+        background-color: var(--bg-3);
+
+        > button {
+          background-color: var(--bg-3);
+        }
+      }
 
       .calendar-ribbon {
         background-color: var(--bg-2);
@@ -976,11 +1050,6 @@ form > section:nth-of-type(2) {
 
       > button {
         background-color: var(--bg-2);
-        border: 1px solid var(--border);
-
-        &:hover {
-          background-color: var(--bg-3);
-        }
       }
     }
   }
@@ -990,11 +1059,18 @@ form > section:nth-of-type(2) {
 form > section:nth-of-type(3) {
   display: flex;
   align-items: center;
+  padding-top: var(--space-xs);
 
   > label {
     display: flex;
     align-items: center;
     gap: var(--space-md);
+    cursor: pointer;
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius);
+    width: 100%;
+    padding: var(--space-xs) var(--space-sm);
+    background-color: var(--bg-2);
   }
 }
 
@@ -1004,45 +1080,48 @@ form > section:nth-of-type(5) {
   width: 100%;
   display: flex;
   gap: var(--space-xs);
+  flex-wrap: wrap;
 
   > label {
     display: flex;
     flex-direction: column;
 
     > span {
-      font-size: var(--text-size-xxs);
+      font-size: var(--text-size-xs);
     }
 
     > div {
       display: flex;
       gap: var(--space-xs);
       align-items: center;
+      flex-wrap: wrap;
 
       > button {
         background-color: var(--bg-2);
         border: 1px solid var(--border);
+        font-size: var(--text-size-xs);
 
         &:hover {
           background-color: var(--bg-3);
         }
       }
 
+      // 日付
       > input {
-        width: calc(100% - var(--space-md) * 2);
+        // width: calc(100% - var(--space-md) * 2);
+        width: 8rem;
       }
     }
 
-    > input:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-  }
-}
+    // 時間
+    > input {
+      width: 6rem;
 
-form > section:nth-of-type(4) > label:nth-child(2),
-form > section:nth-of-type(5) > label:nth-child(2) {
-  > input {
-    width: 4rem; // 時間入力欄の幅は小さく
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+    }
   }
 }
 
@@ -1071,12 +1150,47 @@ form > section:nth-of-type(7) {
   flex-direction: column;
   gap: var(--space-sm);
 
+  > button {
+    background-color: var(--bg-2);
+    border: 1px solid var(--border);
+    font-size: var(--text-size-xs);
+    justify-content: flex-start;
+
+    &:hover {
+      background-color: var(--bg-3);
+    }
+  }
+
   > label {
     display: flex;
     flex-direction: column;
 
     > span {
-      font-size: var(--text-size-xxs);
+      font-size: var(--text-size-xs);
+            display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    }
+
+    > textarea {
+      resize: vertical;
+      min-height: 3rem;
+    }
+  }
+}
+
+
+// 色
+form > section:nth-of-type(8) {
+  > label {
+    display: flex;
+    flex-direction: column;
+
+    > span {
+      font-size: var(--text-size-xs);
+                  display: flex;
+    align-items: center;
+    gap: var(--space-sm);
     }
 
     > textarea {
@@ -1087,39 +1201,49 @@ form > section:nth-of-type(7) {
 }
 
 // 詳細設定
-form .accordion-content {
+section.accordion-content {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
 
-  > section {
+  > label {
     display: flex;
     flex-direction: column;
 
-    > label > span,
-    > span {
-      font-size: var(--text-size-xxs);
+    span {
+      font-size: var(--text-size-xs);
+                  display: flex;
+    align-items: center;
+    gap: var(--space-sm);
     }
   }
+
+  input, select, button {
+    background-color: var(--bg-3);
+  }
+
+  // 招待するユーザー
+  // &:nth-child(1) {}
 
   // タイムゾーン
-  > section:nth-child(2) {
-    > label {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-xs);
+  &:nth-child(2) {
+    :deep(select), :deep(button) {
+        background-color: var(--bg-3);
     }
   }
 
-  // 繰り返し設定
-  > section:nth-child(3) {
-    gap: var(--space-xs);
-  }
+  // 公開設定
+  // &:nth-child(3) {}
+
+  // 繰り返し
+  // &:nth-child(4) {}
+
+  // 通知
+  // &:nth-child(5) {}
 
   // 写真共有アルバム
-  > section:nth-child(5) {
-    gap: var(--space-xs);
-  }
+  // &:nth-child(6) {}
 }
 
 // アクションボタン

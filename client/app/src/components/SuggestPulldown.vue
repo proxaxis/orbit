@@ -180,14 +180,12 @@ function onKeydown(evt) {
       font-size: var(--text-size-sm);
     }
 
-    button {
-      display: flex;
-      flex-direction: column;
-      width: 100%;
-      align-items: flex-start;
+    li button, :deep(li button) {
+      font-size: var(--text-size-sm);
       padding: var(--space-xs) var(--space-sm);
-      border: 0;
       background: transparent;
+      width: 100%;
+      justify-content: flex-start;
       text-align: left;
 
       &:hover {
@@ -198,10 +196,6 @@ function onKeydown(evt) {
         color: var(--text-light);
         overflow-wrap: anywhere;
       }
-    }
-
-    li.is-active button {
-      background: var(--bg-3);
     }
   }
 }

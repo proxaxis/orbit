@@ -2,19 +2,16 @@ FROM node:24.12.0
 
 WORKDIR /app
 
-COPY ./app/package*.json ./
-
-RUN npm install
-
-COPY ./app .
-
-RUN chown -R node:node /app
-
-EXPOSE 5173
-EXPOSE 15173
+RUN mkdir -p /app/node_modules && chown -R node:node /app
 
 USER node
 
-RUN npm run build
+COPY --chown=node:node ./app/* ./
 
-CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "15173"]
+RUN npm install
+
+EXPOSE 5173
+
+EXPOSE 15173
+
+CMD ["npm", "run", "dev", "--host", "0.0.0.0", "--port", "15173"]

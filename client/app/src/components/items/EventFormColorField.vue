@@ -20,41 +20,29 @@ const presetColors = Object.entries(GOOGLE_CALENDAR_EVENT_COLORS).map(([colorId,
 </script>
 
 <template>
-  <section>
-    <span>色</span>
-    <div class="color-preset-grid" role="listbox" aria-label="イベントの色">
-      <button type="button" class="color-swatch" :class="{ active: !props.modelValue }" :style="{ backgroundColor: props.calendarColor }" title="カレンダーの色" aria-label="カレンダーの色" :aria-selected="!props.modelValue" role="option" @click="emit('update:modelValue', '')"></button>
-      <button
-        v-for="color in presetColors"
-        :key="color.colorId"
-        type="button"
-        class="color-swatch"
-        :class="{ active: color.colorId === props.modelValue }"
-        :style="{ backgroundColor: color.background }"
-        :title="color.name"
-        :aria-label="`${color.name} (${color.colorId})`"
-        :aria-selected="color.colorId === props.modelValue"
-        role="option"
-        @click="emit('update:modelValue', color.colorId)"></button>
-    </div>
-  </section>
+  <div class="color-preset-grid" role="listbox" aria-label="イベントの色">
+    <button type="button" class="color-swatch" :class="{ active: !props.modelValue }" :style="{ backgroundColor: props.calendarColor }" title="カレンダーの色" aria-label="カレンダーの色" :aria-selected="!props.modelValue" role="option" @click="emit('update:modelValue', '')"></button>
+    <button
+      v-for="color in presetColors"
+      :key="color.colorId"
+      type="button"
+      class="color-swatch"
+      :class="{ active: color.colorId === props.modelValue }"
+      :style="{ backgroundColor: color.background }"
+      :title="color.name"
+      :aria-label="`${color.name} (${color.colorId})`"
+      :aria-selected="color.colorId === props.modelValue"
+      role="option"
+      @click="emit('update:modelValue', color.colorId)"></button>
+  </div>
 </template>
 
 <style lang="scss" scoped>
-section {
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-sm);
-
-  > span {
-    font-size: var(--text-size-xxs);
-  }
-}
-
 .color-preset-grid {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-xs);
 
   .color-swatch {
     width: 24px;
