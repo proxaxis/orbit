@@ -4,10 +4,11 @@ import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import vueDevTools from 'vite-plugin-vue-devtools';
+const isProduction = process.env.NODE_ENV === 'production';
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
-  plugins: [...(mode === 'development' ? [vueDevTools()] : []), vue()],
+  plugins: [...(isProduction ? [] : [vueDevTools()]), vue()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -19,8 +20,8 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     allowedHosts: ['orbit.proxaxis.me'],
-    ...(mode === 'development' ? { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } } : {}),
+    ...(isProduction ? {} : { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }),
     host: true,
-    port: (mode === 'production') ? 15173 : 15173,
+    port: isProduction ? 15173 : 5173,
   },
 }));

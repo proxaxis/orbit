@@ -250,7 +250,7 @@ function save() {
         <UserConfigViewDriveSyncSection />
       </AccordionMenu>
 
-      <AccordionMenu label="AI 解析モデル">
+      <AccordionMenu label="解析モデル">
         <UserConfigViewLlmSection />
       </AccordionMenu>
 

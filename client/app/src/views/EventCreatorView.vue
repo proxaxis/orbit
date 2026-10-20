@@ -57,7 +57,7 @@ onMounted(async () => {
           </button>
         </div>
       </template>
-      {{ template ? `${template.name} テンプレートから作成します` : '新しいイベントを作成します' }}
+      {{ template ? `${template.name}テンプレートから作成します` : '新しいイベントを作成します' }}
     </MenuBar>
     <EventForm v-if="isTemplateResolved" :template="template" :initial-range="initialRange" @submit="submitCreate" @cancel="router.back()" />
   </section>

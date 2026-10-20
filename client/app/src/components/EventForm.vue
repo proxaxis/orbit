@@ -51,6 +51,8 @@ const props = defineProps({
   template: { type: Object, default: null },
   /** @type {{start: string, end: string, isAllDay: boolean}|null} カレンダーのドラッグ選択などから引き継ぐ初期日時（終日の end は含む側の日付） */
   initialRange: { type: Object, default: null },
+  /** @type {boolean} タスク登録専用フォームとして使う（TaskCreatorView から指定。isTask を強制し公開設定を非公開に固定する） */
+  task: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['submit', 'cancel']);
@@ -748,7 +750,7 @@ onMounted(async () => {
         endDateTime: draftEnd ?? (rangeEnd?.isValid?.() ? rangeEnd : userStore.nowSelectedDate ? toDayjs(userStore.nowSelectedDate).add(1, 'hour') : toDayjs().add(1, 'hour')),
         timeZone: userStore.timeZone,
         visibility: 'default',
-        isTask: false,
+        isTask: Boolean(props.task),
         taskStatus: TASK_STATUS_NOT_STARTED,
         taskDeferred: true,
       });
@@ -790,7 +792,7 @@ onMounted(async () => {
         timeZone: originalEvent.value?.timeZone ?? userStore.timeZone,
         // 'confidential' 等の UI 未対応の値もそのまま保持し、保存時に再送信する
         visibility: originalEvent.value?.raw?.visibility ?? 'default',
-        isTask: isTaskEvent(originalEvent.value),
+        isTask: props.task || isTaskEvent(originalEvent.value),
         taskStatus: taskStatusOf(originalEvent.value),
         taskDeferred: isTaskDeferred(originalEvent.value),
       });
@@ -854,18 +856,6 @@ watch(() => formData.summary, updateTitleSuggestions);
     <!-- 終日 -->
     <section>
       <label> <input v-model="formData.isAllDay" type="checkbox" /> 終日 </label>
-      <label> <input v-model="formData.isTask" type="checkbox" :disabled="!isOrganizerEvent" /> タスクとして管理 </label>
-      <template v-if="formData.isTask">
-        <label class="task-sub-option"> <input v-model="formData.taskDeferred" type="checkbox" :disabled="!isOrganizerEvent" /> 未完了のとき翌日へ持ち越す </label>
-        <label class="task-sub-option">
-          <span>タスクのステータス</span>
-          <select v-model="formData.taskStatus" :disabled="!isOrganizerEvent">
-            <option v-for="status in TASK_STATUSES" :key="status" :value="status">{{ taskStatusLabel(status) }}</option>
-            <option v-if="!TASK_STATUSES.includes(formData.taskStatus)" :value="formData.taskStatus">{{ formData.taskStatus }}</option>
-          </select>
-        </label>
-        <p class="task-hint">タスクは非公開の予定として保存され、共有カレンダーには表示されません.</p>
-      </template>
     </section>
     <!-- 開始日時 -->
     <section>
@@ -908,6 +898,31 @@ watch(() => formData.summary, updateTitleSuggestions);
         <IconAnglesDown /><span>{{ dateTimeCalculator.end }}</span>
       </p>
     </section>
+    <!-- タスクの繰越 -->
+    <section>
+      <template v-if="formData.isTask">
+        <label> <input v-model="formData.taskDeferred" type="checkbox" :disabled="!isOrganizerEvent" /> 未完了のとき翌日へ持ち越す </label>
+      </template>
+    </section>
+    <!-- タスクのステータス -->
+    <section>
+      <template v-if="formData.isTask">
+        <label>
+          <span>タスクのステータス</span>
+          <select v-model="formData.taskStatus" :disabled="!isOrganizerEvent">
+            <option v-for="status in TASK_STATUSES" :key="status" :value="status">{{ taskStatusLabel(status) }}</option>
+            <option v-if="!TASK_STATUSES.includes(formData.taskStatus)" :value="formData.taskStatus">{{ formData.taskStatus }}</option>
+          </select>
+        </label>
+      </template>
+    </section>
+    <!-- イベントの色 -->
+    <section>
+      <label>
+        <span><IconPalette />イベントの色</span>
+        <EventFormColorField v-model="eventColorId" :calendar-color="calendarStore.getCalendarColor(formData.calendarId)?.backgroundColor ?? '#2196f3'" />
+      </label>
+    </section>
     <!-- 場所と説明とノート -->
     <section>
       <button type="button" v-if="!showDetailInputs.location" @click="showDetailInputs.location = !showDetailInputs.location"><IconLocationDot />場所を追加</button>
@@ -929,14 +944,6 @@ watch(() => formData.summary, updateTitleSuggestions);
       <label v-if="showDetailInputs.note">
         <span><IconFileShield />個人用ノート</span>
         <textarea v-model="formData.privacyNote" rows="3" placeholder="自分だけに表示されます" data-enter-focus @keydown.shift.enter="focusNextOnEnter"></textarea>
-      </label>
-      <!-- イベントの色 -->
-    </section>
-    <!-- 色 -->
-    <section>
-      <label>
-        <span><IconPalette />イベントの色</span>
-        <EventFormColorField v-model="eventColorId" :calendar-color="calendarStore.getCalendarColor(formData.calendarId)?.backgroundColor ?? '#2196f3'" />
       </label>
     </section>
     <!-- 詳細設定 -->
@@ -964,6 +971,7 @@ watch(() => formData.summary, updateTitleSuggestions);
             <option value="public">公開</option>
             <option value="private">非公開</option>
           </select>
+          <p v-if="formData.isTask" class="hint">タスクの公開設定は変更できません</p>
         </label>
       </section>
       <!-- 繰り返し設定 -->
@@ -974,8 +982,8 @@ watch(() => formData.summary, updateTitleSuggestions);
         </label>
       </section>
 
-      <!-- 通知設定 -->
-      <section class="accordion-content">
+      <!-- 通知設定（タスクは開始時刻・ユーザー設定時刻で通知するためリマインダーは使わない） -->
+      <section v-if="!formData.isTask" class="accordion-content">
         <label
           ><span><IconBell />通知</span>
           <EventFormReminderField :reminders="reminders" @add-reminder="addReminderRow" @remove-reminder="removeReminderRow" />
@@ -987,6 +995,7 @@ watch(() => formData.summary, updateTitleSuggestions);
         <label
           ><span><IconImage />写真アルバム</span>
           <EventFormPhotoAlbumField v-if="photoAlbumAvailable" v-model="createPhotoAlbum" :existing-album="existingPhotoAlbum" :attendees-count="attendees.length" />
+          <p v-else class="hint">写真共有は無効に設定されています</p>
         </label>
       </section>
     </AccordionMenu>
@@ -1008,6 +1017,11 @@ form {
   flex-direction: column;
   gap: var(--space-sm);
   width: 100%;
+
+  .hint {
+    font-size: var(--text-size-xs);
+    color: var(--text-light);
+  }
 }
 
 // アイコンとタイトルの入力欄
@@ -1115,26 +1129,6 @@ form > section:nth-of-type(3) {
     padding: var(--space-xs) var(--space-sm);
     background-color: var(--bg-2);
   }
-
-  .task-sub-option {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    font-size: var(--text-size-sm);
-    padding: 0 var(--space-sm);
-    cursor: pointer;
-
-    select {
-      flex: 1;
-      min-width: 0;
-    }
-  }
-
-  .task-hint {
-    font-size: var(--text-size-xs);
-    color: var(--text-light);
-    padding: 0 var(--space-sm);
-  }
 }
 
 // 日付と時間の入力欄
@@ -1207,23 +1201,44 @@ form > section:nth-of-type(6) > p {
   }
 }
 
-// 場所と説明とノートの入力欄
+// タスクの繰越
 form > section:nth-of-type(7) {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: var(--space-xs);
+  padding-top: var(--space-xs);
 
-  > button {
-    background-color: var(--bg-2);
+  > label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    cursor: pointer;
     border: 1px solid var(--border);
-    font-size: var(--text-size-xs);
-    justify-content: flex-start;
+    border-radius: var(--border-radius);
+    width: 100%;
+    padding: var(--space-xs) var(--space-sm);
+    background-color: var(--bg-2);
+  }
+}
 
-    &:hover {
-      background-color: var(--bg-3);
+// タスクのステータス
+form > section:nth-of-type(8) {
+  > label {
+    display: flex;
+    flex-direction: column;
+
+    > span {
+      font-size: var(--text-size-xs);
+    }
+
+    > select {
+      background-color: var(--bg-2);
     }
   }
+}
 
+// 色
+form > section:nth-of-type(9) {
   > label {
     display: flex;
     flex-direction: column;
@@ -1242,8 +1257,23 @@ form > section:nth-of-type(7) {
   }
 }
 
-// 色
-form > section:nth-of-type(8) {
+// 場所と説明とノートの入力欄
+form > section:nth-of-type(10) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+
+  > button {
+    background-color: var(--bg-2);
+    border: 1px solid var(--border);
+    font-size: var(--text-size-xs);
+    justify-content: flex-start;
+
+    &:hover {
+      background-color: var(--bg-3);
+    }
+  }
+
   > label {
     display: flex;
     flex-direction: column;

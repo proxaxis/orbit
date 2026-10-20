@@ -75,5 +75,7 @@ function handleResizeSub(evt) {
   padding: var(--space-xxs) 0;
   margin: var(--space-xs);
   overflow: hidden;
+  border: 0;
+  border-radius: var(--border-radius);
 }
 </style>

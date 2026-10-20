@@ -706,11 +706,12 @@ const getDayNumberColor = (day) => {
             @touchmove="handleCellTouchMove"
             @touchend="finishCellTouch"
             @touchcancel="finishCellTouch">
-            <div class="day-num" :style="{ color: getDayNumberColor(day) }">
-              {{ day.date.date() }}
+            <div class="day-heading">
+              <div class="day-num" :style="{ color: getDayNumberColor(day) }">
+                {{ day.date.date() }}
+              </div>
+              <span v-if="getDayTaskCount(day.date) > 0" class="task-count-chip" :aria-label="`タスク ${getDayTaskCount(day.date)}件`">+{{ getDayTaskCount(day.date) }}</span>
             </div>
-            <span v-if="getDayTaskCount(day.date) > 0" class="task-count-chip" :aria-label="`タスク ${getDayTaskCount(day.date)}件`">タスク +{{ getDayTaskCount(day.date) }}</span>
-
             <div class="events-stack">
               <div v-for="(slot, i) in getMonthDayEvents(day.date)" :key="i" class="event-slot">
                 <div
@@ -960,34 +961,64 @@ $event-bar-radius: 4px;
       }
     }
 
-    &.is-today .day-num {
-      background: #2b941180;
-      color: white;
-      border-radius: 50%;
-      width: var(--space-lg);
-      height: var(--space-lg);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    &.is-selected {
-      background-color: var(--selected);
-    }
-
     &.is-in-drag-range {
       background-color: var(--selected);
       outline: 1px dashed var(--primary);
       outline-offset: -1px;
     }
 
-    .day-num {
+    .day-heading {
       position: absolute;
       top: 0;
-      left: 2px;
-      font-size: var(--text-size-sm);
-      font-weight: bold;
-      z-index: 1;
+      left: 0;
+      right: 0;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+
+      .day-num {
+        font-size: var(--text-size-sm);
+        border-radius: 50%;
+        font-weight: bold;
+        z-index: 1;
+        line-height: 1.5;
+        padding: 0 var(--space-xxs);
+      }
+
+      .task-count-chip {
+        padding: 0 var(--space-xs);
+        border-radius: var(--border-radius);
+        background: var(--bg-2);
+        color: var(--success);
+        font-size: var(--text-size-xs);
+        font-weight: bold;
+        line-height: 1.5;
+        z-index: 1;
+        pointer-events: none;
+        white-space: nowrap;
+        opacity: 0.62;
+        margin-right: 2px;
+      }
+    }
+
+    &.is-selected {
+      background-color: var(--selected);
+    }
+
+    &.is-selected .day-heading * {
+      opacity: 1;
+    }
+
+    &.is-today.is-selected .day-num {
+      background-color: var(--success);
+    }
+
+    &.is-today {
+      background-color: color-mix(in srgb, var(--success) 50%, transparent);
+    }
+    &.is-today.is-selected {
+      background-color: var(--selected);
     }
 
     .events-stack {
@@ -1078,22 +1109,6 @@ $event-bar-radius: 4px;
           z-index: 5;
         }
       }
-    }
-
-    .task-count-chip {
-      position: absolute;
-      top: 2px;
-      right: 4px;
-      padding: 0 var(--space-xs);
-      border-radius: var(--border-radius);
-      background: color-mix(in srgb, var(--primary) 15%, var(--bg-2));
-      color: var(--text);
-      font-size: var(--text-size-xs);
-      font-weight: bold;
-      line-height: 1.4;
-      z-index: 1;
-      pointer-events: none;
-      white-space: nowrap;
     }
 
     .hidden-event-count {

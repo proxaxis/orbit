@@ -21,31 +21,27 @@ const isNavCollapsed = computed(() => userStore.isDesktop && userStore.navPaneCo
 
 <template>
   <div class="user-calendars-view" :class="{ 'is-collapsed': isNavCollapsed }">
-    <div class="heading">
-      <template v-if="!isNavCollapsed">
-        <p>Orbit カレンダー</p>
-        <button v-if="userStore.isDesktop" type="button" class="nav-collapse-button" title="ナビゲーションペインを畳む" aria-label="ナビゲーションペインを畳む" @click="userStore.setNavPaneCollapsed(true)">
+    <section>
+      <div class="heading">
+        <h1 v-if="!isNavCollapsed">Orbit カレンダー</h1>
+        <button v-if="!isNavCollapsed && userStore.isDesktop" type="button" class="nav-collapse-button" title="ナビゲーションペインを畳む" aria-label="ナビゲーションペインを畳む"
+          @click="userStore.setNavPaneCollapsed(true)">
           <IconLeftToBracket size="1rem" />
         </button>
-      </template>
-      <button v-else type="button" class="nav-collapse-button" title="ナビゲーションペインを展開する" aria-label="ナビゲーションペインを展開する" @click="userStore.setNavPaneCollapsed(false)">
-        <IconRightFromBracket size="1rem" />
-      </button>
-    </div>
+        <button v-if="isNavCollapsed" type="button" class="nav-collapse-button" title="ナビゲーションペインを展開する" aria-label="ナビゲーションペインを展開する"
+          @click="userStore.setNavPaneCollapsed(false)">
+          <IconRightFromBracket size="1rem" />
+        </button>
+      </div>
 
-    <template v-if="!isNavCollapsed">
-      <MiniCalendar v-if="userStore.useMiniCalendar" />
-
-      <AskLoginMessage v-if="!authStore.isAuthenticated">
-        カレンダーを表示するには Google アカウントでログインする必要があります
-        <div class="google-login-wrapper">
-          <GoogleLogin />
-        </div>
-      </AskLoginMessage>
-
-      <UserCalendarsViewCalendarList />
-      <UserCalendarsViewSessionList />
-    </template>
+      <MiniCalendar v-if="!isNavCollapsed && userStore.useMiniCalendar" />
+      <UserCalendarsViewCalendarList v-if="!isNavCollapsed" />
+      <UserCalendarsViewSessionList v-if="!isNavCollapsed" />
+    </section>
+    <section class="login-message" v-if="!isNavCollapsed && !authStore.isAuthenticated">
+      <p>カレンダーを表示するにはGoogleアカウントでログインする必要があります</p>
+      <GoogleLogin />
+    </section>
   </div>
 </template>
 
@@ -53,27 +49,30 @@ const isNavCollapsed = computed(() => userStore.isDesktop && userStore.navPaneCo
 .user-calendars-view {
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  gap: var(--space-sm);
+}
+
+section {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-sm);
 
-  > div:nth-child(1) {
+  &:first-child {
     flex-grow: 1;
     min-height: 0;
     overflow-y: auto;
   }
-
-  > div:nth-child(2) {
-    border-top: 1px solid var(--border);
-    padding-top: var(--space-sm);
-  }
 }
+
 .heading {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: var(--space-sm) 0;
 
-  p {
-    padding-left: var(--space-xs);
+  h1 {
     margin: 0;
     font-size: 1.4rem;
     font-weight: bold;
@@ -90,5 +89,14 @@ const isNavCollapsed = computed(() => userStore.isDesktop && userStore.navPaneCo
 
 .user-calendars-view.is-collapsed .heading {
   justify-content: center;
+}
+
+.login-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-sm);
 }
 </style>
