@@ -6,7 +6,7 @@ RUN mkdir -p /app/node_modules && chown -R node:node /app
 
 USER node
 
-COPY --chown=node:node ./app/* ./
+COPY --chown=node:node ./app/ ./
 
 RUN npm install
 
@@ -14,4 +14,4 @@ EXPOSE 5173
 
 EXPOSE 15173
 
-CMD ["npm", "run", "dev", "--host", "0.0.0.0", "--port", "15173"]
+CMD ["npm", "run", "dev"]

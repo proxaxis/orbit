@@ -21,6 +21,6 @@ export default defineConfig(({ mode }) => ({
     allowedHosts: ['orbit.proxaxis.me'],
     ...(mode === 'development' ? { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } } : {}),
     host: true,
-    port: (mode === 'production') ? 15173 : 5173,
+    port: (mode === 'production') ? 15173 : 15173,
   },
 }));

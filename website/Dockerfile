@@ -2,19 +2,15 @@ FROM node:24.12.0
 
 WORKDIR /app
 
-COPY app/package*.json ./
+RUN mkdir -p /app/node_mudules && mkdir -p /app/dist/server && chown -R node:node /app
 
-RUN npm install
+USER node
 
-COPY ./app/ .
+COPY --chown=node:node ./app/ ./
 
-RUN chown -R node:node /app
-
-RUN npm run build
+RUN npm install && npm run build
 
 EXPOSE 4321
 EXPOSE 14321
-
-USER node
 
 CMD ["npm", "start"]
