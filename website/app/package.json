@@ -10,7 +10,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "start": "node ./dist/server/entry.mjs",
+    "start": "PORT=14321 HOST=0.0.0.0 node ./dist/server/entry.mjs",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check"
   },
