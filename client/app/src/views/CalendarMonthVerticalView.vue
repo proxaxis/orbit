@@ -379,8 +379,7 @@ function handleEventClick(clickEvent, evt, date) {
     selectDateCell(date);
     return;
   }
-  userStore.setNowSelectedEvent({ eid: evt.id, cid: evt.calendarId });
-  router.push({ name: 'EventDetail' });
+  router.push({ name: 'EventDetail', query: { eid: evt.id, cid: evt.calendarId } });
 }
 
 /** @param {Dayjs} date 日付セルをクリック/タップした日付 */
@@ -625,7 +624,6 @@ function onSelectContextMenu(action) {
   switch (action) {
     // 選択中の日付範囲で新しい予定を作成（終日、終了日は含む側で渡す）
     case 'CreateEvent': {
-      userStore.setNowSelectedEvent(null);
       const start = contextMenuRange.value?.start ?? toDayjs(userStore.nowSelectedDate ?? undefined);
       const end = contextMenuRange.value?.end ?? start;
       router.push({
@@ -640,7 +638,6 @@ function onSelectContextMenu(action) {
     }
     // 選択中の日付範囲で新しいタスクを作成（終日、終了日は含む側で渡す）
     case 'CreateTask': {
-      userStore.setNowSelectedEvent(null);
       const start = contextMenuRange.value?.start ?? toDayjs(userStore.nowSelectedDate ?? undefined);
       const end = contextMenuRange.value?.end ?? start;
       router.push({
@@ -655,7 +652,6 @@ function onSelectContextMenu(action) {
     }
     // テンプレート一覧を開き、選択したテンプレートで予定を作成
     case 'CreateFromTemplate':
-      userStore.setNowSelectedEvent(null);
       router.push({ name: 'EventTemplatePicker' });
       break;
     // 選択中の日付をカスタム休日に設定
@@ -831,11 +827,11 @@ onUnmounted(() => {
           @touchcancel="finishCellTouch">
           <template v-if="!day.isPadding">
             <div class="day-heading">
-            <div class="day-num" :style="{ color: getDayNumberColor(day) }">
-              {{ day.date.date() }}
+              <div class="day-num" :style="{ color: getDayNumberColor(day) }">
+                {{ day.date.date() }}
+              </div>
+              <span v-if="getDayTaskCount(day.date) > 0" class="task-count-chip" :aria-label="`タスク ${getDayTaskCount(day.date)}件`">+{{ getDayTaskCount(day.date) }}</span>
             </div>
-            <span v-if="getDayTaskCount(day.date) > 0" class="task-count-chip" :aria-label="`タスク ${getDayTaskCount(day.date)}件`">+{{ getDayTaskCount(day.date) }}</span>
-</div>
             <div class="events-stack">
               <div v-for="(slot, i) in getDayEvents(day.date)" :key="i" class="event-slot">
                 <div
@@ -1016,7 +1012,7 @@ $event-bar-radius: 4px;
       outline-offset: -1px;
     }
 
-   .day-heading {
+    .day-heading {
       position: absolute;
       top: 0;
       left: 0;

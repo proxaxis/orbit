@@ -211,8 +211,7 @@ const handleEventClick = (clickEvent, evt, date) => {
     selectDateCell(date);
     return;
   }
-  userStore.setNowSelectedEvent({ eid: evt.id, cid: evt.calendarId });
-  router.push({ name: 'EventDetail' });
+  router.push({ name: 'EventDetail', query: { eid: evt.id, cid: evt.calendarId } });
 };
 
 /** @param {Dayjs} date 日付セルをクリックした日付 */
@@ -524,7 +523,6 @@ const onSelectContextMenu = (action) => {
   switch (action) {
     // 選択中の日付範囲で新しい予定を作成（終日、終了日は含む側で渡す）
     case 'CreateEvent': {
-      userStore.setNowSelectedEvent(null);
       const start = contextMenuRange.value?.start ?? toDayjs(userStore.nowSelectedDate ?? undefined);
       const end = contextMenuRange.value?.end ?? start;
       router.push({
@@ -539,7 +537,6 @@ const onSelectContextMenu = (action) => {
     }
     // 選択中の日付範囲で新しいタスクを作成（終日、終了日は含む側で渡す）
     case 'CreateTask': {
-      userStore.setNowSelectedEvent(null);
       const start = contextMenuRange.value?.start ?? toDayjs(userStore.nowSelectedDate ?? undefined);
       const end = contextMenuRange.value?.end ?? start;
       router.push({
@@ -554,7 +551,6 @@ const onSelectContextMenu = (action) => {
     }
     // テンプレート一覧を開き、選択したテンプレートで予定を作成
     case 'CreateFromTemplate':
-      userStore.setNowSelectedEvent(null);
       router.push({ name: 'EventTemplatePicker' });
       break;
     // 選択中の日付をカスタム休日に設定

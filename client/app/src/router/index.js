@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { takePendingShareAccept } from '@/services/share-accept.js';
+import { trackPageView } from '@/services/analytics.js';
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -182,6 +183,11 @@ router.beforeEach((to) => {
   const pending = takePendingShareAccept();
   if (!pending) return true;
   return { name: 'ShareAccept', query: { cid: pending.cid, ...(pending.mode === 'list' ? { mode: 'list' } : {}) }, replace: true };
+});
+
+// SPA のページビュー計測（GA4 未設定時は no-op）
+router.afterEach((to) => {
+  trackPageView(to.path, String(to.name ?? document.title));
 });
 
 export default router;

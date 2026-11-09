@@ -34,6 +34,8 @@ npm run format     # oxfmt によるフォーマット(src/ が対象)
 | `VITE_BFF_APP_BASE_URL` | BFF サーバのベース URL(未設定なら同一オリジン) |
 | `VITE_CLIENT_APP_BASE_URL` | クライアントアプリのベース URL |
 | `VITE_VAPID_PUBLIC_KEY` | Web Push の VAPID 公開鍵 |
+| `VITE_GTM_ID` | Google タグマネージャーのコンテナ ID（`GTM-XXXXXXX`）。設定時は GTM 経由で計測（GA4 ID より優先） |
+| `VITE_GA_MEASUREMENT_ID` | Google Analytics 4 の測定 ID（`G-XXXXXXX`）。`VITE_GTM_ID` 未設定時に直接 gtag.js を読み込む。両方未設定なら計測自体が無効 |
 
 `.env` は gitignore 済み。`.env.example` は存在しない。
 

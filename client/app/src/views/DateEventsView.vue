@@ -63,8 +63,7 @@ function finishDaySwipe(evt) {
  * @returns {void}
  */
 function openEventDetail(evt) {
-  userStore.setNowSelectedEvent({ eid: evt.id, cid: evt.calendarId });
-  router.push({ name: 'EventDetail' });
+  router.push({ name: 'EventDetail', query: { eid: evt.id, cid: evt.calendarId } });
 }
 
 /**
@@ -76,19 +75,16 @@ function openEventDetail(evt) {
 async function onSelectContextMenu(action, evt) {
   switch (action) {
     case 'ShowDetail':
-      userStore.setNowSelectedEvent({ eid: evt.id, cid: evt.calendarId });
-      router.push({ name: 'EventDetail' });
+      router.push({ name: 'EventDetail', query: { eid: evt.id, cid: evt.calendarId } });
       break;
     case 'EditEvent':
-      userStore.setNowSelectedEvent({ eid: evt.id, cid: evt.calendarId });
-      router.push({ name: 'EventEditor' });
+      router.push({ name: 'EventEditor', query: { eid: evt.id, cid: evt.calendarId } });
       break;
     case 'DeleteEvent':
       await eventActions.confirmAndRemoveEvent(evt.id, evt.calendarId);
       break;
     case 'CloneEvent':
-      userStore.setNowSelectedEvent({ eid: evt.id, cid: evt.calendarId });
-      router.push({ name: 'EventCloner' });
+      router.push({ name: 'EventCloner', query: { eid: evt.id, cid: evt.calendarId } });
       break;
     default:
       break;

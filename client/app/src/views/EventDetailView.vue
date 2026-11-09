@@ -27,6 +27,7 @@ import InlineEmoji from '@/components/InlineEmoji.vue';
 import AccordionMenu from '@/components/AccordionMenu.vue';
 import IconUserLock from '@/components/icons/IconUserLock.vue';
 import IconClipboard from '@/components/icons/IconClipboard.vue';
+import IconCrown from '@/components/icons/IconCrown.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -96,6 +97,16 @@ async function onToggleTaskDeferred() {
 
 const myAttendee = computed(() => event.value?.raw?.attendees?.find((attendee) => attendee.self) ?? null);
 
+/** @type {ComputedRef<Array<GoogleCalendarAttendee & {isOrganizer?: boolean}>>} 参加者一覧。主催者を先頭に含め、attendees に同名がいる場合は重複させない */
+const attendeeList = computed(() => {
+  const raw = event.value?.raw;
+  const attendees = (raw?.attendees ?? []).map((attendee) => ({ ...attendee, isOrganizer: Boolean(attendee.organizer || attendee.email === raw?.organizer?.email) }));
+  const organizer = raw?.organizer;
+  if (!organizer?.email && !organizer?.displayName) return attendees;
+  if (attendees.some((attendee) => attendee.isOrganizer)) return attendees;
+  return [{ ...organizer, isOrganizer: true, responseStatus: 'accepted' }, ...attendees];
+});
+
 /** 場所に保存された Google Maps URL から取り出せるリンクカード情報（なければ null） */
 const mapsPlaceBase = computed(() => parseGoogleMapsLink(event.value?.location ?? ''));
 
@@ -131,7 +142,7 @@ function formatReminderMinutes(minutes) {
 
 const reminderText = computed(() => reminderMinutesList.value.map(formatReminderMinutes).join(' / '));
 
-/** @param {'accepted'|'declined'} responseStatus 本人の参加ステータスを更新します。 */
+/** @param {'accepted'|'declined'|'needsAction'} responseStatus 本人の参加ステータスを更新します。 */
 async function respondToInvitation(responseStatus) {
   if (!event.value || !myAttendee.value || userStore.isLoading) return;
   await eventActions.respondToEvent(event.value, responseStatus);
@@ -188,12 +199,12 @@ const dateText = computed(() => {
 
 /** イベント編集画面へ遷移する */
 function edit() {
-  router.push({ name: 'EventEditor' });
+  router.push({ name: 'EventEditor', query: { eid: event.value?.id, cid: event.value?.calendarId } });
 }
 
 /** イベント複製画面へ遷移する */
 function clone() {
-  router.push({ name: 'EventCloner' });
+  router.push({ name: 'EventCloner', query: { eid: event.value?.id, cid: event.value?.calendarId } });
 }
 
 /** 確認ダイアログを表示してからイベントを削除し、ホームへ戻る */
@@ -226,11 +237,11 @@ watch(
   { immediate: true },
 );
 
-// 通知タップなどで表示中に別のイベントが選択された場合は読み込み直す
+// 通知タップなどで表示中に別のイベントの URL へ遷移した場合は読み込み直す
 watch(
-  () => userStore.nowSelectedEvent,
-  async (next, previous) => {
-    if (!next || (next.eid === previous?.eid && next.cid === previous?.cid)) return;
+  () => [route.query.eid, route.query.cid],
+  async ([eid, cid], [prevEid, prevCid]) => {
+    if (route.name !== 'EventDetail' || (eid === prevEid && cid === prevCid)) return;
     await loadEvent();
   },
 );
@@ -372,14 +383,15 @@ watch(
       <AccordionMenu v-if="myAttendee" label="参加回答を変更または確定する">
         <div class="attendance-container">
           <button type="button" data-response-action="declined" :disabled="userStore.isLoading || myAttendee.responseStatus === 'declined'" @click="respondToInvitation('declined')">辞退する</button>
+          <button type="button" data-response-action="needsAction" :disabled="userStore.isLoading || myAttendee.responseStatus === 'needsAction'" @click="respondToInvitation('needsAction')">未回答</button>
           <button type="button" data-response-action="accepted" :disabled="userStore.isLoading || myAttendee.responseStatus === 'accepted'" @click="respondToInvitation('accepted')">承諾する</button>
         </div>
       </AccordionMenu>
 
-      <AccordionMenu v-if="event.raw.attendees?.length" :label="`参加者（${event.raw.attendees.length}人）`">
+      <AccordionMenu v-if="event.raw.attendees?.length" :label="`参加者（${attendeeList.length}人）`">
         <ul class="attendees-container">
-          <li v-for="attendee in event.raw.attendees" :key="attendee.email || attendee.id">
-            <span>{{ attendee.displayName || attendee.email || '不明な参加者' }}</span>
+          <li v-for="attendee in attendeeList" :key="attendee.email || attendee.id">
+            <span>{{ attendee.displayName || attendee.email || '不明な参加者' }}<IconCrown v-if="attendee.isOrganizer" class="organizer-badge" size="0.9rem" /></span>
             <small>
               <span :data-response-status="attendee.responseStatus ?? 'needsAction'">
                 {{ attendee.responseStatus === 'accepted' ? '承諾済み' : attendee.responseStatus === 'declined' ? '辞退済み' : '未回答' }}
@@ -635,6 +647,14 @@ span[data-response-status='needsAction'] {
       opacity: 0.8;
     }
   }
+
+  button[data-response-action='needsAction'] {
+    background-color: var(--warning);
+    color: var(--text);
+    &:hover:not(:disabled) {
+      opacity: 0.8;
+    }
+  }
 }
 
 .attendees-container {
@@ -648,6 +668,12 @@ span[data-response-status='needsAction'] {
     align-items: center;
     gap: var(--space-sm);
     border-radius: var(--border-radius);
+  }
+
+  .organizer-badge {
+    fill: var(--warning);
+    margin-left: var(--space-xs);
+    vertical-align: middle;
   }
 }
 

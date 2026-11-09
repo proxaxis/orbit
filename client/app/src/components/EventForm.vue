@@ -1,5 +1,6 @@
 <script setup>
 import { computed, reactive, ref, onMounted, onUnmounted, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import dayjs, { toDayjs } from '@/services/dayjs.js';
 import { useUserStore } from '@/stores/user.js';
 import { useCalendarStore } from '@/stores/calendar.js';
@@ -57,6 +58,7 @@ const props = defineProps({
 
 const emit = defineEmits(['submit', 'cancel']);
 
+const route = useRoute();
 const userStore = useUserStore();
 const calendarStore = useCalendarStore();
 const peopleStore = usePeopleStore();
@@ -714,8 +716,9 @@ onMounted(async () => {
     await userStore.settingsReady;
     // 写真共有が有効ならトークンを復元してアルバム作成セクションを表示できるようにする
     if (userStore.usePhotoSharing) auth.ensurePhotoToken().catch(() => null);
-    // 編集対象のイベントが選択されていない場合は新規作成
-    if (!userStore.nowSelectedEvent) {
+    // 編集対象のイベントがクエリで指定されていない場合は新規作成
+    const { eid, cid } = route.query;
+    if (typeof eid !== 'string' || typeof cid !== 'string') {
       originalEvent.value = null;
       // 自然言語クイック登録で解析されたドラフト（1回限り消費）。開始時刻がなければ終日として扱う
       const draft = takeQuickAddDraft();
@@ -768,14 +771,15 @@ onMounted(async () => {
       Object.assign(dateFields, {
         startDate: formData.startDateTime.format(formData.startDateTime.year() === dayjs().year() ? 'MMDD' : 'YYYYMMDD'),
         endDate: formData.endDateTime.format(formData.endDateTime.year() === dayjs().year() ? 'MMDD' : 'YYYYMMDD'),
-        startTime: formData.startDateTime.format('HHmm'),
-        endTime: formData.endDateTime.format('HHmm'),
+        // 終日のとき時刻欄は無効なので初期値は空欄にする（時間指定の範囲選択やクイック登録では時刻を保持）
+        startTime: formData.isAllDay ? '' : formData.startDateTime.format('HHmm'),
+        endTime: formData.isAllDay ? '' : formData.endDateTime.format('HHmm'),
       });
       if (!props.template) initReminders(null, formData.calendarId);
     }
-    // 編集対象のイベントが選択されている場合は、イベントを取得してフォームに反映
+    // 編集対象のイベントがクエリで指定されている場合は、イベントを取得してフォームに反映
     else {
-      originalEvent.value = await events.getEventById(userStore.nowSelectedEvent.eid, userStore.nowSelectedEvent.cid);
+      originalEvent.value = await events.getEventById(eid, cid);
 
       Object.assign(formData, {
         summary: originalEvent.value?.summary ?? '',

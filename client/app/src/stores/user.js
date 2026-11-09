@@ -813,15 +813,6 @@ export const useUserStore = defineStore('user', () => {
     return arr;
   });
 
-  /** @type {Ref<{eid: string, cid: string}|null>} @description 現在選択されているイベント */
-  const nowSelectedEvent = ref(null);
-
-  /** @param {{eid: string, cid: string}|null} event @description 選択するイベント情報 */
-  function setNowSelectedEvent(event) {
-    if (event === null) return (nowSelectedEvent.value = null);
-    nowSelectedEvent.value = { eid: event.eid, cid: event.cid };
-  }
-
   /** @type {Ref<{target: 'eventForm'|'shareForm', field: string}|null>} @description フォームがメインカレンダーに要求している日付選択（非 null の間カレンダーは日付ピックモード） */
   const formDatePick = ref(null);
 
@@ -950,7 +941,6 @@ export const useUserStore = defineStore('user', () => {
     nowSelectedDate,
     isCellClicked,
     daysMap,
-    nowSelectedEvent,
     formDatePick,
     formPickResult,
     beginFormDatePick,
@@ -968,7 +958,6 @@ export const useUserStore = defineStore('user', () => {
     toastMessage,
     showToast,
     clearToast,
-    setNowSelectedEvent,
     saveSettings,
     exportSettings,
     applyRemoteSettings,

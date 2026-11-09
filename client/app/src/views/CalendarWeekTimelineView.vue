@@ -501,7 +501,6 @@ async function unsetCustomHoliday() {
 function onSelectContextMenu(action) {
   switch (action) {
     case 'CreateEvent': {
-      userStore.setNowSelectedEvent(null);
       const range = contextMenuRange.value;
       if (!range) break;
       if (range.isTimed) {
@@ -526,7 +525,6 @@ function onSelectContextMenu(action) {
     }
     // 選択中の範囲で新しいタスクを作成（時間帯ドラッグなら時間指定、日付なら終日）
     case 'CreateTask': {
-      userStore.setNowSelectedEvent(null);
       const range = contextMenuRange.value;
       if (!range) break;
       router.push({
@@ -536,7 +534,6 @@ function onSelectContextMenu(action) {
       break;
     }
     case 'CreateFromTemplate':
-      userStore.setNowSelectedEvent(null);
       router.push({ name: 'EventTemplatePicker' });
       break;
     case 'SetCustomHoliday':
@@ -573,8 +570,7 @@ function handleEventClick(clickEvent, evt, date) {
     selectDateCell(date);
     return;
   }
-  userStore.setNowSelectedEvent({ eid: evt.id, cid: evt.calendarId });
-  router.push({ name: 'EventDetail' });
+  router.push({ name: 'EventDetail', query: { eid: evt.id, cid: evt.calendarId } });
 }
 
 /** 前週へ移動します。 */

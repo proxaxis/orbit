@@ -27,7 +27,7 @@ services:
       - redis
     tty: true
     stdin_open: true
-    command: sleep infinity
+#    command: sleep infinity
 
   # Client
   client:
@@ -40,6 +40,11 @@ services:
       - "5173:5173"
     env_file:
       - .env.development
+    # 共有 env_file の NODE_ENV=production は BFF の必須変数検証用。
+    # client は vite.config.js が NODE_ENV=production を 15173 扱いにするため、
+    # 開発ポート 5173 で起動させるには development に戻す
+    environment:
+      - NODE_ENV=development
     volumes:
       - ./client/app:/app
       - /app/node_modules
@@ -47,7 +52,7 @@ services:
       - server
     tty: true
     stdin_open: true
-    command: sleep infinity
+#    command: sleep infinity
 
   website:
     build:
@@ -64,7 +69,16 @@ services:
       - /app/node_modules
     tty: true
     stdin_open: true
-    command: sleep infinity
+#    command: sleep infinity
+
+  # Operation Agent
+  orchestrator:
+    image: proxaxis/orchestrator:latest
+    container_name: orbit_orchestrator
+    shm_size: "2gb"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/ws
 
 volumes:
   nv_redis:

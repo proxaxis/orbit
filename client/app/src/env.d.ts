@@ -24,6 +24,8 @@ declare global {
     readonly VITE_CLIENT_APP_BASE_URL: string;
     readonly VITE_BFF_APP_BASE_URL: string;
     readonly VITE_VAPID_PUBLIC_KEY: string;
+    readonly VITE_GTM_ID: string;
+    readonly VITE_GA_MEASUREMENT_ID: string;
     [key: string]: any;
   }
 

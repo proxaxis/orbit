@@ -5,6 +5,7 @@
  * オフライン操作キューは Service Worker の Background Sync にも委譲する。
  */
 import dayjs, { toDayjs } from '@/services/dayjs.js';
+import router from '@/router/index.js';
 import * as gCalAPI from '@/services/google-calendar-api.js';
 import { useAuthStore } from '@/stores/auth.js';
 import { useCalendarStore } from '@/stores/calendar.js';
@@ -426,9 +427,11 @@ export function useEvents() {
       if (!event) return null;
       const created = { ...toHandyEvent(event, gCalendarId, calendarColor), timeZone: event.start?.timeZone ?? undefined };
       await upsertStoredEvent(created);
-      // 詳細画面がローカル ID を指している場合はサーバ ID へ差し替える
-      const selected = userStore.nowSelectedEvent;
-      if (selected?.eid === localId && selected?.cid === gCalendarId) userStore.setNowSelectedEvent({ eid: created.id, cid: created.calendarId });
+      // 詳細・編集画面がローカル ID の URL を表示中ならサーバ ID へ差し替える
+      const { eid, cid } = router.currentRoute.value.query;
+      if (eid === localId && cid === gCalendarId) {
+        void router.replace({ query: { ...router.currentRoute.value.query, eid: created.id, cid: created.calendarId } });
+      }
       // 作成時の通知は insert 前に出ているため、API 版へ差し替えたことを再通知する
       eventStore.invalidateEventCache();
       notifyEventDataChanged();

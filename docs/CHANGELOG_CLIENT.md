@@ -1,5 +1,15 @@
 # クライアント変更履歴
 
+## Google Analytics 4 の導入
+
+- `src/services/analytics.js` を新設。`VITE_GA_MEASUREMENT_ID` が設定されている環境のみ gtag.js を読み込み、未設定では全関数が no-op。
+- SPA のため `send_page_view: false` で自動送信を抑制し、`router.afterEach` から `trackPageView(to.path, to.name)` を送信（クエリを送らないためイベント ID 等は GA に流出しない）。
+- `trackEvent(name, params)` で任意イベント送信が可能。
+- `env.d.ts` に `VITE_GA_MEASUREMENT_ID` の型を追加。
+- デプロイ: クライアントコンテナは `npm run dev`（vite dev サーバ）で起動し、環境変数は compose の `env_file` で注入されるため、`.env.production` に `VITE_GA_MEASUREMENT_ID` を追加して再起動するだけで有効になる（Dockerfile・build args の変更は不要）。`.env.sample` にも変数を追記済み。将来 `npm run build` + 静的配信に切り替える場合はビルド時への変数注入（build args 等）が必要。
+- プライバシーポリシー（`website/app/docs/privacy-policy.md`、`server/app/docs/privacy-policy.md` のテンプレート版）にアクセス解析節を追加し、「アクセス解析しない・トラッキング Cookie 不使用」との従来記述を修正済み（最終改定日 2026-11-08）。LP `index.astro` の「アクセス解析のための情報収集は一切行いません」の記述も「広告配信や広告目的の行動追跡は一切行いません」に修正。
+
+
 ## タスク管理機能の追加
 
 カレンダーイベントを「タスク」として扱えるようにした。タスクは Google Calendar イベントとして保存され、既存のオフラインキュー・同期・通知基盤をそのまま利用する。

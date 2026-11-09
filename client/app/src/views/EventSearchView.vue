@@ -45,8 +45,7 @@ async function runSearch() {
 
 /** @param {HandyCalendarEvent} evt イベントカードのクリックで詳細画面へ遷移する */
 function openEventDetail(evt) {
-  userStore.setNowSelectedEvent({ eid: evt.id, cid: evt.calendarId });
-  router.push({ name: 'EventDetail' });
+  router.push({ name: 'EventDetail', query: { eid: evt.id, cid: evt.calendarId } });
 }
 
 /**
@@ -61,16 +60,14 @@ async function onSelectContextMenu(action, evt) {
       openEventDetail(evt);
       break;
     case 'EditEvent':
-      userStore.setNowSelectedEvent({ eid: evt.id, cid: evt.calendarId });
-      router.push({ name: 'EventEditor' });
+      router.push({ name: 'EventEditor', query: { eid: evt.id, cid: evt.calendarId } });
       break;
     case 'DeleteEvent':
       await eventActions.confirmAndRemoveEvent(evt.id, evt.calendarId);
       if (searchResults.value) searchResults.value = searchResults.value.filter((item) => !(item.id === evt.id && item.calendarId === evt.calendarId));
       break;
     case 'CloneEvent':
-      userStore.setNowSelectedEvent({ eid: evt.id, cid: evt.calendarId });
-      router.push({ name: 'EventCloner' });
+      router.push({ name: 'EventCloner', query: { eid: evt.id, cid: evt.calendarId } });
       break;
     default:
       break;

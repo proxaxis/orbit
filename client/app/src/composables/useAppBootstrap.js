@@ -92,10 +92,7 @@ export function useAppBootstrap() {
     if (event.data?.type === 'orbit-open-event') {
       // 通知タップ時に Service Worker から送られるイベント詳細への遷移要求
       const { eid, cid } = event.data;
-      if (eid && cid) {
-        userStore.setNowSelectedEvent({ eid, cid });
-        router.push({ name: 'EventDetail' });
-      }
+      if (eid && cid) router.push({ name: 'EventDetail', query: { eid, cid } });
     } else if (event.data?.type === 'orbit-queue-synced') {
       // バックグラウンドでイベントキューが処理された → 表示中の月を再同期
       calendars.loadCalendars();

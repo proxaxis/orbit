@@ -44,7 +44,7 @@ export function useEventActions() {
    */
   async function respondToEvent(event, responseStatus) {
     const attendees = (event.raw?.attendees ?? []).map((attendee) => (attendee.self ? { ...attendee, responseStatus } : attendee));
-    userStore.setLoading(true, responseStatus === 'accepted' ? '承諾しています...' : '辞退しています...');
+    userStore.setLoading(true, responseStatus === 'accepted' ? '承諾しています...' : responseStatus === 'declined' ? '辞退しています...' : '未回答に戻しています...');
     try {
       await events.updateEvent(event.id, event.calendarId, { attendees });
       if (event.raw) event.raw = { ...event.raw, attendees };
@@ -58,18 +58,15 @@ export function useEventActions() {
   }
 
   /**
-   * イベントを読み込む。選択中のイベントが無ければクエリから復元する。
+   * ルートクエリで指定されたイベントを読み込む
    * @param {{eid?: string, cid?: string}} [query] ルートクエリのイベント指定
    * @returns {Promise<HandyCalendarEvent|null>} 読み込んだイベント
    */
   async function loadSelectedEvent(query = {}) {
-    if (!userStore.nowSelectedEvent && typeof query.eid === 'string' && typeof query.cid === 'string') {
-      userStore.setNowSelectedEvent({ eid: query.eid, cid: query.cid });
-    }
     userStore.setLoading(true, 'Loading the event...');
     try {
-      if (!userStore.nowSelectedEvent) throw new Error('You do not have an event selected. You must select an event to view its details.');
-      return await events.getEventById(userStore.nowSelectedEvent.eid, userStore.nowSelectedEvent.cid);
+      if (typeof query.eid !== 'string' || typeof query.cid !== 'string') throw new Error('You do not have an event selected. You must select an event to view its details.');
+      return await events.getEventById(query.eid, query.cid);
     } catch (err) {
       userStore.setError(true, err);
       return null;

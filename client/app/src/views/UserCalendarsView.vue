@@ -24,12 +24,10 @@ const isNavCollapsed = computed(() => userStore.isDesktop && userStore.navPaneCo
     <section>
       <div class="heading">
         <h1 v-if="!isNavCollapsed">Orbit カレンダー</h1>
-        <button v-if="!isNavCollapsed && userStore.isDesktop" type="button" class="nav-collapse-button" title="ナビゲーションペインを畳む" aria-label="ナビゲーションペインを畳む"
-          @click="userStore.setNavPaneCollapsed(true)">
+        <button v-if="!isNavCollapsed && userStore.isDesktop" type="button" class="nav-collapse-button" title="ナビゲーションペインを畳む" aria-label="ナビゲーションペインを畳む" @click="userStore.setNavPaneCollapsed(true)">
           <IconLeftToBracket size="1rem" />
         </button>
-        <button v-if="isNavCollapsed" type="button" class="nav-collapse-button" title="ナビゲーションペインを展開する" aria-label="ナビゲーションペインを展開する"
-          @click="userStore.setNavPaneCollapsed(false)">
+        <button v-if="isNavCollapsed" type="button" class="nav-collapse-button" title="ナビゲーションペインを展開する" aria-label="ナビゲーションペインを展開する" @click="userStore.setNavPaneCollapsed(false)">
           <IconRightFromBracket size="1rem" />
         </button>
       </div>
