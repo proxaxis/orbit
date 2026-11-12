@@ -1,0 +1,24 @@
+{
+  "id": "/",
+  "name": "Orbit Calendar",
+  "short_name": "Orbit",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ff3434",
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+  "purpose": "maskable",
+      "type": "image/png"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+  "purpose": "maskable",
+      "type": "image/png"
+    }
+  ]
+}

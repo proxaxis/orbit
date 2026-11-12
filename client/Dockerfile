@@ -22,15 +22,15 @@ RUN yes | sdkmanager --licenses && \
 RUN npm install -g @quasar/cli
 
 WORKDIR /app
+
 RUN mkdir -p /app/node_modules /app/src-capacitor/node_modules && \
     chown -R node:node /app $ANDROID_HOME
 
 USER node
 
-COPY --chown=node:node ./app/package*.json ./
-RUN npm install
+#COPY --chown=node:node ./app/package*.json ./
+#RUN npm install
 
-COPY --chown=node:node ./app/ ./
+#COPY --chown=node:node ./app/ ./
 
-EXPOSE 9000
-EXPOSE 9222
+CMD ["sleep", "infinity"]

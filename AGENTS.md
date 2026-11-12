@@ -1,6 +1,6 @@
 # Orbit Calendar リポジトリルート
 
-Google カレンダーがバックエンドの PWA. `client/`(Vue3+Vite+Pinia), `server/`(BFF, Hono), `website/`(Astro LP)の3構成. 各 `app/AGENTS.md` に詳細あり. Git 管理されていないため差分はファイルで確認する.
+Google カレンダーがバックエンドの PWA. `client/`(Quasar+Vue3+Pinia, Capacitor によるネイティブアプリ化のため `client_v1/` の Vite 製から移行中), `server/`(BFF, Hono), `website/`(Astro LP)の構成. 各 `app/AGENTS.md` に詳細あり.
 
 ## マークダウン記述ルール
 
@@ -26,5 +26,5 @@ docker compose -f docker-compose.development.yml \
 ## dev スタックのポートと NODE_ENV
 
 - `.env.development` は `NODE_ENV=production` を全サービスに注入する(BFF の必須変数検証や Realm 設定のため意図的).
-- `client` の vite.config.js は `NODE_ENV=production` 時に 15173 で listen するため, dev 側は compose の `environment: NODE_ENV=development` で上書きし 5173 で起動させている.
-- ポート対応: client `5173`, server `8787`(`BFF_APP_PORT`), website は `npm start` が 14321 固定のため dev compose の `4321:4321` マッピングとは不整合(website の dev 公開は未対応).
+- `client` は Quasar 化に伴い `quasar dev` で port 9000 起動(devServer.host: 0.0.0.0). コンテナ内で手動実行する構成(compose は sleep + tty, 9000/9222 公開)に変わったため, vite.config.js の NODE_ENV 分岐問題は解消した.
+- ポート対応: client `9000`(Quasar dev, Android デバッグ用に `9222` も公開), server `8787`(`BFF_APP_PORT`), website は `npm start` が 14321 固定のため dev compose の `4321:4321` マッピングとは不整合(website の dev 公開は未対応).

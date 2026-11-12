@@ -1,0 +1,57 @@
+{
+  "name": "orbit-client",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "description": "Orbit Calendar client (Quasar)",
+  "keywords": [
+    "quasar",
+    "quasar-app",
+    "quasar-app-vite",
+    "quasar-cli",
+    "vite",
+    "vue",
+    "vuejs",
+    "capacitor"
+  ],
+  "scripts": {
+    "dev": "quasar dev",
+    "build": "quasar build && vite build --config vite.sw.config.js",
+    "build:capacitor": "quasar build -m capacitor -T android",
+    "test": "vitest run",
+    "lint": "oxfmt && oxlint --fix",
+    "lint:check": "oxfmt --check && oxlint",
+    "format": "oxfmt src/ tests/",
+    "postinstall": "quasar prepare --silent"
+  },
+  "dependencies": {
+    "@holiday-jp/holiday_jp": "^2.5.2",
+    "@mlc-ai/web-llm": "^0.2.85",
+    "@quasar/extras": "^2.1.0",
+    "@twemoji/api": "^17.0.3",
+    "dayjs": "^1.11.23",
+    "pinia": "^4.0.3",
+    "quasar": "^2.35.3",
+    "rrule": "^2.8.1",
+    "vue": "^3.5.42",
+    "vue-router": "^5.3.1"
+  },
+  "devDependencies": {
+    "@quasar/app-vite": "^3.10.4",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vue/test-utils": "^2.5.1",
+    "autoprefixer": "^10.4.27",
+    "jsdom": "^29.1.1",
+    "oxfmt": "^0.67.0",
+    "oxlint": "^1.x",
+    "postcss": "^8.5.8",
+    "sass": "^1.105.1",
+    "vite-plugin-vue-devtools": "^8.2.1",
+    "vitest": "^5.0.3"
+  },
+  "engines": {
+    "node": ">= 26 || ^24 || ^22.12"
+  },
+  "productName": "Orbit Calendar",
+  "productDescription": "Unify Your Tasks and Time. Execute with Focus."
+}
