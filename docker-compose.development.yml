@@ -27,32 +27,47 @@ services:
       - redis
     tty: true
     stdin_open: true
-#    command: sleep infinity
 
-  # Client
   client:
     build:
       context: ./client
       dockerfile: Dockerfile
     image: orbit-client:development
     container_name: orbit_client_dev
+    volumes:
+      - ./app:/app
+      - /app/node_modules
+      - /app/src-capacitor/node_modules
     ports:
-      - "5173:5173"
+      - "9000:9000"
+      - "9222:9222"
     env_file:
       - .env.development
-    # 共有 env_file の NODE_ENV=production は BFF の必須変数検証用。
-    # client は vite.config.js が NODE_ENV=production を 15173 扱いにするため、
-    # 開発ポート 5173 で起動させるには development に戻す
-    environment:
-      - NODE_ENV=development
-    volumes:
-      - ./client/app:/app
-      - /app/node_modules
-    depends_on:
-      - server
     tty: true
     stdin_open: true
-#    command: sleep infinity
+
+#  client:
+#    build:
+#      context: ./client
+#      dockerfile: Dockerfile
+#    image: orbit-client:development
+#    container_name: orbit_client_dev
+#    ports:
+#      - "5173:5173"
+#    env_file:
+#      - .env.development
+#    # 共有 env_file の NODE_ENV=production は BFF の必須変数検証用。
+#    # client は vite.config.js が NODE_ENV=production を 15173 扱いにするため、
+#    # 開発ポート 5173 で起動させるには development に戻す
+#    environment:
+#      - NODE_ENV=development
+#    volumes:
+#      - ./client/app:/app
+#      - /app/node_modules
+#    depends_on:
+#      - server
+#    tty: true
+#    stdin_open: true
 
   website:
     build:
@@ -69,7 +84,6 @@ services:
       - /app/node_modules
     tty: true
     stdin_open: true
-#    command: sleep infinity
 
   # Operation Agent
   orchestrator:
