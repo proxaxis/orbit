@@ -23,6 +23,15 @@ const emit = defineEmits(['add-attendee', 'add-unknown-email', 'remove-attendee'
 const query = defineModel({ type: String, default: '' });
 
 /**
+ * 「その他の連絡先」(contacts.other.readonly) 由来の候補かを判定する
+ * @param {GooglePeoplePerson} person 判定対象の連絡先
+ * @returns {boolean}
+ */
+function isOtherContact(person) {
+  return person.metadata?.sources?.some((source) => source.type === 'OTHER_CONTACT') ?? false;
+}
+
+/**
  * Enter キーで未知のメールアドレスを追加するか、次の項目へ移動する
  * @param {KeyboardEvent} keyboardEvent キーダウンイベント
  * @returns {void}
@@ -54,6 +63,7 @@ function onKeydown(keyboardEvent) {
       <template #suggestion="{ item: person }">
         <span>{{ person.names?.[0]?.displayName || '名前なし' }}</span>
         <small>{{ person.emailAddresses?.[0]?.value }}</small>
+        <small v-if="isOtherContact(person)" class="contact-source">その他の連絡先</small>
       </template>
       <template #extra>
         <li>
@@ -110,6 +120,12 @@ section {
     margin: 0;
     color: var(--text-light);
     font-size: var(--text-size-xs);
+  }
+
+  .contact-source {
+    color: var(--primary);
+    font-size: var(--text-size-xs);
+    white-space: nowrap;
   }
 }
 </style>

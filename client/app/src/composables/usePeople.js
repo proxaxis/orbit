@@ -22,8 +22,8 @@ let searchDebounceTimer = null;
 /** @type {((people: GooglePeoplePerson[]) => void)|null} 未実行の検索を待つ resolve */
 let searchDebounceResolve = null;
 
-/** @type {string} 検索時に取得する連絡先フィールド */
-const SEARCH_READ_MASK = 'names,emailAddresses,photos,userDefined';
+/** @type {string} 検索時に取得する連絡先フィールド（metadata は「その他の連絡先」判定に必要） */
+const SEARCH_READ_MASK = 'names,emailAddresses,photos,userDefined,metadata';
 
 /**
  * 連絡先が検索文字列に一致するかを判定する
@@ -46,6 +46,23 @@ function matchesSearchText(person, needle) {
  */
 function filterConnections(connections, needle) {
   return connections.filter((person) => matchesSearchText(person, needle)).slice(0, 10);
+}
+
+/**
+ * 登録済み連絡先と「その他の連絡先」の結合結果から重複を除去する。
+ * 同一メールアドレスが両方に存在する場合は先に並んだ方（登録済み連絡先）を残す。
+ * メールアドレスもリソース名も持たない候補は招待に使えないため除外する。
+ * @param {GooglePeoplePerson[]} people 結合済みの候補
+ * @returns {GooglePeoplePerson[]}
+ */
+function dedupePeople(people) {
+  const seen = new Set();
+  return people.filter((person) => {
+    const key = (person.emailAddresses?.[0]?.value ?? person.resourceName ?? '').toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /** 検索結果のメモリキャッシュを全て破棄する（アカウント切替時などに使用） */
@@ -94,11 +111,15 @@ export function usePeople() {
     try {
       let people = [];
       if (!isLabelQuery) {
-        const response = await gPeopleAPI.searchContacts(token, searchText, { readMask: SEARCH_READ_MASK, pageSize: 10 });
-        people = (response?.results ?? [])
-          .map((result) => result.person)
-          .filter(Boolean)
-          .filter((person) => matchesSearchText(person, needle));
+        // 登録済み連絡先と「その他の連絡先」を並行して検索し、結果をマージする
+        const [contactsResult, otherContactsResult] = await Promise.allSettled([gPeopleAPI.searchContacts(token, searchText, { readMask: SEARCH_READ_MASK, pageSize: 10 }), gPeopleAPI.searchOtherContacts(token, searchText, { readMask: SEARCH_READ_MASK, pageSize: 10 })]);
+        if (contactsResult.status === 'rejected' && otherContactsResult.status === 'rejected') {
+          throw contactsResult.reason;
+        }
+        const toPeople = (/** @type {PromiseSettledResult<{ results?: Array<{ person: GooglePeoplePerson }> }>} */ result) => (result.status === 'fulfilled' ? (result.value?.results ?? []).map((item) => item.person).filter(Boolean) : []);
+        people = dedupePeople([...toPeople(contactsResult), ...toPeople(otherContactsResult)])
+          .filter((person) => matchesSearchText(person, needle))
+          .slice(0, 10);
       }
       if (!people.length) {
         const connections = await gPeopleAPI.listConnections(token, { personFields: SEARCH_READ_MASK, pageSize: 1000 });

@@ -44,7 +44,7 @@ appcreateddata + Picker の最小構成。
 | スコープ | 用途 | 呼び出す API |
 | --- | --- | --- |
 | `contacts.readonly` | 予定・タスクの招待者入力時の連絡先検索（名前/メール/写真の readMask） | `people:searchContacts` |
-| `contacts.other.readonly` | 「その他の連絡先」（Gmail 宛先履歴等）の検索 | `otherContacts.list`・`otherContacts:search` |
+| `contacts.other.readonly` | 「その他の連絡先」（Gmail 宛先履歴等）の検索（招待者サジェストにマージ表示） | `otherContacts:search` |
 
 ### drive（設定のクラウド同期）
 
