@@ -123,6 +123,7 @@ src-capacitor/     # Capacitor プロジェクト(android プラットフォー�
 ## 注意事項
 
 - `tools/screenshot.mjs` …本番環境の画面撮影スクリプト(Puppeteer). ログイン済み Cookie を `/tmp/orbit-cookie.txt`(リポジトリ外)に置いて `node tools/screenshot.mjs [名前フィルタ]` で実行. BFF は `bff-orbit.proxaxis.me` の別サブドメインのため Cookie は親ドメインで設定する.
+- `tools/oauth-demo-video.mjs` …Google OAuth 検証向けデモ動画の自動収録スクリプト(Playwright, recordVideo). 同じく `/tmp/orbit-cookie.txt` の Cookie でログインし, シーンごとの webm を `oauth-demo-recordings/` へ出力する. 台本と手順は `/docs/OAUTH_DEMO_VIDEO.md`.
 - `tools/sync-check.mjs` / `tools/sync-check-ext.mjs` …2ブラウザコンテキスト間の同期検証スクリプト(Puppeteer). `ORBIT_COOKIE_A`/`ORBIT_COOKIE_B` に各セッションの `session_id` の値を渡して実行する(dev サーバ + BFF が起動していること). Cookie は環境変数でのみ渡しファイルに保存しない.
 - `tools/webkit-check.mjs` …Playwright WebKit でのレンダリング検証(スクリーンショット + 縦スクロール月タイトル追従). WebKit のシステム依存ライブラリが不足する環境では `/tmp/wk-libs`(deb をローカル展開)の `LD_LIBRARY_PATH`・EGL/DRI 環境変数が必要. HTTPS リソースは TLS バックエンド欠如で読み込めず環境起因のコンソールエラーが出る(アプリ自体は HTTP で動作).
 - `tools/share-check.mjs` …2セッション共有フロー検証(Playwright WebKit). `ORBIT_COOKIE_A`/`ORBIT_COOKIE_B` に各セッションの `session_id` を渡して実行. dev サーバの既定ポートは 9000.

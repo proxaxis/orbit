@@ -40,3 +40,6 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+# OAuth 検証デモ動画の録画出力
+oauth-demo-recordings/
