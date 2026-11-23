@@ -66,6 +66,20 @@ onUnmounted(bootstrap.stop);
   text-autospace: normal;
 }
 
+// Quasar の Material タイポグラフィ(h1〜h6 の巨大なサイズ/line-height, p の下マージン,
+// body の Roboto 14px)が素の要素へ効いてしまうため、UA 既定のスタイルへ戻す
+h1, h2, h3, h4, h5, h6 {
+  font-size: revert;
+  font-weight: revert;
+  line-height: revert;
+  letter-spacing: revert;
+  margin: 0;
+}
+
+p {
+  margin: 0;
+}
+
 html {
   font-family: var(--ui-font-family);
   scroll-behavior: smooth;
@@ -93,6 +107,8 @@ html {
 }
 
 body {
+  font-family: var(--ui-font-family);
+  font-size: var(--text-size-md);
   background-color: var(--bg-1);
   color: var(--text);
   line-height: var(--line-height);
