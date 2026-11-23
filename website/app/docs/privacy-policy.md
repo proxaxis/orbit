@@ -70,6 +70,17 @@ Orbit Calendar（以下「本サービス」）は、利用者のプライバシ
 - 広告目的、信用調査、採用選考等の目的で利用しません
 - 人によるデータの閲覧は、利用者の明示的な同意がある場合、セキュリティ上または法令上必要な場合に限定します
 
+### 端末内 AI 処理（Quick Add）
+
+予定作成補助機能「Quick Add」の自然言語解析には、利用者の端末内のみで動作するオンデバイス AI モデル（WebLLM、ブラウザ上の WebGPU で実行）を使用しています。
+
+- 利用者が入力したテキストおよび解析に用いるデータは、利用者のブラウザ内でのみ処理され、AI モデルの提供元や第三者の AI サービスへ一切送信されません
+- AI モデルの作成・学習・改善のために、Google ユーザーデータ（加工・匿名化したものを含む）を利用または転送しません
+- モデルの重みデータは公開 CDN から一度だけダウンロードされ、ブラウザのローカルキャッシュに保存されます。推論はすべて端末内で完結します
+- 本機能の利用には、個人設定画面での明示的なモデルインストール操作が必要です
+
+This Quick Add feature uses a strictly on-device / offline AI model: Google user data is processed locally in the user's browser and is never shared with the model provider or used to train or improve any model.
+
 ## 4. 第三者への提供・委託
 
 利用者情報は、以下の場合を除き第三者に提供しません。
@@ -138,4 +149,4 @@ Google Analytics による計測を無効化したい場合は、[Google アナ�
 ---
 
 制定日: 2026年10月12日
-最終改定日: 2026年11月8日
+最終改定日: 2026年11月17日
