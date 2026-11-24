@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import dayjs from '@/services/dayjs.js';
-import { buildAllDayTaskDigestEntries, buildTaskDeferralPatch, buildTaskSharedProperties, canEditTaskProperties, isTaskCompleted, isTaskDeferred, isTaskEvent, normalizeTaskNotificationTimes, taskStatusOf, unfinishedTaskCountForDay } from '@/services/task-events.js';
+import { buildAllDayTaskDigestEntries, buildTaskDeferralPatch, buildTaskSharedProperties, canEditTaskProperties, isTaskCompleted, isTaskDeferred, isTaskEvent, needsTaskPrivacyFix, normalizeTaskNotificationTimes, taskStatusOf, unfinishedTaskCountForDay } from '@/services/task-events.js';
 
 /** タスクイベントのモックを作る */
 function taskEvent(overrides = {}) {
-  const shared = { orbitIsTask: '1', orbitTaskStatus: 'not-started', orbitTaskDeferred: '0', ...(overrides.shared ?? {}) };
+  const shared = { orbitIsTask: '1', orbitTaskStatus: 'not-started', orbitTaskDeferred: '0', ...overrides.shared };
   return {
     id: 'evt-1',
     calendarId: 'cal-1',
@@ -32,6 +32,27 @@ describe('isTaskEvent / taskStatusOf / isTaskDeferred / isTaskCompleted', () => 
     expect(isTaskCompleted(taskEvent({ shared: { orbitTaskStatus: 'completed' } }))).toBe(true);
     expect(isTaskDeferred(taskEvent({ shared: { orbitTaskDeferred: '1' } }))).toBe(true);
     expect(isTaskDeferred(taskEvent({ shared: { orbitTaskDeferred: '0' } }))).toBe(false);
+  });
+});
+
+describe('needsTaskPrivacyFix', () => {
+  const privatizeTarget = (overrides = {}) => taskEvent({ fields: { raw: { start: { date: '2026-10-20' }, end: { date: '2026-10-21' }, extendedProperties: { shared: { orbitIsTask: '1' } }, organizer: { self: true }, visibility: 'default', ...overrides } } });
+
+  it('主催者のタスクで非公開未設定なら修復対象', () => {
+    expect(needsTaskPrivacyFix(privatizeTarget())).toBe(true);
+    expect(needsTaskPrivacyFix(privatizeTarget({ visibility: 'confidential' }))).toBe(true);
+  });
+
+  it('非公開済み・タスクでない・他者主催・キャンセル済みは対象外', () => {
+    expect(needsTaskPrivacyFix(privatizeTarget({ visibility: 'private' }))).toBe(false);
+    expect(needsTaskPrivacyFix({ raw: { visibility: 'default', organizer: { self: true } } })).toBe(false);
+    expect(needsTaskPrivacyFix(privatizeTarget({ organizer: { self: false } }))).toBe(false);
+    expect(needsTaskPrivacyFix(privatizeTarget({ organizer: undefined }))).toBe(false);
+    expect(needsTaskPrivacyFix(privatizeTarget({ status: 'cancelled' }))).toBe(false);
+  });
+
+  it('API イベント(生)の形でも判定できる', () => {
+    expect(needsTaskPrivacyFix({ visibility: 'default', organizer: { self: true }, extendedProperties: { shared: { orbitIsTask: '1' } } })).toBe(true);
   });
 });
 

@@ -18,6 +18,7 @@ import { runEventOperation } from '@/services/event-sync-worker.js';
 import { parseEventTags, stripTagsFromDescription } from '@/services/event-tags.js';
 import { isCustomHolidayEvent } from '@/services/custom-holidays.js';
 import { eventsQueryForCalendar } from '@/services/birthday-calendar.js';
+import { needsTaskPrivacyFix } from '@/services/task-events.js';
 
 /** @type {boolean} オフライン同期の初期化済みフラグ */
 let syncInitialized = false;
@@ -33,6 +34,9 @@ const recentlyRemovedEventKeys = new Map();
 
 /** @type {number} 削除ガードの有効期間（この間に届いた API 一覧内の該当イベントを無視する） */
 const REMOVED_EVENT_GUARD_MS = 60 * 1000;
+
+/** @type {Set<string>} 非公開化 PATCH を試行済みのタスクキー（失敗時の連投防止。セッション内で一度だけ試す） */
+const taskPrivatizeAttempted = new Set();
 
 /**
  * イベントの更新時刻を返す。ローカル保存版はトップレベルの updated、API 版は raw.updated を持つため新しい方を使う
@@ -226,6 +230,14 @@ export function useEvents() {
       }
       const calendarColor = calendarStore.getCalendarColor(gCalId);
       const fetched = result.items.map((/** @type {GoogleCalendarEvent} */ evt) => toHandyEvent(evt, gCalId, calendarColor)).filter((event) => !isRecentlyRemovedEvent(event));
+      // タスクの非公開固定が入る前に作られたイベントを修復する。
+      // 一覧・保存データへ先に反映し、PATCH が失敗した場合は次回取得で実状態に戻る
+      for (const event of fetched) {
+        if (!needsTaskPrivacyFix(event) || taskPrivatizeAttempted.has(eventKeyOf(event))) continue;
+        taskPrivatizeAttempted.add(eventKeyOf(event));
+        event.raw.visibility = 'private';
+        gCalAPI.patchEvent(authStore.token, gCalId, event.id, { visibility: 'private' }).catch(() => {});
+      }
       const prev = eventStore.getCachedEntry(key);
       if (prev && Array.isArray(prev.items) && sameEventItems(prev.items, fetched)) {
         // 内容が同一なら既存のイベント参照を維持して取得時刻だけ更新する（再描画のちらつき防止）
@@ -549,9 +561,9 @@ export function useEvents() {
     // セクション・キー単位でマージし、値が null のキーは削除する。
     // （単純な上書きだと、非主催者イベントで送らない shared など未送信セクションが消える）
     /** @type {Record<string, Record<string, any>>} */
-    const mergedExtendedProperties = { ...(existing.raw?.extendedProperties ?? {}) };
+    const mergedExtendedProperties = { ...existing.raw?.extendedProperties };
     for (const [section, values] of Object.entries(body.extendedProperties ?? {})) {
-      mergedExtendedProperties[section] = { ...(mergedExtendedProperties[section] ?? {}) };
+      mergedExtendedProperties[section] = { ...mergedExtendedProperties[section] };
       for (const [key, value] of Object.entries(values ?? {})) {
         if (value === null) delete mergedExtendedProperties[section][key];
         else mergedExtendedProperties[section][key] = value;
@@ -574,7 +586,7 @@ export function useEvents() {
       isAllDay: body.start ? !!body.start.date : existing.isAllDay,
       eventColorId: body.colorId === undefined ? existing.eventColorId : (body.colorId ?? undefined),
       // raw も更新内容で上書きする。古い raw.updated のままだと鮮度比較で API 版に負けて変更が巻き戻る
-      raw: { ...(existing.raw ?? {}), ...body, extendedProperties: mergedExtendedProperties, id: gEventId, updated: now },
+      raw: { ...existing.raw, ...body, extendedProperties: mergedExtendedProperties, id: gEventId, updated: now },
       updated: now,
     });
     eventStore.invalidateEventCache();

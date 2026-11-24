@@ -40,6 +40,22 @@ export function isTaskEvent(evt) {
 }
 
 /**
+ * 共有相手へ見せるための非公開化が必要なタスクかどうか。
+ * タスクの非公開固定が入る前に作られたイベントは visibility が 'default' のまま残り、
+ * カレンダーの共有相手へ詳細が見えてしまうため、取得時に検出して PATCH で修復する。
+ * 主催者でないイベントは他者の所有物なので対象外とする。
+ * @param {HandyCalendarEvent|GoogleCalendarEvent|any} evt イベント
+ * @returns {boolean} 自分が主催者のタスクで非公開未設定なら true
+ */
+export function needsTaskPrivacyFix(evt) {
+  if (!isTaskEvent(evt)) return false;
+  const raw = evt?.raw ?? evt;
+  if (raw?.status === 'cancelled') return false;
+  if (raw?.organizer?.self !== true) return false;
+  return raw?.visibility !== 'private';
+}
+
+/**
  * タスクステータス文字列を正規化する
  * @param {unknown} value ステータス候補
  * @param {string} [fallback] 無効なときの既定値
