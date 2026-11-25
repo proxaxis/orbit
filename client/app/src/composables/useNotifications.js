@@ -5,9 +5,11 @@
  */
 import dayjs from '@/services/dayjs.js';
 import { rrulestr } from 'rrule';
+import router from '@/router/index.js';
 import { CACHE_KEYS, SYNC_TAGS, readCache, registerBackgroundSync, registerPeriodicBackgroundSync, writeCache } from '@/composables/useCache.js';
 import { ensurePushSubscription, syncPushSchedule } from '@/composables/usePushNotifications.js';
 import { buildAllDayTaskDigestEntries, DEFAULT_TASK_NOTIFICATION_TIMES, isTaskCompleted, isTaskEvent, normalizeTaskNotificationTimes } from '@/services/task-events.js';
+import { cancelAllNativeNotifications, initNativeNotificationActions, nativeNotificationPermission, nativeNotificationsSupported, requestNativeNotificationPermission, showNativeNotification, syncNativeNotifications } from '@/services/native-notifications.js';
 
 /** スケジュールに保存する通知エントリの上限 */
 const MAX_SCHEDULE_ENTRIES = 200;
@@ -29,20 +31,37 @@ let scanTimer = null;
 /** @type {Set<string>} 既に通知を送ったキー */
 let notifiedKeys = new Set();
 
+/** @type {'granted'|'denied'|'prompt'} ネイティブの通知許可状態のキャッシュ（checkPermissions は非同期のため直近の取得値を保持） */
+let nativePermissionState = 'prompt';
+
 /**
  * 通知 API が利用可能かどうか
  * @returns {boolean}
  */
 export function notificationsSupported() {
-  return typeof window !== 'undefined' && 'Notification' in window;
+  return nativeNotificationsSupported() || (typeof window !== 'undefined' && 'Notification' in window);
 }
 
 /**
- * 現在の通知許可状態を返す
- * @returns {'unsupported'|NotificationPermission}
+ * 現在の通知許可状態を返す。ネイティブは非同期 API のためキャッシュ値を返す
+ * @returns {'unsupported'|'granted'|'denied'|'prompt'}
  */
 export function notificationPermission() {
+  if (nativeNotificationsSupported()) return nativePermissionState;
   return notificationsSupported() ? Notification.permission : 'unsupported';
+}
+
+/**
+ * 通知許可状態を最新に更新して返す（ネイティブのキャッシュも更新する）
+ * @returns {Promise<'unsupported'|'granted'|'denied'|'prompt'>}
+ */
+async function refreshNotificationPermission() {
+  if (nativeNotificationsSupported()) {
+    const result = await nativeNotificationPermission();
+    if (result !== 'unsupported') nativePermissionState = result;
+    return nativePermissionState;
+  }
+  return notificationPermission();
 }
 
 /**
@@ -51,6 +70,12 @@ export function notificationPermission() {
  */
 export async function ensureNotificationPermission() {
   if (!notificationsSupported()) return 'unsupported';
+  if (nativeNotificationsSupported()) {
+    const result = await requestNativeNotificationPermission();
+    if (result !== 'unsupported') nativePermissionState = result;
+    if (nativePermissionState === 'granted') rescheduleNotifications();
+    return nativePermissionState;
+  }
   if (Notification.permission === 'granted') {
     // 許可済みならモバイル向けのプッシュ購読も確保する
     ensurePushSubscription().then(() => rescheduleNotifications());
@@ -161,6 +186,10 @@ export function occurrenceStarts(evt, windowStart, windowEnd) {
  * @returns {Promise<void>}
  */
 async function showSystemNotification(title, options) {
+  if (nativeNotificationsSupported()) {
+    await showNativeNotification(title, options);
+    return;
+  }
   try {
     /** @type {ServiceWorkerRegistration|null} 登録済みの Service Worker */
     const registration = (await navigator.serviceWorker?.getRegistration?.()) ?? (await navigator.serviceWorker?.ready);
@@ -233,11 +262,27 @@ async function deliverTaskDigestNotification(entry) {
 }
 
 /**
+ * スケジュールエントリから通知文言を生成する（ネイティブ同期用。文言は Web Push と揃える）
+ * @param {any} entry 通知スケジュールエントリ
+ * @param {string} url 通知タップ時の遷移先 URL
+ * @returns {{title: string, options: NotificationOptions}}
+ */
+function formatScheduleEntryNotification(entry, url) {
+  return {
+    title: entry.title ?? `${entry.icon ?? ''} ${entry.summary ?? '予定'}`.trim(),
+    options: {
+      body: entry.body ?? `${dayjs(entry.start).format('M月D日 (ddd) HH:mm')} 開始（${entry.minutes > 0 ? `${entry.minutes}分前` : '開始時刻'}）`,
+      data: { eid: entry.eid, cid: entry.cid, url },
+    },
+  };
+}
+
+/**
  * 保存済みイベントをスキャンし、期限の来た通知を送信して次回のタイマーをセットする。
  * @returns {Promise<void>}
  */
 export async function rescheduleNotifications() {
-  if (!initialized || notificationPermission() !== 'granted') return;
+  if (!initialized || (await refreshNotificationPermission()) !== 'granted') return;
   if (scanTimer !== null) {
     window.clearTimeout(scanTimer);
     scanTimer = null;
@@ -321,6 +366,12 @@ export async function rescheduleNotifications() {
   scheduleEntries.sort((a, b) => a.fireAt - b.fireAt);
   const limitedEntries = scheduleEntries.slice(0, MAX_SCHEDULE_ENTRIES);
   await writeCache(CACHE_KEYS.NOTIFICATION_SCHEDULE, limitedEntries);
+  if (nativeNotificationsSupported()) {
+    // OS の通知スケジューラへ登録する。アプリ未起動・オフラインでも発火するため
+    // ページタイマーと Web Push は不要（アプリ起動中も OS が通知する）
+    await syncNativeNotifications(limitedEntries, formatScheduleEntryNotification);
+    return;
+  }
   // モバイル端末でアプリが閉じていても届くよう、購読情報とスケジュールを BFF へ送る
   syncPushSchedule(limitedEntries);
 
@@ -348,6 +399,7 @@ async function registerNotificationBackgroundSync() {
 /** 通知済みイベントの記録を破棄する（アカウント切替時などに使用） */
 export function resetNotificationHistory() {
   notifiedKeys = new Set();
+  cancelAllNativeNotifications();
 }
 
 /** イベント通知のスケジューリングを開始する */
@@ -358,9 +410,15 @@ export function initEventNotifications() {
     notifiedKeys = new Set(Array.isArray(keys) ? keys : []);
     rescheduleNotifications();
   });
-  // 既に通知許可済みならモバイル向けのプッシュ購読を確保する
-  if (notificationPermission() === 'granted') ensurePushSubscription();
-  registerNotificationBackgroundSync();
+  if (nativeNotificationsSupported()) {
+    // 通知タップでイベント詳細を開く（extra.url はルータパス）
+    initNativeNotificationActions((url) => router.push(`/${url}`));
+    refreshNotificationPermission().then(() => rescheduleNotifications());
+  } else {
+    // 既に通知許可済みならモバイル向けのプッシュ購読を確保する
+    if (notificationPermission() === 'granted') ensurePushSubscription();
+    registerNotificationBackgroundSync();
+  }
   window.setInterval(rescheduleNotifications, RESCAN_INTERVAL_MS);
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) rescheduleNotifications();
