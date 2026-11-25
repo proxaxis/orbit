@@ -9,6 +9,49 @@
 /** @type {string} 通知タップ時の遷移先 URL を保持する extra キー */
 const EXTRA_URL_KEY = 'url';
 
+/** @type {string} 一般お知らせの通知チャンネル ID */
+export const NOTIFICATION_CHANNEL_ANNOUNCE = 'announce';
+/** @type {string} 予定リマインダーの通知チャンネル ID */
+export const NOTIFICATION_CHANNEL_EVENTS = 'events';
+/** @type {string} タスク通知の通知チャンネル ID */
+export const NOTIFICATION_CHANNEL_TASKS = 'tasks';
+
+/** @type {boolean} チャンネル作成済みかどうか */
+let channelsCreated = false;
+
+/**
+ * 通知キーから使用するチャンネル ID を判定する。
+ * 時間指定タスクは key が '|task' で終わり、終日タスクのダイジェストは
+ * 'task-digest|' で始まる。それ以外のイベントは予定、タグの無い通知はお知らせ。
+ * @param {string} key 通知キー
+ * @returns {string} チャンネル ID
+ */
+export function notificationChannelForKey(key) {
+  if (typeof key !== 'string') return NOTIFICATION_CHANNEL_ANNOUNCE;
+  if (key.startsWith('task-digest|') || key.endsWith('|task')) return NOTIFICATION_CHANNEL_TASKS;
+  if (key.includes('|')) return NOTIFICATION_CHANNEL_EVENTS;
+  return NOTIFICATION_CHANNEL_ANNOUNCE;
+}
+
+/**
+ * Android の通知チャンネルを登録する（端末の設定画面でチャンネル別に制御できる）。
+ * 初回呼び出し時にのみ作成する（再作成は冪等）。
+ * @returns {Promise<void>}
+ */
+async function ensureNotificationChannels() {
+  if (channelsCreated) return;
+  const local = plugin();
+  if (!local) return;
+  try {
+    await local.createChannel({ id: NOTIFICATION_CHANNEL_EVENTS, name: '予定', description: '予定開始前のリマインダー通知', importance: 4 });
+    await local.createChannel({ id: NOTIFICATION_CHANNEL_TASKS, name: 'タスク', description: 'タスクの開始時刻通知と日次ダイジェスト', importance: 4 });
+    await local.createChannel({ id: NOTIFICATION_CHANNEL_ANNOUNCE, name: 'お知らせ', description: 'アプリからの一般的なお知らせ', importance: 3 });
+    channelsCreated = true;
+  } catch (error) {
+    console.warn('Notification channel creation failed.', error);
+  }
+}
+
 /**
  * Capacitor プラグインオブジェクトを取得する
  * @returns {any} LocalNotifications プラグイン（無ければ undefined）
@@ -76,6 +119,7 @@ export async function requestNativeNotificationPermission() {
 export async function syncNativeNotifications(entries, formatNotification) {
   const local = plugin();
   if (!local) return;
+  await ensureNotificationChannels();
   /** @type {Map<number, any>} 今回登録すべき通知 ID → エントリ */
   const wanted = new Map();
   for (const entry of entries) {
@@ -95,6 +139,7 @@ export async function syncNativeNotifications(entries, formatNotification) {
           id: nativeNotificationId(entry.key),
           title,
           body: options?.body ?? '',
+          channelId: notificationChannelForKey(entry.key),
           schedule: { at: new Date(entry.fireAt), allowWhileIdle: true },
           extra: { [EXTRA_URL_KEY]: url, key: entry.key, eid: entry.eid, cid: entry.cid },
         };
@@ -114,6 +159,7 @@ export async function syncNativeNotifications(entries, formatNotification) {
 export async function showNativeNotification(title, options) {
   const local = plugin();
   if (!local) return;
+  await ensureNotificationChannels();
   const key = String(options?.tag ?? `native-${Date.now()}`);
   await local.schedule({
     notifications: [
@@ -121,6 +167,7 @@ export async function showNativeNotification(title, options) {
         id: nativeNotificationId(key),
         title,
         body: options?.body ?? '',
+        channelId: notificationChannelForKey(key.replace(/^orbit-event-/, '')),
         schedule: { at: new Date(Date.now() + 500), allowWhileIdle: true },
         extra: { [EXTRA_URL_KEY]: options?.data?.url ?? '', key, eid: options?.data?.eid ?? '', cid: options?.data?.cid ?? '' },
       },
@@ -151,6 +198,7 @@ export async function cancelAllNativeNotifications() {
 export async function initNativeNotificationActions(onOpen) {
   const local = plugin();
   if (!local) return;
+  await ensureNotificationChannels();
   await local.addListener('localNotificationActionPerformed', (/** @type {any} */ action) => {
     const url = action?.notification?.extra?.[EXTRA_URL_KEY];
     if (typeof url === 'string' && url) onOpen(url);
