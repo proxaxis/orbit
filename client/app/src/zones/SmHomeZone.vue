@@ -103,6 +103,17 @@ function onSubContentRef(element) {
 .sm-home-zone {
   flex-direction: column;
 
+  // モバイルではペインの枠線を省略する
+  .aside-content,
+  .main-content {
+    border: none;
+  }
+
+  // ドロワーの中身は .home-zone の余白の外側に被さるため個別にセーフエリアを確保する
+  .nav-pane .aside-content {
+    padding-top: calc(var(--space-sm) + env(safe-area-inset-top));
+  }
+
   main {
     display: flex;
     position: relative;
@@ -169,6 +180,12 @@ function onSubContentRef(element) {
     border: 0;
     z-index: 40;
     margin-top: var(--space-xs);
+
+    // 全画面時も .home-zone の余白の外側に被さるため個別にセーフエリアを確保する
+    .sub-pane-content {
+      padding-top: calc(var(--space-sm) + env(safe-area-inset-top));
+      padding-bottom: calc(var(--space-sm) + env(safe-area-inset-bottom));
+    }
   }
 }
 </style>

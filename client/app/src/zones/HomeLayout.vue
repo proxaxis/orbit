@@ -311,6 +311,9 @@ onUnmounted(() => {
   max-width: 100vw;
   overflow: hidden;
   box-sizing: border-box;
+  // Capacitor の edge-to-edge 表示でステータスバーやジェスチャーバーに
+  // コンテンツが被らないようセーフエリア分の余白を取る。非対応環境では 0
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 .home-zone aside {
