@@ -57,11 +57,11 @@ async function uninstall() {
 
 <template>
   <section class="config-section">
-    <p class="hint">クイック登録の AI 解析に使う言語モデル（約 400MB）です. 端末にインストールすると、オフラインでも AI 解析が利用できます.</p>
-    <p v-if="isUnsupported" class="hint">このブラウザは AI 解析（WebGPU）に対応していません.</p>
+    <p class="hint">クイック登録の AI 解析に使う言語モデル（約 400MB）です. この端末にインストールすると、オフラインでも AI 解析が利用できます.</p>
+    <p v-if="isUnsupported" class="hint">このデバイス（ブラウザ）は AI 解析（WebGPU）に対応していません.</p>
     <template v-else>
       <p class="llm-status">
-        状態:
+        このデバイスの状態:
         <strong v-if="isInstalling">インストール中</strong>
         <strong v-else-if="llmModelInstalled === null">確認中...</strong>
         <strong v-else-if="llmModelInstalled">インストール済み</strong>

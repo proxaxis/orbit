@@ -44,11 +44,11 @@ async function disablePeopleApi() {
 
 <template>
   <section class="config-section">
-    <p class="hint">連絡先を検索して招待先や共有相手の候補を表示します. 有効化にはGoogleアカウントでの追加認証が必要です.</p>
+    <p class="hint">連絡先を検索して招待先や共有相手の候補を表示します. この設定はデバイスごとに適用され、他の端末には同期されません.</p>
     <p v-if="!authStore.isAuthenticated" class="hint">利用するには Google アカウントでログインしてください.</p>
     <p v-else-if="userStore.isLoading" class="hint">認証状態を確認しています...</p>
     <template v-else-if="userStore.usePeopleApi && authStore.isPeopleApiAuthorized">
-      <p class="hint">連絡先連携は有効です. 入力欄で連絡先の候補が表示されます.</p>
+      <p class="hint">このデバイスで連絡先連携は有効です. 入力欄で連絡先の候補が表示されます.</p>
       <button type="button" class="clear-cache-button" @click="disablePeopleApi"><IconXMark />無効にする</button>
     </template>
     <template v-else>

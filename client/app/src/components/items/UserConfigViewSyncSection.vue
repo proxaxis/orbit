@@ -3,7 +3,7 @@
  * UserConfigView の同期欄。
  * 保留中のオフライン操作の再送・カレンダー一覧とイベントの即時更新を担う。
  */
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useUserStore } from '@/stores/user.js';
 import { useAuthStore } from '@/stores/auth.js';
 import { useCalendars } from '@/composables/useCalendars.js';
@@ -14,8 +14,12 @@ import IconArrowsRotate from '@/components/icons/IconArrowsRotate.vue';
 
 const userStore = useUserStore();
 const authStore = useAuthStore();
+const eventStore = useEventStore();
 const calendars = useCalendars();
 const events = useEvents();
+
+/** @type {ComputedRef<number>} このデバイスで未送信のオフライン操作の件数 */
+const pendingCount = computed(() => eventStore.pendingOperations.length);
 
 /** @type {Ref<boolean>} 同期処理の実行中フラグ */
 const isSyncing = ref(false);
@@ -49,12 +53,23 @@ async function syncNow() {
 <template>
   <section class="config-section">
     <p class="hint">他のデバイスでの変更を今すぐ取り込み、保留中の操作を再送します.</p>
-    <button type="button" class="sync-button" :disabled="isSyncing" @click="syncNow"><IconArrowsRotate :class="{ 'is-spinning': isSyncing }" />{{ isSyncing ? '同期中...' : '今すぐ同期' }}</button>
+    <p class="sync-status">
+      このデバイスの状態:
+      <strong v-if="userStore.isOffline">オフライン</strong>
+      <strong v-else-if="!authStore.isAuthenticated">未ログイン</strong>
+      <strong v-else>オンライン</strong>
+    </p>
+    <p v-if="pendingCount" class="hint">未送信の操作が {{ pendingCount }} 件あります.</p>
+    <button type="button" class="sync-button" :disabled="isSyncing || userStore.isOffline || !authStore.isAuthenticated" @click="syncNow"><IconArrowsRotate :class="{ 'is-spinning': isSyncing }" />{{ isSyncing ? '同期中...' : '今すぐ同期' }}</button>
   </section>
 </template>
 
 <style lang="scss" scoped>
 .hint {
+  font-size: var(--text-size-xs);
+}
+.sync-status {
+  margin: 0;
   font-size: var(--text-size-xs);
 }
 .sync-button {

@@ -497,9 +497,10 @@ export const useUserStore = defineStore('user', () => {
     await writeCache(CACHE_KEYS.USER_SETTINGS, buildSettingsSnapshot());
   }
 
-  /** 現在の設定スナップショットを返す（Drive 同期など外部永続化用） */
+  /** 現在の設定スナップショットを返す（Drive 同期など外部永続化用。デバイス固有の機能フラグは含めない） */
   function exportSettings() {
-    return buildSettingsSnapshot();
+    const { usePhotoSharing: _p, usePeopleApi: _pp, useDriveSync: _d, ...syncable } = buildSettingsSnapshot();
+    return syncable;
   }
 
   /**
@@ -576,7 +577,9 @@ export const useUserStore = defineStore('user', () => {
    */
   async function applyRemoteSettings(saved) {
     if (!saved || typeof saved !== 'object') return;
-    applySettingsData(saved);
+    // 写真共有・連絡先連携・Drive 同期はデバイス固有の状態なのでリモート値を適用しない
+    const { usePhotoSharing: _p, usePeopleApi: _pp, useDriveSync: _d, ...remote } = saved;
+    applySettingsData(remote);
     await saveSettings();
   }
 

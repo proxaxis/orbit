@@ -43,11 +43,11 @@ async function disablePhotoSharing() {
 
 <template>
   <section class="config-section">
-    <p class="hint">イベントに写真の共有アルバムを紐づけます. 有効化にはGoogleアカウントでの追加認証が必要です.</p>
+    <p class="hint">イベントに写真の共有アルバムを紐づけます. この設定はデバイスごとに適用され、他の端末には同期されません.</p>
     <p v-if="!authStore.isAuthenticated" class="hint">利用するには Google アカウントでログインしてください.</p>
     <p v-else-if="userStore.isLoading" class="hint">認証状態を確認しています...</p>
     <template v-else-if="userStore.usePhotoSharing && authStore.isPhotoSharingAuthorized">
-      <p class="hint">写真共有は有効です. イベント詳細画面から写真を追加できます.</p>
+      <p class="hint">このデバイスで写真共有は有効です. イベント詳細画面から写真を追加できます.</p>
       <button type="button" class="clear-cache-button" @click="disablePhotoSharing"><IconXMark />無効にする</button>
     </template>
     <template v-else>

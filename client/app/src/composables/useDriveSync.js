@@ -7,8 +7,8 @@
  * その後は設定・セッションカレンダーの変更を監視してデバウンス付きで
  * リモートへ書き込む。書き込みはバックグラウンドで行い UI をブロックしない。
  * 起動中も表示復帰・オンライン復帰時に間隔制限付きでリモートを確認し、
- * 機能の有効化状態（写真共有・連絡先連携・Drive 同期）やカレンダー並び順など
- * 他デバイスでの変更を取り込む。
+ * カレンダー並び順など他デバイスでの変更を取り込む。
+ * 写真共有・連絡先連携・Drive 同期の各フラグはデバイス固有のため同期対象外。
  */
 import { watch, nextTick } from 'vue';
 import { useAuthStore } from '@/stores/auth.js';
@@ -101,23 +101,6 @@ export function useDriveSync() {
   }
 
   /**
-   * リモートから適用された機能フラグをこのデバイスへ反映する。
-   * 有効化された機能はトークンを取得し、無効化された機能は保持トークンを破棄する。
-   * Drive 同期自体が他デバイスで無効化された場合は同期を停止する。
-   * @returns {void}
-   */
-  function applyFeatureFlagEffects() {
-    if (userStore.usePhotoSharing) auth.ensurePhotoToken();
-    else auth.clearPhotoToken();
-    if (userStore.usePeopleApi) auth.ensurePeopleToken();
-    else auth.clearPeopleToken();
-    if (!userStore.useDriveSync) {
-      auth.clearDriveToken();
-      stopDriveSync();
-    }
-  }
-
-  /**
    * Drive 上の同期データを取得し、ローカルより新しければ state へ反映する。
    * リモートが無い・古い場合はローカル状態を書き込んで揃える。
    * @returns {Promise<boolean>} Drive との疎通に成功したか
@@ -144,7 +127,6 @@ export function useDriveSync() {
         if (remote.data.settings) await userStore.applyRemoteSettings(remote.data.settings);
         if (Array.isArray(remote.data.sessionCalendars)) calendarStore.setSessionCalendars(remote.data.sessionCalendars);
         await writeCache(CACHE_KEYS.DRIVE_SYNC_AT, remoteAt);
-        applyFeatureFlagEffects();
       } finally {
         // 適用で発火する watcher のフラッシュが済むまで push を抑制する
         nextTick(() => {
@@ -189,8 +171,6 @@ export function useDriveSync() {
     } catch (error) {
       console.warn('Failed to pull app data from Drive.', error);
     }
-    // 他デバイスで同期が無効化されていた場合は監視を開始せずに終了する
-    if (!userStore.useDriveSync) return;
     // 設定・セッションカレンダーの変更を監視してバックグラウンドで同期する
     stopWatch = watch(
       () => JSON.stringify([userStore.exportSettings(), calendarStore.sessionCalendars]),
@@ -205,18 +185,12 @@ export function useDriveSync() {
   }
 
   /**
-   * Drive 同期を無効化する。無効化した状態をリモートへ書き込んでから監視を止め、
-   * 他デバイス側でも同期が止まるようにする。
+   * Drive 同期を無効化する。無効化はこのデバイスのみに適用され、
+   * 他デバイスの同期状態には影響しない。
    * @returns {Promise<void>}
    */
   async function disableDriveSync() {
     userStore.setUseDriveSync(false);
-    // 無効化後は pushRemote がフラグで弾かれるため force で最終状態を書き込む
-    try {
-      await pushRemote({ force: true });
-    } catch (error) {
-      console.warn('Failed to push disabled state to Drive.', error);
-    }
     stopDriveSync();
   }
 

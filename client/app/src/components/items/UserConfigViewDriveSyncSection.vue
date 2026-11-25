@@ -5,11 +5,13 @@
  * 有効化（OAuth 認証）・無効化と認証状態の表示を担う。
  * 有効にすると個人設定やセッションカレンダーがデバイス間で同期される。
  */
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
+import dayjs from '@/services/dayjs.js';
 import { useAuthStore, BFF_APP_BASE_URL } from '@/stores/auth.js';
 import { useUserStore } from '@/stores/user.js';
 import { useAuth } from '@/composables/useAuth.js';
 import { useDriveSync } from '@/composables/useDriveSync.js';
+import { CACHE_KEYS, readCache } from '@/composables/useCache.js';
 import IconCloudArrowUp from '@/components/icons/IconCloudArrowUp.vue';
 import IconXMark from '@/components/icons/IconXMark.vue';
 
@@ -18,7 +20,11 @@ const userStore = useUserStore();
 const auth = useAuth();
 const driveSync = useDriveSync();
 
+/** @type {Ref<string>} このデバイスが最後に Drive と同期した日時（表示用文字列） */
+const lastSyncedAt = ref('');
+
 onMounted(async () => {
+  lastSyncedAt.value = await readCache(CACHE_KEYS.DRIVE_SYNC_AT, '');
   if (!authStore.isAuthenticated || !userStore.useDriveSync || authStore.isDriveSyncAuthorized) return;
   userStore.setLoading(true, '認証状態を確認しています...');
   try {
@@ -47,11 +53,12 @@ async function disableDriveSync() {
 
 <template>
   <section class="config-section">
-    <p class="hint">個人設定やセッションカレンダーをGoogle Driveのアプリ専用領域へ保存し、デバイス間で同期します. 有効化にはGoogleアカウントでの追加認証が必要です.</p>
+    <p class="hint">個人設定やセッションカレンダーをGoogle Driveのアプリ専用領域へ保存し、デバイス間で同期します. 有効・無効の切り替えはこのデバイスのみに適用されます.</p>
     <p v-if="!authStore.isAuthenticated" class="hint">利用するには Google アカウントでログインしてください.</p>
     <p v-else-if="userStore.isLoading" class="hint">認証状態を確認しています...</p>
     <template v-else-if="userStore.useDriveSync && authStore.isDriveSyncAuthorized">
-      <p class="hint">クラウド同期は有効です. 設定の変更はバックグラウンドで Drive へ保存されます.</p>
+      <p class="hint">このデバイスでクラウド同期は有効です. 設定の変更はバックグラウンドで Drive へ保存されます.</p>
+      <p v-if="lastSyncedAt" class="hint">このデバイスの最終同期: {{ dayjs(lastSyncedAt).format('YYYY年M月D日 H:mm') }}</p>
       <button type="button" class="clear-cache-button" @click="disableDriveSync"><IconXMark />無効にする</button>
     </template>
     <template v-else>

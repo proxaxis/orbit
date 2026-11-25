@@ -52,7 +52,7 @@ async function switchAccount() {
   <AccordionMenu label="アカウント">
     <section class="config-section">
       <template v-if="authStore.isAuthenticated">
-        <p class="hint">Google アカウントでログイン中です.</p>
+        <p class="hint">このデバイスで Google アカウントにログイン中です. ログイン状態はデバイスごとに管理されます.</p>
         <div class="account-actions">
           <button type="button" class="clear-cache-button" @click="switchAccount"><IconArrowsRotate />アカウントを変更</button>
           <button type="button" class="clear-cache-button" @click="handleLogout"><IconArrowRightFromBracket />ログアウト</button>

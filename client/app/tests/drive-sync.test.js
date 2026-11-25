@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
-import { CACHE_KEYS } from '@/composables/useCache.js';
 
 const mocks = vi.hoisted(() => ({
   storage: new Map(),
@@ -81,34 +80,29 @@ describe('pullRemote（リモート設定の適用）', () => {
     await driveSync.pullRemote();
     expect(mocks.writeSyncFile).toHaveBeenCalledTimes(1);
     const data = JSON.parse(mocks.writeSyncFile.mock.calls[0][1]);
-    expect(data.settings.useDriveSync).toBe(true);
+    expect(data.settings.calendarOrder).toBeDefined();
   });
 
-  it('有効化された機能フラグを適用し、対応トークンを取得する', async () => {
-    mocks.readSyncFile.mockImplementation(async () =>
-      remoteWithSettings({
-        usePhotoSharing: true,
-        usePeopleApi: true,
-        useDriveSync: true,
-      }),
-    );
+  it('デバイス固有の機能フラグは同期ペイロードに含めない', async () => {
     const { driveSync, userStore, authStore } = await freshSetup();
     authStore.setDriveAccessToken('drive-token');
     userStore.setUseDriveSync(true);
+    userStore.setUsePhotoSharing(true);
+    userStore.setUsePeopleApi(true);
 
     await driveSync.pullRemote();
-    expect(userStore.usePhotoSharing).toBe(true);
-    expect(userStore.usePeopleApi).toBe(true);
-    expect(mocks.auth.ensurePhotoToken).toHaveBeenCalledTimes(1);
-    expect(mocks.auth.ensurePeopleToken).toHaveBeenCalledTimes(1);
+    const data = JSON.parse(mocks.writeSyncFile.mock.calls[0][1]);
+    expect(data.settings.useDriveSync).toBeUndefined();
+    expect(data.settings.usePhotoSharing).toBeUndefined();
+    expect(data.settings.usePeopleApi).toBeUndefined();
   });
 
-  it('無効化された機能フラグを適用し、保持トークンを破棄する', async () => {
+  it('リモートの機能フラグはデバイスの状態を上書きしない', async () => {
     mocks.readSyncFile.mockImplementation(async () =>
       remoteWithSettings({
         usePhotoSharing: false,
         usePeopleApi: false,
-        useDriveSync: true,
+        useDriveSync: false,
       }),
     );
     const { driveSync, userStore, authStore } = await freshSetup();
@@ -118,10 +112,11 @@ describe('pullRemote（リモート設定の適用）', () => {
     userStore.setUsePeopleApi(true);
 
     await driveSync.pullRemote();
-    expect(userStore.usePhotoSharing).toBe(false);
-    expect(userStore.usePeopleApi).toBe(false);
-    expect(mocks.auth.clearPhotoToken).toHaveBeenCalledTimes(1);
-    expect(mocks.auth.clearPeopleToken).toHaveBeenCalledTimes(1);
+    expect(userStore.usePhotoSharing).toBe(true);
+    expect(userStore.usePeopleApi).toBe(true);
+    expect(userStore.useDriveSync).toBe(true);
+    expect(mocks.auth.clearPhotoToken).not.toHaveBeenCalled();
+    expect(mocks.auth.clearPeopleToken).not.toHaveBeenCalled();
   });
 
   it('カレンダーの並び順をリモートから適用する', async () => {
@@ -140,7 +135,7 @@ describe('pullRemote（リモート設定の適用）', () => {
     expect(userStore.calendarOrder).toEqual(['cal-b', 'cal-a']);
   });
 
-  it('他デバイスで Drive 同期が無効化された場合はローカルでも停止する', async () => {
+  it('リモートで Drive 同期が無効でもローカルの同期は継続する', async () => {
     mocks.readSyncFile.mockImplementation(async () => remoteWithSettings({ useDriveSync: false }));
     const { driveSync, userStore, authStore } = await freshSetup();
     authStore.setAccessToken('main-token');
@@ -148,13 +143,13 @@ describe('pullRemote（リモート設定の適用）', () => {
     userStore.setUseDriveSync(true);
 
     await driveSync.initDriveSync();
-    expect(userStore.useDriveSync).toBe(false);
+    expect(userStore.useDriveSync).toBe(true);
   });
 });
 
 describe('pushRemote / disableDriveSync', () => {
   it('同期無効時は push しないが、force では書き込む', async () => {
-    const { driveSync, userStore, authStore } = await freshSetup();
+    const { driveSync, authStore } = await freshSetup();
     authStore.setDriveAccessToken('drive-token');
 
     await driveSync.pushRemote();
@@ -174,18 +169,18 @@ describe('pushRemote / disableDriveSync', () => {
     await driveSync.pushRemote();
     const data = JSON.parse(mocks.writeSyncFile.mock.calls[0][1]);
     expect(data.settings.calendarOrder).toEqual(['cal-b', 'cal-a']);
-    expect(data.settings.usePhotoSharing).toBe(true);
+    // 機能フラグはデバイス固有のため含めない
+    expect(data.settings.usePhotoSharing).toBeUndefined();
   });
 
-  it('disableDriveSync は無効化状態をリモートへ書き込んでから停止する', async () => {
+  it('disableDriveSync はこのデバイスの同期のみ停止する', async () => {
     const { driveSync, userStore, authStore } = await freshSetup();
     authStore.setDriveAccessToken('drive-token');
     userStore.setUseDriveSync(true);
 
     await driveSync.disableDriveSync();
     expect(userStore.useDriveSync).toBe(false);
-    expect(mocks.writeSyncFile).toHaveBeenCalledTimes(1);
-    const data = JSON.parse(mocks.writeSyncFile.mock.calls[0][1]);
-    expect(data.settings.useDriveSync).toBe(false);
+    // 無効化は他デバイスへ伝播させないためリモートへの書き込みはしない
+    expect(mocks.writeSyncFile).not.toHaveBeenCalled();
   });
 });
