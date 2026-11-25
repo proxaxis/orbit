@@ -68,7 +68,12 @@ onUnmounted(bootstrap.stop);
 
 // Quasar の Material タイポグラフィ(h1〜h6 の巨大なサイズ/line-height, p の下マージン,
 // body の Roboto 14px)が素の要素へ効いてしまうため、UA 既定のスタイルへ戻す
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-size: revert;
   font-weight: revert;
   line-height: revert;
